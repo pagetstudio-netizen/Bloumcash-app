@@ -60,7 +60,7 @@ export default function Historique() {
         </div>
       </div>
 
-      <div className="p-4 flex-1 overflow-auto pb-24">
+      <div className="p-4 pb-24">
         <Tabs defaultValue="tout" className="w-full mb-6" onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl bg-muted">
             <TabsTrigger value="tout" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Tout</TabsTrigger>

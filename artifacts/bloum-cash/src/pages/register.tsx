@@ -22,12 +22,8 @@ import { Input } from "@/components/ui/input";
 const registerSchema = z.object({
   fullName: z.string().min(2, { message: "Le nom complet est requis" }),
   email: z.string().email({ message: "Adresse e-mail invalide" }),
-  confirmEmail: z.string().email({ message: "Adresse e-mail invalide" }),
   pin: z.string().min(4, { message: "Mot de passe requis (min. 4 caractères)" }),
   confirmPin: z.string().min(4, { message: "Confirmez votre mot de passe" }),
-}).refine((data) => data.email === data.confirmEmail, {
-  message: "Les adresses e-mail ne correspondent pas",
-  path: ["confirmEmail"],
 }).refine((data) => data.pin === data.confirmPin, {
   message: "Les mots de passe ne correspondent pas",
   path: ["confirmPin"],
@@ -46,7 +42,6 @@ export default function Register() {
     defaultValues: {
       fullName: "",
       email: "",
-      confirmEmail: "",
       pin: "",
       confirmPin: "",
     },
@@ -118,20 +113,6 @@ export default function Register() {
 
               <FormField
                 control={form.control}
-                name="confirmEmail"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirmer e-mail</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Confirmer e-mail" type="email" data-testid="input-confirm-email" {...field} className="h-12" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="pin"
                 render={({ field }) => (
                   <FormItem>
@@ -191,7 +172,7 @@ export default function Register() {
               <Button
                 type="submit"
                 data-testid="button-register"
-                className="w-full h-14 mt-2 text-base font-semibold bg-accent hover:bg-accent/90 text-accent-foreground rounded-xl"
+                className="w-full h-14 mt-2 text-base font-semibold bg-[#1a3fc4] hover:bg-[#2b50e8] text-white rounded-xl"
                 disabled={registerMutation.isPending}
               >
                 {registerMutation.isPending ? "Création du compte..." : "S'Inscrire"}

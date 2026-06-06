@@ -55,7 +55,7 @@ export default function Plus() {
         </div>
       </div>
 
-      <div className="p-4 flex-1 overflow-auto pb-24 space-y-6">
+      <div className="p-4 pb-24 space-y-6">
         {/* Profile summary */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
