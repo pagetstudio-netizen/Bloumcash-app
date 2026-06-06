@@ -27,6 +27,12 @@ import Confidentialite from "@/pages/plus/confidentialite";
 import Apropos from "@/pages/plus/apropos";
 import Notifications from "@/pages/notifications";
 
+import ConfigTmoney from "@/pages/encaisser/tmoney";
+import ConfigMoov from "@/pages/encaisser/moov";
+import Produits from "@/pages/encaisser/produits";
+import Boutiques from "@/pages/encaisser/boutiques";
+import EncaisserWhatsApp from "@/pages/encaisser/whatsapp";
+
 const queryClient = new QueryClient();
 
 function Router() {
@@ -52,6 +58,11 @@ function Router() {
       <Route path="/plus/confidentialite" component={Confidentialite} />
       <Route path="/plus/apropos" component={Apropos} />
       <Route path="/notifications" component={Notifications} />
+      <Route path="/encaisser/tmoney" component={ConfigTmoney} />
+      <Route path="/encaisser/moov" component={ConfigMoov} />
+      <Route path="/encaisser/produits" component={Produits} />
+      <Route path="/encaisser/boutiques" component={Boutiques} />
+      <Route path="/encaisser/whatsapp" component={EncaisserWhatsApp} />
       <Route component={NotFound} />
     </Switch>
   );

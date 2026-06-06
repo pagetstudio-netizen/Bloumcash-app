@@ -75,34 +75,34 @@ export default function Encaisser() {
         iconImg: tmoneyLogo,
         title: "Configuration Tmoney",
         subtitle: "Gérer le numéro Tmoney configuré.",
-        action: () => setView("config"),
+        action: () => setLocation("/encaisser/tmoney"),
       },
       {
         iconImg: moovLogo,
         title: "Configuration Moov",
         subtitle: "Gérer le numéro Moov configuré.",
-        action: () => setView("config"),
+        action: () => setLocation("/encaisser/moov"),
       },
       {
         icon: <ShoppingBag className="w-5 h-5 text-white" />,
         bg: "bg-green-500",
         title: "Produits / Boutique",
         subtitle: "Liste des produits et boutiques.",
-        action: () => toast({ title: "Bientôt disponible" }),
+        action: () => setLocation("/encaisser/produits"),
       },
       {
         icon: <ShoppingCart className="w-5 h-5 text-white" />,
         bg: "bg-green-500",
         title: "Boutiques configurées",
-        subtitle: "Liste des produits et boutiques configurés.",
-        action: () => toast({ title: "Bientôt disponible" }),
+        subtitle: "Boutiques et numéros de réception.",
+        action: () => setLocation("/encaisser/boutiques"),
       },
       {
         icon: <MessageCircle className="w-5 h-5 text-white" />,
         bg: "bg-[#25D366]",
         title: "Support Paiements via WhatsApp",
         subtitle: "Aide rapide pour vos encaissements.",
-        action: () => toast({ title: "Bientôt disponible" }),
+        action: () => setLocation("/encaisser/whatsapp"),
       },
     ];
 
@@ -132,13 +132,13 @@ export default function Encaisser() {
         </div>
 
         {/* Menu list */}
-        <div className="flex-1 px-4 pb-3 flex flex-col gap-2 overflow-hidden min-h-0">
+        <div className="flex-1 px-4 pb-3 flex flex-col gap-2">
           {filtered.map((item, i) => (
             <motion.button
               key={i}
               whileTap={{ scale: 0.98 }}
               onClick={item.action}
-              className="w-full bg-white rounded-xl flex items-center px-3 py-2.5 gap-3 shadow-sm text-left flex-shrink-0"
+              className="flex-1 w-full bg-white rounded-xl flex items-center px-3 gap-3 shadow-sm text-left min-h-[56px]"
             >
               {item.iconImg ? (
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
