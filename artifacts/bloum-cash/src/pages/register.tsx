@@ -76,13 +76,28 @@ export default function Register() {
       >
         <h2 className="text-[18px] font-bold text-gray-900 text-center mb-5">Inscription</h2>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3 flex-1 min-h-0">
+        {/*
+          autocomplete="off" + data-form-type="other" bloquent Chrome/Google
+          de proposer d'enregistrer le mot de passe et d'afficher l'URL de l'app
+        */}
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          autoComplete="off"
+          data-form-type="other"
+          className="flex flex-col gap-3 flex-1 min-h-0"
+        >
+          {/* Champs leurres cachés — empêchent la détection par le gestionnaire de mots de passe */}
+          <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
+          <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
 
           {/* Nom complet */}
           <div>
             <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Nom complet</label>
             <input
               placeholder="Votre nom complet"
+              type="text"
+              autoComplete="off"
+              data-form-type="other"
               {...form.register("fullName")}
               data-testid="input-fullname"
               className={`w-full h-11 rounded-xl border px-4 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.fullName ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
@@ -97,7 +112,10 @@ export default function Register() {
             <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Adresse e-mail</label>
             <input
               placeholder="nom@exemple.com"
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="off"
+              data-form-type="other"
               {...form.register("email")}
               data-testid="input-email"
               className={`w-full h-11 rounded-xl border px-4 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.email ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
@@ -114,6 +132,8 @@ export default function Register() {
               <input
                 placeholder="Créer votre mot de passe"
                 type={showPin ? "text" : "password"}
+                autoComplete="new-password"
+                data-form-type="other"
                 {...form.register("pin")}
                 data-testid="input-pin"
                 className={`w-full h-11 rounded-xl border px-4 pr-11 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.pin ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
@@ -123,7 +143,7 @@ export default function Register() {
                 onClick={() => setShowPin(!showPin)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                {showPin ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             {errors.pin && (
@@ -138,6 +158,8 @@ export default function Register() {
               <input
                 placeholder="Confirmer votre mot de passe"
                 type={showConfirm ? "text" : "password"}
+                autoComplete="new-password"
+                data-form-type="other"
                 {...form.register("confirmPin")}
                 data-testid="input-confirm-pin"
                 className={`w-full h-11 rounded-xl border px-4 pr-11 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.confirmPin ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
@@ -147,7 +169,7 @@ export default function Register() {
                 onClick={() => setShowConfirm(!showConfirm)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                {showConfirm ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             {errors.confirmPin && (
@@ -163,7 +185,7 @@ export default function Register() {
             type="submit"
             data-testid="button-register"
             disabled={registerMutation.isPending}
-            className="w-full h-13 rounded-xl text-[15px] font-bold text-white bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] shadow-lg active:scale-[0.98] transition-all disabled:opacity-60"
+            className="w-full rounded-xl text-[15px] font-bold text-white bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] shadow-lg active:scale-[0.98] transition-all disabled:opacity-60"
             style={{ height: "52px" }}
           >
             {registerMutation.isPending ? "Création du compte..." : "S'inscrire"}
