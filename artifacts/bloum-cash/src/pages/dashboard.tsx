@@ -29,7 +29,7 @@ const mockChartData = [
 export default function Dashboard() {
   return (
     <Layout>
-      <div className="pb-24">
+      <div className="pb-32">
         {/* Header */}
         <div className="sticky top-0 z-50 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-6 py-4 flex items-center justify-between shadow-md rounded-b-3xl">
           <div className="w-10 h-10 flex flex-col justify-center gap-1.5 cursor-pointer">
@@ -106,12 +106,12 @@ export default function Dashboard() {
             className="bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden"
           >
             <div className="flex justify-between items-start mb-2 relative z-10">
-              <p className="text-white/80 font-medium">Solde Total</p>
+              <p className="text-white/80 font-medium">Statistiques</p>
               <div className="flex items-center gap-1 bg-white/20 rounded-full px-3 py-1 text-sm cursor-pointer hover:bg-white/30 transition-colors">
                 Ce mois <ChevronDown className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-3xl font-bold mb-6 relative z-10">6 520 000 FCFA</h3>
+            <h3 className="text-3xl font-bold mb-6 relative z-10">+650 000 FCFA</h3>
             
             <div className="h-[100px] w-full mt-4 -mx-2 relative z-10">
               <ResponsiveContainer width="100%" height="100%">
