@@ -18,11 +18,11 @@ function OperatorBtn({ op, selected, onClick }: { op: Operator; selected: boolea
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-colors ${
+      className={`flex-1 flex items-center gap-2 px-3 py-1.5 rounded-xl border-2 transition-colors ${
         selected ? "border-green-500 bg-green-50" : "border-gray-200 bg-white"
       }`}
     >
-      <img src={logo} alt={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+      <img src={logo} alt={name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
       <span className={`text-xs font-bold ${selected ? "text-green-700" : "text-gray-500"}`}>{name}</span>
     </button>
   );
@@ -94,7 +94,7 @@ export default function Transfert() {
     <div className="h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] to-[#0d9488] flex flex-col md:max-w-md md:mx-auto overflow-hidden">
 
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-5 pt-10 pb-2">
+      <div className="flex-shrink-0 flex items-center justify-between px-5 pt-4 pb-2">
         <button onClick={() => setLocation("/")} className="text-white p-1 -ml-1">
           <ArrowLeft className="w-6 h-6" />
         </button>
@@ -106,12 +106,12 @@ export default function Transfert() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 flex flex-col px-4 gap-2.5 pb-4 overflow-hidden">
+      <div className="flex-1 flex flex-col px-4 gap-2 pb-3 overflow-hidden">
 
         {/* DEPUIS */}
-        <div className="bg-white rounded-2xl px-4 py-3 shadow-lg flex-shrink-0">
-          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Depuis</p>
-          <div className="flex gap-2 mb-2.5">
+        <div className="bg-white rounded-2xl px-4 py-2.5 shadow-lg flex-shrink-0">
+          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Depuis</p>
+          <div className="flex gap-2 mb-2">
             <OperatorBtn op="tmoney" selected={fromOp === "tmoney"} onClick={() => setFromOp("tmoney")} />
             <OperatorBtn op="moov"   selected={fromOp === "moov"}   onClick={() => setFromOp("moov")} />
           </div>
@@ -121,7 +121,7 @@ export default function Transfert() {
             value={fromPhone}
             onChange={(e) => setFromPhone(e.target.value)}
             placeholder="Ex : 90 12 34 56"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 h-10"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"
           />
         </div>
 
@@ -139,9 +139,9 @@ export default function Transfert() {
         </div>
 
         {/* VERS */}
-        <div className="bg-white rounded-2xl px-4 py-3 shadow-lg flex-shrink-0">
-          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Vers</p>
-          <div className="flex gap-2 mb-2.5">
+        <div className="bg-white rounded-2xl px-4 py-2.5 shadow-lg flex-shrink-0">
+          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Vers</p>
+          <div className="flex gap-2 mb-2">
             <OperatorBtn op="moov"   selected={toOp === "moov"}   onClick={() => setToOp("moov")} />
             <OperatorBtn op="tmoney" selected={toOp === "tmoney"} onClick={() => setToOp("tmoney")} />
           </div>
@@ -151,13 +151,13 @@ export default function Transfert() {
             value={toPhone}
             onChange={(e) => setToPhone(e.target.value)}
             placeholder="Ex : 99 65 43 21"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 h-10"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 h-9"
           />
         </div>
 
         {/* MONTANT */}
-        <div className="bg-white rounded-2xl px-4 py-3 shadow-lg flex-shrink-0">
-          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-2">Montant</p>
+        <div className="bg-white rounded-2xl px-4 py-2.5 shadow-lg flex-shrink-0">
+          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Montant</p>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -175,18 +175,18 @@ export default function Transfert() {
         </div>
 
         {/* Récapitulatif */}
-        <div className="bg-white/15 rounded-2xl px-4 py-2.5 border border-white/20 flex-shrink-0">
-          <div className="flex justify-between items-center py-1">
+        <div className="bg-white/15 rounded-2xl px-4 py-2 border border-white/20 flex-shrink-0">
+          <div className="flex justify-between items-center py-0.5">
             <span className="text-white/70 text-xs">Frais</span>
             <span className="text-white font-semibold text-xs">{amountNum > 0 ? formatAmount(fees) : "—"}</span>
           </div>
-          <div className="h-px bg-white/10" />
-          <div className="flex justify-between items-center py-1">
+          <div className="h-px bg-white/10 my-0.5" />
+          <div className="flex justify-between items-center py-0.5">
             <span className="text-white/70 text-xs">Total débité</span>
-            <span className="text-white font-bold text-sm">{amountNum > 0 ? formatAmount(total) : "—"}</span>
+            <span className="text-white font-bold text-xs">{amountNum > 0 ? formatAmount(total) : "—"}</span>
           </div>
-          <div className="h-px bg-white/10" />
-          <div className="flex justify-between items-center py-1">
+          <div className="h-px bg-white/10 my-0.5" />
+          <div className="flex justify-between items-center py-0.5">
             <span className="text-white/70 text-xs">Délai</span>
             <span className="text-white font-semibold text-xs">Instantané</span>
           </div>
