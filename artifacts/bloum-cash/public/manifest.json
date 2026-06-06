@@ -1,0 +1,15 @@
+{
+  "name": "Bloum Cash",
+  "short_name": "Bloum Cash",
+  "theme_color": "#1a3fc4",
+  "background_color": "#1a3fc4",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

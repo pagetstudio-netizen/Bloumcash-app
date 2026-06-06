@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Bloum Cash API - Fintech PWA for Togo
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: transactions
+    description: Transaction management
+  - name: stats
+    description: Statistics and analytics
+  - name: qr
+    description: QR code management
 paths:
   /healthz:
     get:
@@ -24,6 +32,288 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Unauthorized
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: User registration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+
+  /auth/forgot-pin:
+    post:
+      operationId: forgotPin
+      tags: [auth]
+      summary: Forgot PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPinInput"
+      responses:
+        "200":
+          description: Reset initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: List all transactions
+      parameters:
+        - in: query
+          name: filter
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: period
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Create a new transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /transactions/{id}:
+    get:
+      operationId: getTransaction
+      tags: [transactions]
+      summary: Get a transaction by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /transactions/recent:
+    get:
+      operationId: getRecentTransactions
+      tags: [transactions]
+      summary: Get recent transactions for dashboard
+      responses:
+        "200":
+          description: Recent transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+
+  /stats/summary:
+    get:
+      operationId: getStatsSummary
+      tags: [stats]
+      summary: Get statistics summary
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [today, week, month, year]
+      responses:
+        "200":
+          description: Statistics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsSummary"
+
+  /stats/chart:
+    get:
+      operationId: getStatsChart
+      tags: [stats]
+      summary: Get chart data for statistics
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [today, week, month, year]
+      responses:
+        "200":
+          description: Chart data points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChartPoint"
+
+  /qr/generate:
+    post:
+      operationId: generateQrCode
+      tags: [qr]
+      summary: Generate a QR code for payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QrInput"
+      responses:
+        "201":
+          description: QR code generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrCode"
+
+  /qr/{reference}:
+    get:
+      operationId: getQrCode
+      tags: [qr]
+      summary: Get QR code by reference
+      parameters:
+        - in: path
+          name: reference
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: QR code details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrCode"
+
+  /qr/{reference}/pay:
+    post:
+      operationId: payQrCode
+      tags: [qr]
+      summary: Process payment for a QR code
+      parameters:
+        - in: path
+          name: reference
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+
+  /transfer:
+    post:
+      operationId: createTransfer
+      tags: [transactions]
+      summary: Create a money transfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferInput"
+      responses:
+        "201":
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferResult"
+
+  /transfer/fees:
+    post:
+      operationId: calculateTransferFees
+      tags: [transactions]
+      summary: Calculate transfer fees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransferFeesInput"
+      responses:
+        "200":
+          description: Fee calculation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferFees"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +324,261 @@ components:
       required:
         - status
 
+    LoginInput:
+      type: object
+      required: [email, pin]
+      properties:
+        email:
+          type: string
+          format: email
+        pin:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+    RegisterInput:
+      type: object
+      required: [fullName, email, pin]
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        pin:
+          type: string
+          minLength: 6
+          maxLength: 6
+
+    ForgotPinInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, fullName, email]
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    Transaction:
+      type: object
+      required: [id, type, title, amount, date, status, operator]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [incoming, outgoing]
+        title:
+          type: string
+        amount:
+          type: integer
+        date:
+          type: string
+        time:
+          type: string
+        status:
+          type: string
+          enum: [success, failed, pending]
+        operator:
+          type: string
+          enum: [tmoney, moov]
+        reference:
+          type: string
+        fromPhone:
+          type: ["string", "null"]
+        toPhone:
+          type: ["string", "null"]
+        fees:
+          type: ["integer", "null"]
+        description:
+          type: ["string", "null"]
+
+    TransactionInput:
+      type: object
+      required: [type, title, amount, operator]
+      properties:
+        type:
+          type: string
+          enum: [incoming, outgoing]
+        title:
+          type: string
+        amount:
+          type: integer
+        operator:
+          type: string
+          enum: [tmoney, moov]
+        fromPhone:
+          type: string
+        toPhone:
+          type: string
+        description:
+          type: string
+
+    StatsSummary:
+      type: object
+      required: [totalAmount, incoming, outgoing, transactionCount]
+      properties:
+        totalAmount:
+          type: integer
+        incoming:
+          type: integer
+        outgoing:
+          type: integer
+        transactionCount:
+          type: integer
+        period:
+          type: string
+
+    ChartPoint:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: integer
+
+    QrInput:
+      type: object
+      required: [businessName, phone, operator, amount]
+      properties:
+        businessName:
+          type: string
+        phone:
+          type: string
+        operator:
+          type: string
+          enum: [tmoney, moov]
+        amount:
+          type: integer
+        description:
+          type: string
+
+    QrCode:
+      type: object
+      required: [reference, businessName, phone, operator, amount, qrData]
+      properties:
+        reference:
+          type: string
+        businessName:
+          type: string
+        phone:
+          type: string
+        operator:
+          type: string
+          enum: [tmoney, moov]
+        amount:
+          type: integer
+        qrData:
+          type: string
+        description:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    PaymentInput:
+      type: object
+      required: [payerPhone, payerOperator]
+      properties:
+        payerPhone:
+          type: string
+        payerOperator:
+          type: string
+          enum: [tmoney, moov]
+
+    PaymentResult:
+      type: object
+      required: [success, message, reference]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        reference:
+          type: string
+        transactionId:
+          type: ["string", "null"]
+
+    TransferInput:
+      type: object
+      required: [fromOperator, fromPhone, toOperator, toPhone, amount]
+      properties:
+        fromOperator:
+          type: string
+          enum: [tmoney, moov]
+        fromPhone:
+          type: string
+        toOperator:
+          type: string
+          enum: [tmoney, moov]
+        toPhone:
+          type: string
+        amount:
+          type: integer
+
+    TransferResult:
+      type: object
+      required: [success, message, reference]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        reference:
+          type: string
+        fees:
+          type: integer
+        total:
+          type: integer
+
+    TransferFeesInput:
+      type: object
+      required: [fromOperator, toOperator, amount]
+      properties:
+        fromOperator:
+          type: string
+          enum: [tmoney, moov]
+        toOperator:
+          type: string
+          enum: [tmoney, moov]
+        amount:
+          type: integer
+
+    TransferFees:
+      type: object
+      required: [amount, fees, total, estimatedTime]
+      properties:
+        amount:
+          type: integer
+        fees:
+          type: integer
+        total:
+          type: integer
+        estimatedTime:
+          type: string

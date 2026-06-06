@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Bloum Cash"
+version = "1.0.0"
+id = "artifacts/bloum-cash"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18544
+
+[services.development]
+run = "pnpm --filter @workspace/bloum-cash run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/bloum-cash", "run", "build" ]
+publicDir = "artifacts/bloum-cash/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18544"
+BASE_PATH = "/"

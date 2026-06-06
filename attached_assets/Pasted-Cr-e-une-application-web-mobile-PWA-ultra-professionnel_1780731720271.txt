@@ -1,0 +1,352 @@
+Crée une application web mobile (PWA) ultra professionnelle nommée Bloum Cash. L'application est destinée uniquement au Togo et permet les transferts entre TMoney et Moov Money ainsi que les paiements via QR Code.
+
+IMPORTANT
+
+La capture d'écran que je fournis est la référence principale du design.
+
+Tu dois reproduire son style avec une fidélité maximale :
+
+mêmes proportions
+
+mêmes espacements
+
+mêmes cartes
+
+mêmes coins arrondis
+
+même disposition
+
+même taille des icônes
+
+même taille des textes
+
+même largeur et hauteur des sections
+
+même style premium
+
+même ergonomie
+
+même sensation visuelle
+
+Tu peux uniquement remplacer le nom de la marque par Bloum Cash tout en conservant l'esprit du design.
+
+Design
+
+Créer un design haut de gamme inspiré des meilleures fintech.
+
+Bleu premium
+
+Blanc
+
+Ombres douces
+
+Coins arrondis
+
+Animations fluides
+
+Responsive mobile
+
+Interface élégante
+
+Ne pas créer un design différent.
+
+Respecter la maquette de référence.
+
+
+
+Authentification
+
+Créer :
+
+Splash Screen
+
+
+
+Connexion avec la formule 
+
+Inscription sa aussi 
+
+Mot de passe oublié
+
+Qualité
+
+Tout doit être entièrement relié entre les pages.
+
+Les boutons doivent fonctionner.
+
+Les cartes doivent être parfaitement alignées.
+
+Les textes doivent être bien proportionnés.
+
+Les icônes doivent être homogènes.
+
+Le rendu final doit donner l'impression d'une véritable application fintech premium prête pour une mise en production
+
+Le dashboard doit être reproduit presque pixel par pixel :
+
+mêmes dimensions
+
+mêmes espacements
+
+mêmes marges
+
+mêmes paddings
+
+mêmes coins arrondis
+
+mêmes ombres
+
+même largeur des cartes
+
+même hauteur des cartes
+
+même taille des icônes
+
+même taille des textes
+
+même hiérarchie visuelle
+
+même alignement
+
+même style premium
+IMPORTANT
+
+La capture d'écran fournie est la référence absolue du design.
+
+
+HEADER
+Header fixe identique à la capture.
+À gauche :
+Icône Menu
+Au centre :
+Logo Bloum Cash
+À droite :
+Icône Notification
+Badge rouge
+Le header reste fixe pendant le scroll.
+DASHBOARD
+Reproduire exactement la disposition de la capture.
+Ne pas modifier les proportions.
+Première grande carte
+Afficher quatre boutons parfaitement alignés :
+Encaisser
+Icône QR Code
+Texte :
+Encaisser
+Transférer
+Icône échange
+Texte :
+Transférer
+Historique
+Icône historique
+Texte :
+Historique
+Plus
+Icône menu
+Texte :
+Plus
+Les quatre boutons doivent avoir exactement :
+même largeur
+même hauteur
+même espacement
+même alignement
+Animations douces au clic.
+TRANSACTIONS RÉCENTES
+Créer une grande carte identique à la référence.
+En haut :
+Gauche :
+Transactions récentes
+Droite :
+Voir tout
+Chaque ligne affiche :
+Icône
+Titre
+Date
+Heure
+Montant
+Entrée :
+Montant vert
+Sortie :
+Montant rouge
+Créer automatiquement des transactions réalistes.
+GRANDE CARTE DE STATISTIQUES
+Ne pas oublier cette carte.
+Elle doit apparaître exactement en bas du dashboard, comme sur la capture.
+Même largeur.
+Même hauteur.
+Même rayon des coins.
+Même espacement.
+Même style.
+Fond :
+Dégradé Bleu premium.
+En haut gauche :
+Statistiques
+En haut droite :
+Sélecteur :
+Aujourd'hui
+Cette semaine
+Ce mois
+Cette année
+Au centre :
+Grand montant :
+6 520 000 FCFA
+Texte blanc.
+En dessous :
+Créer un graphique moderne avec une courbe animée représentant les volumes de transactions.
+Caractéristiques :
+ligne fluide
+animation
+fond transparent
+responsive
+Graduations :
+0
+200
+300
+400
+500
+MODULE ENCAISSER
+Lorsque l'utilisateur clique sur Encaisser :
+Afficher :
+Nom du commerce
+Numéro de réception
+Choix :
+TMoney
+Moov Money
+Description
+Montant
+Bouton :
+Générer le QR Code
+Après génération :
+Afficher :
+QR Code
+Référence
+Partager
+Copier le lien
+Télécharger
+Imprimer
+Le QR Code reste enregistré.
+PAIEMENT CLIENT
+Lorsqu'un client scanne le QR Code :
+Ouvrir une page moderne.
+Afficher :
+Logo Bloum Cash
+Nom du commerçant
+Montant
+Bouton :
+Payer
+Afficher ensuite :
+Traitement...
+Vérification...
+Paiement réussi ou échoué.
+MODULE TRANSFERT
+Cliquer sur Transférer.
+Créer :
+De
+Choisir :
+TMoney
+Moov Money
+Téléphone
+Vers
+Choisir :
+TMoney
+Moov Money
+Téléphone
+Montant
+Afficher :
+Montant
+Frais
+Total
+Boutons :
+Calculer les frais
+Transférer
+Afficher une confirmation moderne.
+HISTORIQUE
+Accessible depuis :
+Historique
+ou
+Voir tout
+Fonctions :
+Recherche
+Filtres :
+Entrées
+Sorties
+Aujourd'hui
+Cette semaine
+Ce mois
+Chaque transaction affiche :
+Référence
+Expéditeur
+Destinataire
+Montant
+Frais
+Date
+Statut
+Opérateur
+Bouton :
+Exporter PDF
+MENU PLUS
+Créer :
+Mon QR Code
+Mes statistiques
+Centre d'aide
+FAQ
+Support WhatsApp
+Paramètres
+Conditions d'utilisation
+Politique de confidentialité
+À propos
+Déconnexion
+VALIDATION DES NUMÉROS TOGO
+Détecter automatiquement l'opérateur.
+Préfixes TMoney :
+90
+91
+92
+93
+Afficher :
+TMoney
+Préfixes Moov Money :
+96
+97
+98
+99
+Afficher :
+Moov Money
+Accepter automatiquement :
++228XXXXXXXX
+228XXXXXXXX
+XXXXXXXX
+Afficher la validation en temps réel.
+NAVIGATION
+Application en véritable Single Page Application (SPA).
+Aucun rechargement de page.
+Transitions fluides.
+PWA
+Compatible :
+Android
+iPhone
+Tablette
+Desktop
+Installer comme une application.
+Support hors ligne.
+Notifications Push.
+Service Worker.
+Manifest.
+TECHNOLOGIES
+Frontend :
+React
+Tailwind CSS
+React Router
+Chart.js
+QRCode.js
+Animations :
+Framer Motion
+Icônes :
+Lucide React
+Backend (prévoir l'architecture) :
+Node.js
+Express
+Stockage :
+LocalStorage pour le mode démonstration
+EXIGENCE FINALE
+L'interface doit être quasiment identique à la capture fournie, avec le nom Bloum Cash, une finition premium et une expérience utilisateur digne des meilleures applications FinTech.
