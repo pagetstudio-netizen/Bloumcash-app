@@ -171,8 +171,8 @@ export default function Encaisser() {
       <div className={BG}>
         <Header onBack={() => setView("menu")} title="Nouvelle Configuration" />
 
-        <div className="flex-1 flex flex-col px-4 overflow-hidden min-h-0 justify-between pb-4">
-          <div className="bg-white rounded-2xl p-4 shadow-2xl flex flex-col gap-4">
+        <div className="flex-1 flex flex-col px-4 pb-4 gap-3 min-h-0">
+          <div className="flex-1 bg-white rounded-2xl p-5 shadow-2xl flex flex-col gap-5 min-h-0">
 
             {/* Numéro */}
             <div>
@@ -184,14 +184,14 @@ export default function Encaisser() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Ex : 90 12 34 56"
-                className="w-full border border-gray-300 rounded-xl px-4 h-11 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full border border-gray-300 rounded-xl px-4 h-12 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
 
             {/* Opérateur */}
             <div>
               <label className="text-xs font-semibold text-gray-600 block mb-1.5">Opérateur</label>
-              <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden h-11">
+              <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden h-12">
                 <button
                   type="button"
                   onClick={() => setOperator("tmoney")}
@@ -211,10 +211,6 @@ export default function Encaisser() {
                 >
                   Moov
                 </button>
-                <div className="w-px h-6 bg-gray-300" />
-                <div className="px-3 flex items-center text-gray-400">
-                  <ChevronRight className="w-4 h-4 rotate-90" />
-                </div>
               </div>
             </div>
 
@@ -228,29 +224,15 @@ export default function Encaisser() {
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
                 placeholder="Ex : Ma Boutique"
-                className="w-full border border-gray-300 rounded-xl px-4 h-11 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full border border-gray-300 rounded-xl px-4 h-12 text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
 
-            {/* Bouton QR inline */}
-            <div>
-              <button
-                type="button"
-                disabled={!canGenerate}
-                onClick={canGenerate ? handleCreate : undefined}
-                className={`w-full h-11 rounded-xl text-sm font-bold transition-all ${
-                  canGenerate
-                    ? "bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white shadow"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                Générer Code QR
-              </button>
-              {!canGenerate && (
-                <p className="text-xs text-gray-400 mt-1.5 text-center">
-                  Remplissez tous les champs pour générer le QR
-                </p>
-              )}
+            {/* Info */}
+            <div className="flex-1 bg-blue-50 rounded-xl px-4 py-3 flex items-center">
+              <p className="text-xs text-blue-500 leading-relaxed">
+                Ce QR code sera lié au numéro et à la boutique renseignés. Le client scannera ce code pour vous payer.
+              </p>
             </div>
           </div>
 
@@ -258,9 +240,9 @@ export default function Encaisser() {
           <button
             type="button"
             onClick={handleCreate}
-            className="w-full h-13 py-3.5 mt-4 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white rounded-2xl text-sm font-bold shadow-lg"
+            className="flex-shrink-0 w-full h-14 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white rounded-2xl text-base font-bold shadow-lg"
           >
-            Créer la configuration
+            {canGenerate ? "Générer le Code QR" : "Créer la configuration"}
           </button>
         </div>
       </div>
