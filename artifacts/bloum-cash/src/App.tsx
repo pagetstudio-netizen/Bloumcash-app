@@ -16,6 +16,16 @@ import Historique from "@/pages/historique";
 import Plus from "@/pages/plus";
 import NotFound from "@/pages/not-found";
 
+import MonQrCode from "@/pages/plus/mon-qr-code";
+import Statistiques from "@/pages/plus/statistiques";
+import Aide from "@/pages/plus/aide";
+import Faq from "@/pages/plus/faq";
+import SupportWhatsApp from "@/pages/plus/whatsapp";
+import Parametres from "@/pages/plus/parametres";
+import Conditions from "@/pages/plus/conditions";
+import Confidentialite from "@/pages/plus/confidentialite";
+import Apropos from "@/pages/plus/apropos";
+
 const queryClient = new QueryClient();
 
 function Router() {
@@ -31,6 +41,15 @@ function Router() {
       <Route path="/transfert" component={Transfert} />
       <Route path="/historique" component={Historique} />
       <Route path="/plus" component={Plus} />
+      <Route path="/plus/mon-qr-code" component={MonQrCode} />
+      <Route path="/plus/statistiques" component={Statistiques} />
+      <Route path="/plus/aide" component={Aide} />
+      <Route path="/plus/faq" component={Faq} />
+      <Route path="/plus/whatsapp" component={SupportWhatsApp} />
+      <Route path="/plus/parametres" component={Parametres} />
+      <Route path="/plus/conditions" component={Conditions} />
+      <Route path="/plus/confidentialite" component={Confidentialite} />
+      <Route path="/plus/apropos" component={Apropos} />
       <Route component={NotFound} />
     </Switch>
   );

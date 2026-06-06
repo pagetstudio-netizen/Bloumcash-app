@@ -20,25 +20,25 @@ export default function Plus() {
     {
       title: "Mon Activité",
       items: [
-        { icon: <QrCode className="w-5 h-5" />, label: "Mon QR Code", href: "/plus" },
-        { icon: <BarChart3 className="w-5 h-5" />, label: "Mes statistiques", href: "/plus" },
+        { icon: <QrCode className="w-5 h-5" />, label: "Mon QR Code", href: "/plus/mon-qr-code" },
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Mes statistiques", href: "/plus/statistiques" },
       ]
     },
     {
       title: "Assistance",
       items: [
-        { icon: <HelpCircle className="w-5 h-5" />, label: "Centre d'aide", href: "/plus" },
-        { icon: <MessageCircleQuestion className="w-5 h-5" />, label: "FAQ", href: "/plus" },
-        { icon: <Phone className="w-5 h-5" />, label: "Support WhatsApp", href: "/plus", color: "text-green-500" },
+        { icon: <HelpCircle className="w-5 h-5" />, label: "Centre d'aide", href: "/plus/aide" },
+        { icon: <MessageCircleQuestion className="w-5 h-5" />, label: "FAQ", href: "/plus/faq" },
+        { icon: <Phone className="w-5 h-5" />, label: "Support WhatsApp", href: "/plus/whatsapp", color: "text-green-500" },
       ]
     },
     {
       title: "Préférences & Légal",
       items: [
-        { icon: <Settings className="w-5 h-5" />, label: "Paramètres", href: "/plus" },
-        { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus" },
-        { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus" },
-        { icon: <Info className="w-5 h-5" />, label: "À propos de Bloum Cash", href: "/plus" },
+        { icon: <Settings className="w-5 h-5" />, label: "Paramètres", href: "/plus/parametres" },
+        { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions" },
+        { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite" },
+        { icon: <Info className="w-5 h-5" />, label: "À propos de Bloum Cash", href: "/plus/apropos" },
       ]
     }
   ];
