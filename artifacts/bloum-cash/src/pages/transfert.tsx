@@ -281,24 +281,6 @@ export default function Transfert() {
               </div>
             </div>
 
-            {/* Montants rapides */}
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Montant rapide</p>
-              <div className="grid grid-cols-3 gap-2">
-                {QUICK_AMOUNTS.map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setAmount(String(v))}
-                    className="py-2 rounded-full text-xs font-bold transition-all active:scale-95"
-                    style={amountNum === v
-                      ? { background: "#3B4FC5", color: "white" }
-                      : { background: "#F2F3FA", color: "#555" }}
-                  >
-                    {fmt(v)}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {/* Résumé */}
             <div className="rounded-2xl overflow-hidden border border-gray-100">
