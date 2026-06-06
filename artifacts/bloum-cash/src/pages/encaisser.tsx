@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, Search, ChevronRight, QrCode,
   ShoppingBag, ShoppingCart, MessageCircle,
-  Share2, Copy, Download, Printer, ScanLine,
+  Share2, Copy, Download, Printer,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
@@ -20,7 +20,7 @@ const BG = "h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] via-[#1558b0] to-[
 
 function Header({ onBack, title }: { onBack: () => void; title: string }) {
   return (
-    <div className="flex items-center px-5 pt-14 pb-4 flex-shrink-0">
+    <div className="flex items-center px-5 pt-6 pb-3 flex-shrink-0">
       <button onClick={onBack} className="text-white p-1 -ml-1">
         <ArrowLeft className="w-6 h-6" />
       </button>
@@ -158,24 +158,7 @@ export default function Encaisser() {
           ))}
         </div>
 
-        {/* Bottom buttons */}
-        <div className="px-4 pb-6 pt-3 flex flex-col gap-2.5 flex-shrink-0">
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => toast({ title: "Scanner", description: "Bientôt disponible." })}
-            className="w-full h-12 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white rounded-full text-sm font-bold shadow-md flex items-center justify-center gap-2"
-          >
-            <ScanLine className="w-4 h-4" />
-            Scanner un QR Code
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setView("config")}
-            className="w-full h-12 bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-white rounded-full text-sm font-bold shadow-md"
-          >
-            Créer une Nouvelle Configuration
-          </motion.button>
-        </div>
+        <div className="pb-3 flex-shrink-0" />
       </div>
     );
   }
