@@ -419,16 +419,14 @@ export default function Transfert() {
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
 
-              {/* Pill numéro source */}
+              {/* Pill compte source */}
               <div
-                className="flex-1 flex items-center gap-1.5 rounded-full px-4 py-2.5"
+                className="flex-1 flex items-center gap-2 rounded-full px-4 py-2.5"
                 style={{ background: "#F0F1FA" }}
               >
-                <span className="text-[18px] leading-none">🇹🇬</span>
-                <span className="text-[13px] font-medium text-gray-500">+228</span>
-                <span className="text-gray-400 text-sm mx-0.5">·</span>
-                <span className="text-[13px] font-semibold text-gray-700">
-                  {fromOp === "tmoney" ? "90 XX XX XX" : "96 XX XX XX"}
+                <span className="text-[13px] font-semibold text-gray-500">Mon compte</span>
+                <span className="text-[12px] text-gray-400">
+                  {fromOp === "tmoney" ? "• TMoney" : "• Moov Money"}
                 </span>
               </div>
             </div>
