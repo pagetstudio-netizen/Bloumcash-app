@@ -8,7 +8,7 @@ import {
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
@@ -32,7 +32,7 @@ function Header({ onBack, title }: { onBack: () => void; title: string }) {
 export default function Encaisser() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [view, setView] = useState<View>("menu");
   const [operator, setOperator] = useState<Operator>("tmoney");
@@ -49,7 +49,7 @@ export default function Encaisser() {
 
   const handleCreate = () => {
     if (!phone || phone.length < 8 || !shopName || shopName.length < 2) {
-      toast({ variant: "destructive", title: "Champs requis", description: "Veuillez remplir tous les champs." });
+      showModal({ type: "warning", title: "Champs requis", message: "Veuillez remplir tous les champs." });
       return;
     }
     const ref = "QR" + Math.random().toString(36).substring(2, 8).toUpperCase();

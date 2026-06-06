@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 
 const BG = "h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] via-[#1558b0] to-[#0d9488] flex flex-col md:max-w-md md:mx-auto overflow-hidden";
@@ -11,7 +11,7 @@ const BG = "h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] via-[#1558b0] to-[
 export default function ConfigTmoney() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [phone, setPhone] = useState("90 12 34 56");
   const [name, setName] = useState("Mon compte TMoney");
@@ -25,11 +25,11 @@ export default function ConfigTmoney() {
 
   const handleSave = () => {
     if (phone.length < 8) {
-      toast({ variant: "destructive", title: "Numéro invalide", description: "Entrez un numéro TMoney valide." });
+      showModal({ type: "error", title: "Numéro invalide", message: "Entrez un numéro TMoney valide." });
       return;
     }
     setSaved(true);
-    toast({ title: "Configuration sauvegardée !", description: "Votre numéro TMoney est configuré." });
+    showModal({ type: "success", title: "Configuration sauvegardée !", message: "Votre numéro TMoney est bien configuré." });
   };
 
   return (

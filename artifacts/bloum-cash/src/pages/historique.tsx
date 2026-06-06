@@ -5,7 +5,7 @@ import { ArrowLeft, Search, Download, X, Copy, ArrowDownLeft, ArrowUpRight, Chec
 import { formatAmount } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
@@ -49,7 +49,7 @@ function InfoRow({ label, value, valueClass = "" }: { label: string; value: stri
 export default function Historique() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Tx | null>(null);
 
@@ -66,7 +66,7 @@ export default function Historique() {
 
   const copyRef = (ref: string) => {
     navigator.clipboard?.writeText(ref);
-    toast({ title: "Référence copiée !" });
+    showModal({ type: "success", title: "Référence copiée !", message: ref });
   };
 
   return (

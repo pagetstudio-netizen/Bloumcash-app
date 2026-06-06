@@ -3,14 +3,14 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Bell, Moon, Globe, Lock, ChevronRight, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
 export default function Parametres() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [notifs, setNotifs] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
@@ -67,7 +67,7 @@ export default function Parametres() {
           label: "Langue",
           description: langue,
           type: "link",
-          onClick: () => toast({ title: "Bientôt disponible", description: "Choix de langue à venir." }),
+          onClick: () => showModal({ type: "info", title: "Bientôt disponible", message: "Le choix de langue sera disponible prochainement." }),
         },
       ],
     },
@@ -88,7 +88,7 @@ export default function Parametres() {
           label: "Authentification biométrique",
           description: "Empreinte digitale / Face ID",
           type: "link",
-          onClick: () => toast({ title: "Bientôt disponible" }),
+          onClick: () => showModal({ type: "info", title: "Bientôt disponible", message: "L'authentification biométrique sera disponible prochainement." }),
         },
       ],
     },

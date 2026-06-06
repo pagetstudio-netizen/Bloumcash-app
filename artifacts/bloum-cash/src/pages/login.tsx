@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -27,7 +27,7 @@ const loginSchema = z.object({
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
-  const { toast } = useToast();
+  const { showModal } = useModal();
   const loginMutation = useLogin();
   const [showPin, setShowPin] = useState(false);
 
@@ -45,10 +45,10 @@ export default function Login() {
       login(result.user, result.token);
       setLocation("/");
     } catch {
-      toast({
-        variant: "destructive",
+      showModal({
+        type: "error",
         title: "Erreur de connexion",
-        description: "Email ou mot de passe incorrect. Vérifiez vos identifiants.",
+        message: "Email ou mot de passe incorrect. Vérifiez vos identifiants.",
       });
     }
   }

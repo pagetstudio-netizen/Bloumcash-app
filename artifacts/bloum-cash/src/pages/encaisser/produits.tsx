@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 import { formatAmount } from "@/lib/utils";
 
 const BG = "h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] via-[#1558b0] to-[#0d9488] flex flex-col md:max-w-md md:mx-auto overflow-hidden";
@@ -23,7 +23,7 @@ const initialProduits: Produit[] = [
 export default function Produits() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [produits, setProduits] = useState<Produit[]>(initialProduits);
   const [showForm, setShowForm] = useState(false);
@@ -39,7 +39,7 @@ export default function Produits() {
 
   const handleAdd = () => {
     if (!nom || !prix) {
-      toast({ variant: "destructive", title: "Champs requis", description: "Nom et prix sont obligatoires." });
+      showModal({ type: "warning", title: "Champs requis", message: "Nom et prix sont obligatoires." });
       return;
     }
     const newProduit: Produit = {
@@ -51,12 +51,12 @@ export default function Produits() {
     setProduits((p) => [newProduit, ...p]);
     setNom(""); setPrix(""); setDescription("");
     setShowForm(false);
-    toast({ title: "Produit ajouté !" });
+    showModal({ type: "success", title: "Produit ajouté !", message: "Le produit a été ajouté à votre catalogue." });
   };
 
   const handleDelete = (id: string) => {
     setProduits((p) => p.filter((x) => x.id !== id));
-    toast({ title: "Produit supprimé." });
+    showModal({ type: "info", title: "Produit supprimé", message: "Le produit a été retiré de votre catalogue." });
   };
 
   return (

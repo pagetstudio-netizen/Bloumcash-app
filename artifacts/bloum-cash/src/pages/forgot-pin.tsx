@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
 import { useForgotPin } from "@workspace/api-client-react";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +25,7 @@ const forgotPinSchema = z.object({
 
 export default function ForgotPin() {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
   const forgotPinMutation = useForgotPin();
 
   const form = useForm<z.infer<typeof forgotPinSchema>>({
@@ -41,17 +41,18 @@ export default function ForgotPin() {
       // await forgotPinMutation.mutateAsync({ data: values });
       
       setTimeout(() => {
-        toast({
+        showModal({
+          type: "success",
           title: "Email envoyé",
-          description: "Si cette adresse existe, un lien de réinitialisation a été envoyé.",
+          message: "Si cette adresse existe, un lien de réinitialisation a été envoyé.",
+          onClose: () => setLocation("/login"),
         });
-        setLocation("/login");
       }, 1000);
     } catch (error) {
-      toast({
-        variant: "destructive",
+      showModal({
+        type: "error",
         title: "Erreur",
-        description: "Une erreur est survenue.",
+        message: "Une erreur est survenue. Veuillez réessayer.",
       });
     }
   }

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -32,7 +32,7 @@ const registerSchema = z.object({
 export default function Register() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
-  const { toast } = useToast();
+  const { showModal } = useModal();
   const registerMutation = useRegister();
   const [showPin, setShowPin] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -53,13 +53,12 @@ export default function Register() {
         data: { fullName: values.fullName, email: values.email, pin: values.pin },
       });
       login(result.user, result.token);
-      toast({ title: "Compte créé avec succès !", description: "Bienvenue sur Bloum Cash." });
-      setLocation("/");
+      showModal({ type: "success", title: "Compte créé !", message: "Bienvenue sur Bloum Cash.", onClose: () => setLocation("/") });
     } catch {
-      toast({
-        variant: "destructive",
+      showModal({
+        type: "error",
         title: "Erreur d'inscription",
-        description: "Cet email est peut-être déjà utilisé. Veuillez réessayer.",
+        message: "Cet email est peut-être déjà utilisé. Veuillez réessayer.",
       });
     }
   }

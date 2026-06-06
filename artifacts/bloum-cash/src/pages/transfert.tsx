@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowDownUp, CheckCircle2, Zap, HelpCircle, ChevronDown, X }
 import { motion, AnimatePresence } from "framer-motion";
 import { formatAmount, validateTogoPhone } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
@@ -103,7 +103,7 @@ function OpModal({
 export default function Transfert() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [fromOp, setFromOp] = useState<Operator>("tmoney");
   const [toOp,   setToOp]   = useState<Operator>("moov");
@@ -147,10 +147,10 @@ export default function Transfert() {
 
   const handleConfirm = () => {
     if (!canConfirm) {
-      toast({
-        variant: "destructive",
-        title: "Champs incomplets",
-        description: "Vérifiez le numéro destinataire et le montant (min. 100 FCFA).",
+      showModal({
+        type: "warning",
+        title: "Informations requises",
+        message: "Vérifiez le numéro destinataire et le montant (minimum 100 FCFA).",
       });
       return;
     }

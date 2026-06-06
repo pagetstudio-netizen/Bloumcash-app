@@ -4,14 +4,14 @@ import { ArrowLeft, Share2, Download, Printer } from "lucide-react";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
 export default function MonQrCode() {
   const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -55,8 +55,8 @@ export default function MonQrCode() {
 
         <div className="flex gap-3 w-full">
           {[
-            { icon: <Share2 className="w-5 h-5" />, label: "Partager",    fn: () => toast({ title: "Lien partagé !" }) },
-            { icon: <Download className="w-5 h-5" />, label: "Enregistrer", fn: () => toast({ title: "Téléchargement en cours..." }) },
+            { icon: <Share2 className="w-5 h-5" />, label: "Partager",    fn: () => showModal({ type: "success", title: "Lien partagé !", message: "Votre QR Code a été partagé avec succès." }) },
+            { icon: <Download className="w-5 h-5" />, label: "Enregistrer", fn: () => showModal({ type: "info", title: "Téléchargement", message: "Votre QR Code est en cours de téléchargement." }) },
             { icon: <Printer className="w-5 h-5" />, label: "Imprimer",   fn: () => window.print() },
           ].map((btn, i) => (
             <motion.button

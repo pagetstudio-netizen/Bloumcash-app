@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Store, Plus, Trash2, X, QrCode } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
-import { useToast } from "@/hooks/use-toast";
+import { useModal } from "@/components/app-modal";
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
 
@@ -27,7 +27,7 @@ const initialBoutiques: Boutique[] = [
 export default function Boutiques() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { showModal } = useModal();
 
   const [boutiques, setBoutiques] = useState<Boutique[]>(initialBoutiques);
   const [showForm, setShowForm] = useState(false);
@@ -43,18 +43,18 @@ export default function Boutiques() {
 
   const handleAdd = () => {
     if (!nom || numero.length < 8) {
-      toast({ variant: "destructive", title: "Champs requis", description: "Nom et numéro valide obligatoires." });
+      showModal({ type: "warning", title: "Champs requis", message: "Nom et numéro valide obligatoires." });
       return;
     }
     const ref = "QR" + Math.random().toString(36).substring(2, 8).toUpperCase();
     setBoutiques((b) => [{ id: Date.now().toString(), nom, operateur, numero, ref }, ...b]);
     setNom(""); setNumero(""); setShowForm(false);
-    toast({ title: "Boutique ajoutée !" });
+    showModal({ type: "success", title: "Boutique ajoutée !", message: "Votre boutique a été configurée avec succès." });
   };
 
   const handleDelete = (id: string) => {
     setBoutiques((b) => b.filter((x) => x.id !== id));
-    toast({ title: "Boutique supprimée." });
+    showModal({ type: "info", title: "Boutique supprimée", message: "La boutique a été retirée de votre liste." });
   };
 
   return (
