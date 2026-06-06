@@ -495,11 +495,14 @@ export default function Transfert() {
                 <span className="text-gray-400 text-sm mx-0.5">·</span>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={toPhone}
                   onChange={(e) => setToPhone(e.target.value)}
                   placeholder="00 00 00 00"
                   maxLength={11}
+                  autoComplete="off"
                   className="flex-1 bg-transparent text-[13px] font-semibold text-gray-800 placeholder:text-gray-400 placeholder:font-normal focus:outline-none min-w-0"
+                  style={{ userSelect: "text", WebkitUserSelect: "text", touchAction: "manipulation", pointerEvents: "auto" }}
                 />
                 {/* Bouton contacts */}
                 <button className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 active:scale-90 transition-transform" style={{ background: "#3B4FC520" }}>

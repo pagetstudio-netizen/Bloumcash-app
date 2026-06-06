@@ -22,11 +22,14 @@ img {
 button img, a img {
   pointer-events: none;
 }
-input, textarea {
+input, textarea, [contenteditable] {
+  -webkit-touch-callout: default;
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
   user-select: text;
+  pointer-events: auto !important;
+  touch-action: manipulation;
 }
 
 @custom-variant dark (&:is(.dark *));
