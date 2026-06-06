@@ -22,7 +22,7 @@ export function Layout({ children, requireAuth = true }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-[100dvh] w-full bg-background flex flex-col md:mx-auto md:max-w-md relative overflow-hidden">
+    <div className="min-h-[100dvh] w-full bg-background flex flex-col md:mx-auto md:max-w-md relative overflow-x-hidden">
       {children}
     </div>
   );
