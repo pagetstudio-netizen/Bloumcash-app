@@ -20,10 +20,26 @@ const mockTransactions = [
   { id: "4", type: "incoming", title: "Paiement reçu", operator: "moov", amount: 325000, date: "Hier, 14:10" },
 ];
 
-const mockChartData = [
-  { value: 400000 }, { value: 300000 }, { value: 550000 },
-  { value: 450000 }, { value: 700000 }, { value: 600000 }, { value: 850000 },
-];
+const STAT_PERIODS = ["Semaine", "Mois", "Année"] as const;
+type StatPeriod = (typeof STAT_PERIODS)[number];
+
+const STAT_DATA: Record<StatPeriod, { chartData: { value: number }[]; total: number; label: string }> = {
+  Semaine: {
+    chartData: [{ value: 120000 }, { value: 200000 }, { value: 150000 }, { value: 320000 }, { value: 280000 }, { value: 410000 }, { value: 190000 }],
+    total: 1670000,
+    label: "Cette semaine",
+  },
+  Mois: {
+    chartData: [{ value: 400000 }, { value: 300000 }, { value: 550000 }, { value: 450000 }, { value: 700000 }, { value: 600000 }, { value: 850000 }],
+    total: 4850000,
+    label: "Ce mois",
+  },
+  Année: {
+    chartData: [{ value: 2500000 }, { value: 1800000 }, { value: 3200000 }, { value: 2900000 }, { value: 4100000 }, { value: 3700000 }],
+    total: 18200000,
+    label: "Cette année",
+  },
+};
 
 const menuGroups = [
   {
@@ -56,6 +72,8 @@ export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [statPeriod, setStatPeriod] = useState<StatPeriod>("Mois");
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -239,30 +257,72 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] rounded-3xl shadow-lg p-6 text-white relative overflow-hidden"
+          className="bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] rounded-3xl shadow-lg p-5 text-white relative overflow-hidden"
         >
-          <div className="flex justify-between items-start mb-2 relative z-10">
-            <p className="text-white/80 font-medium">Statistiques</p>
-            <div className="flex items-center gap-1 bg-white/20 rounded-full px-3 py-1 text-sm cursor-pointer hover:bg-white/30 transition-colors">
-              Ce mois <ChevronDown className="w-4 h-4" />
+          {/* Période dropdown */}
+          <div className="flex justify-between items-center mb-1 relative z-10">
+            <button
+              onClick={() => setLocation("/plus/statistiques")}
+              className="text-white/80 font-semibold text-sm flex items-center gap-1 active:text-white"
+            >
+              Statistiques <ChevronRight className="w-4 h-4" />
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowPeriodMenu((v) => !v)}
+                className="flex items-center gap-1 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold active:bg-white/30 transition-colors"
+              >
+                {STAT_DATA[statPeriod].label} <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <AnimatePresence>
+                {showPeriodMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-8 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 min-w-[130px]"
+                  >
+                    {STAT_PERIODS.map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => { setStatPeriod(p); setShowPeriodMenu(false); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${
+                          statPeriod === p
+                            ? "bg-blue-50 text-blue-700 font-bold"
+                            : "text-gray-700 active:bg-gray-50"
+                        }`}
+                      >
+                        {STAT_DATA[p].label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
-          <h3 className="text-3xl font-bold mb-6 relative z-10">+650 000 FCFA</h3>
-          <div className="h-[100px] w-full mt-4 -mx-2 relative z-10">
+
+          <h3 className="text-2xl font-bold relative z-10">
+            +{formatAmount(STAT_DATA[statPeriod].total)}
+          </h3>
+          <p className="text-white/50 text-xs mb-3 relative z-10">Encaissements nets</p>
+
+          <div className="h-[90px] w-full -mx-2 relative z-10">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockChartData}>
+              <LineChart data={STAT_DATA[statPeriod].chartData}>
                 <Line
                   type="monotone"
                   dataKey="value"
                   stroke="#22c55e"
-                  strokeWidth={4}
+                  strokeWidth={3}
                   dot={false}
                   isAnimationActive={true}
-                  animationDuration={1500}
+                  animationDuration={800}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
+
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform translate-x-10 -translate-y-10" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform -translate-x-10 translate-y-10" />
         </motion.div>
