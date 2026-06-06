@@ -2,6 +2,23 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+/* ── Bloquer menu contextuel & appui long sur mobile ─────────── */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+img, button, a {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+img {
+  pointer-events: none;
+}
+button img, a img {
+  pointer-events: none;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
