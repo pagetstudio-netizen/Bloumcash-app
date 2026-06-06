@@ -8,21 +8,11 @@ import { Eye, EyeOff } from "lucide-react";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "@/components/auth-provider";
 import { useModal } from "@/components/app-modal";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 
 const registerSchema = z.object({
-  fullName: z.string().min(2, { message: "Le nom complet est requis" }),
-  email: z.string().email({ message: "Adresse e-mail invalide" }),
-  pin: z.string().min(4, { message: "Mot de passe requis (min. 4 caractères)" }),
+  fullName: z.string().min(2, { message: "Nom complet requis" }),
+  email: z.string().email({ message: "Email invalide" }),
+  pin: z.string().min(4, { message: "Min. 4 caractères" }),
   confirmPin: z.string().min(4, { message: "Confirmez votre mot de passe" }),
 }).refine((data) => data.pin === data.confirmPin, {
   message: "Les mots de passe ne correspondent pas",
@@ -39,12 +29,7 @@ export default function Register() {
 
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
-      fullName: "",
-      email: "",
-      pin: "",
-      confirmPin: "",
-    },
+    defaultValues: { fullName: "", email: "", pin: "", confirmPin: "" },
   });
 
   async function onSubmit(values: z.infer<typeof registerSchema>) {
@@ -53,7 +38,12 @@ export default function Register() {
         data: { fullName: values.fullName, email: values.email, pin: values.pin },
       });
       login(result.user, result.token);
-      showModal({ type: "success", title: "Compte créé !", message: "Bienvenue sur Bloum Cash.", onClose: () => setLocation("/") });
+      showModal({
+        type: "success",
+        title: "Compte créé !",
+        message: "Bienvenue sur Bloum Cash.",
+        onClose: () => setLocation("/"),
+      });
     } catch {
       showModal({
         type: "error",
@@ -63,132 +53,131 @@ export default function Register() {
     }
   }
 
+  const errors = form.formState.errors;
+
   return (
-    <div className="min-h-[100dvh] w-full bg-background flex flex-col md:mx-auto md:max-w-md relative">
-      <div className="h-44 bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] flex flex-col items-center justify-center p-6 text-white rounded-b-[2rem]">
-        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-3">
-          <div className="w-7 h-7 bg-primary rounded-full" />
+    <div className="h-[100dvh] w-full overflow-hidden flex flex-col md:max-w-md md:mx-auto bg-gradient-to-b from-[#1a3fc4] to-[#2b50e8]">
+
+      {/* ── En-tête compact ── */}
+      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-8 pb-5 px-6">
+        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-2.5">
+          <div className="w-6 h-6 bg-[#1a3fc4] rounded-full" />
         </div>
-        <h1 className="text-xl font-bold">Bloum Cash</h1>
+        <h1 className="text-[17px] font-bold text-white">Bloum Cash</h1>
+        <p className="text-white/60 text-[12px] mt-0.5">Créer votre compte</p>
       </div>
 
-      <div className="flex-1 p-6 -mt-8 pb-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card rounded-2xl shadow-xl p-6 border border-border"
-        >
-          <h2 className="text-xl font-bold text-center mb-6">Inscription</h2>
+      {/* ── Carte formulaire ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex-1 bg-white rounded-t-3xl px-6 pt-6 pb-4 flex flex-col min-h-0 overflow-hidden"
+      >
+        <h2 className="text-[18px] font-bold text-gray-900 text-center mb-5">Inscription</h2>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="fullName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nom Complet</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nom Complet" data-testid="input-fullname" {...field} className="h-12" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-3 flex-1 min-h-0">
 
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Adresse e-mail</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Adresse e-mail" type="email" data-testid="input-email" {...field} className="h-12" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="pin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mot de passe</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          placeholder="Créer votre mot de passe"
-                          type={showPin ? "text" : "password"}
-                          data-testid="input-pin"
-                          {...field}
-                          className="h-12 pr-12"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPin(!showPin)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="confirmPin"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Confirmer le mot de passe</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Input
-                          placeholder="Confirmer votre mot de passe"
-                          type={showConfirm ? "text" : "password"}
-                          data-testid="input-confirm-pin"
-                          {...field}
-                          className="h-12 pr-12"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirm(!showConfirm)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="submit"
-                data-testid="button-register"
-                className="w-full h-14 mt-2 text-base font-semibold bg-[#1a3fc4] hover:bg-[#2b50e8] text-white rounded-xl"
-                disabled={registerMutation.isPending}
-              >
-                {registerMutation.isPending ? "Création du compte..." : "S'Inscrire"}
-              </Button>
-            </form>
-          </Form>
-
-          <div className="mt-6 text-center">
-            <p className="text-muted-foreground text-sm">
-              Vous avez déjà un compte ?{" "}
-              <Link href="/login" className="text-primary font-semibold">
-                Se connecter
-              </Link>
-            </p>
+          {/* Nom complet */}
+          <div>
+            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Nom complet</label>
+            <input
+              placeholder="Votre nom complet"
+              {...form.register("fullName")}
+              data-testid="input-fullname"
+              className={`w-full h-11 rounded-xl border px-4 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.fullName ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
+            />
+            {errors.fullName && (
+              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.fullName.message}</p>
+            )}
           </div>
-        </motion.div>
-      </div>
+
+          {/* Email */}
+          <div>
+            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Adresse e-mail</label>
+            <input
+              placeholder="nom@exemple.com"
+              type="email"
+              {...form.register("email")}
+              data-testid="input-email"
+              className={`w-full h-11 rounded-xl border px-4 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.email ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
+            />
+            {errors.email && (
+              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.email.message}</p>
+            )}
+          </div>
+
+          {/* Mot de passe */}
+          <div>
+            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Mot de passe</label>
+            <div className="relative">
+              <input
+                placeholder="Créer votre mot de passe"
+                type={showPin ? "text" : "password"}
+                {...form.register("pin")}
+                data-testid="input-pin"
+                className={`w-full h-11 rounded-xl border px-4 pr-11 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.pin ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPin ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+              </button>
+            </div>
+            {errors.pin && (
+              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.pin.message}</p>
+            )}
+          </div>
+
+          {/* Confirmer mot de passe */}
+          <div>
+            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Confirmer le mot de passe</label>
+            <div className="relative">
+              <input
+                placeholder="Confirmer votre mot de passe"
+                type={showConfirm ? "text" : "password"}
+                {...form.register("confirmPin")}
+                data-testid="input-confirm-pin"
+                className={`w-full h-11 rounded-xl border px-4 pr-11 text-[14px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1a3fc4]/30 focus:border-[#1a3fc4] transition-all ${errors.confirmPin ? "border-red-400 bg-red-50" : "border-gray-200 bg-gray-50"}`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(!showConfirm)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showConfirm ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+              </button>
+            </div>
+            {errors.confirmPin && (
+              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.confirmPin.message}</p>
+            )}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Bouton S'inscrire */}
+          <button
+            type="submit"
+            data-testid="button-register"
+            disabled={registerMutation.isPending}
+            className="w-full h-13 rounded-xl text-[15px] font-bold text-white bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] shadow-lg active:scale-[0.98] transition-all disabled:opacity-60"
+            style={{ height: "52px" }}
+          >
+            {registerMutation.isPending ? "Création du compte..." : "S'inscrire"}
+          </button>
+
+          {/* Lien connexion */}
+          <p className="text-center text-[13px] text-gray-500 pb-1">
+            Vous avez déjà un compte ?{" "}
+            <Link href="/login" className="text-[#1a3fc4] font-bold">
+              Se connecter
+            </Link>
+          </p>
+        </form>
+      </motion.div>
     </div>
   );
 }
