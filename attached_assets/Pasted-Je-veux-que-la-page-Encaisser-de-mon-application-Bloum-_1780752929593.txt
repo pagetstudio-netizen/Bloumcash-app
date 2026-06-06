@@ -1,0 +1,116 @@
+Je veux que la page "Encaisser" de mon application Bloum Cash soit reproduite exactement comme la maquette que je fournis. Cette maquette est la référence officielle du design et doit être respectée presque pixel par pixel.
+IMPORTANT
+Reproduire le même fond.
+Reproduire les mêmes couleurs.
+Reproduire les mêmes cartes.
+Reproduire les mêmes dimensions.
+Reproduire les mêmes espacements.
+Reproduire les mêmes marges.
+Reproduire les mêmes paddings.
+Reproduire les mêmes coins arrondis.
+Reproduire les mêmes ombres.
+Reproduire les mêmes tailles d'icônes.
+Reproduire les mêmes tailles de textes.
+Reproduire la même hiérarchie visuelle.
+Reproduire le même style premium.
+Ne pas inventer un nouveau design.
+La maquette est la seule référence.
+ARRIÈRE-PLAN
+Utiliser exactement le même fond que sur la maquette :
+Dégradé premium
+Même luminosité
+Même profondeur
+Même effet visuel
+Le fond doit rester fixe.
+PAGE FIXE
+La page Encaisser doit être entièrement visible sur un écran mobile.
+Je ne veux :
+Aucun défilement vertical
+Aucun défilement horizontal
+Aucune barre de scroll
+Toute l'interface doit tenir sur un seul écran.
+Utiliser une mise en page avec :
+height: 100vh
+overflow: hidden
+La page doit donner l'impression d'une véritable application native.
+HEADER
+Créer un header identique à la maquette.
+À gauche :
+Bouton Retour
+Au centre :
+Logo Bloum Cash
+En dessous :
+Texte : Encaisser
+À droite :
+Icône d'aide ou information
+Le header doit rester fixe.
+CARTE PRINCIPALE
+Créer une grande carte blanche avec :
+Coins très arrondis
+Ombres légères
+Même largeur que la maquette
+Même hauteur que la maquette
+CONFIGURATION DE L'ENCAISSEMENT
+Afficher les champs suivants :
+Nom du commerce
+Champ moderne avec icône.
+Numéro de réception
+Champ téléphone.
+Détection automatique du format.
+Opérateur
+Deux grandes cartes sélectionnables :
+TMoney
+Moov Money
+Chaque carte contient :
+Logo
+Nom
+Indicateur de sélection
+Animation fluide lors du changement.
+Description (optionnelle)
+Exemple :
+Paiement Restaurant
+Montant
+Champ numérique en FCFA.
+Ajouter des montants rapides :
+1 000
+2 000
+5 000
+10 000
+20 000
+50 000
+BOUTON PRINCIPAL
+Créer un grand bouton premium :
+Générer mon QR Code
+Largeur 100%
+Coins très arrondis
+Dégradé bleu premium
+Animation au clic
+APRÈS GÉNÉRATION
+Afficher une grande carte contenant :
+QR Code centré
+Nom du commerce
+Numéro de réception
+Opérateur sélectionné
+Référence unique
+En dessous, afficher quatre boutons modernes :
+Partager
+Copier le lien
+Télécharger
+Imprimer
+Les boutons doivent être alignés et parfaitement visibles.
+APERÇU DU QR
+Créer un aperçu élégant avec :
+Bloum Cash
+Nom du commerce
+QR Code
+Scanner pour payer
+Fond blanc avec ombre légère et coins arrondis.
+RESPONSIVE
+Optimisé pour :
+Android
+iPhone
+Aucune barre de défilement.
+Toute la page doit rester parfaitement centrée et entièrement visible.
+QUALITÉ
+Le rendu final doit être digne des meilleures applications FinTech comme Wave, Paymaya ou Yango.
+L'interface doit être premium, fluide, moderne et quasiment identique à la maquette fournie, avec une excellente lisibilité des icônes, des cartes et des boutons.
