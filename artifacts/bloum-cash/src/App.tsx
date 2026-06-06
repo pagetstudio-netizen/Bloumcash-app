@@ -25,6 +25,7 @@ import Parametres from "@/pages/plus/parametres";
 import Conditions from "@/pages/plus/conditions";
 import Confidentialite from "@/pages/plus/confidentialite";
 import Apropos from "@/pages/plus/apropos";
+import Notifications from "@/pages/notifications";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/plus/conditions" component={Conditions} />
       <Route path="/plus/confidentialite" component={Confidentialite} />
       <Route path="/plus/apropos" component={Apropos} />
+      <Route path="/notifications" component={Notifications} />
       <Route component={NotFound} />
     </Switch>
   );

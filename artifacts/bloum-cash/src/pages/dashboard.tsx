@@ -40,18 +40,24 @@ export default function Dashboard() {
     <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden">
       {/* Header — flex-shrink-0 : ne défile jamais */}
       <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-6 py-4 flex items-center justify-between shadow-md rounded-b-3xl z-50">
-          <div className="w-10 h-10 flex flex-col justify-center gap-1.5 cursor-pointer">
+          <button
+            onClick={() => setLocation("/plus")}
+            className="w-10 h-10 flex flex-col justify-center gap-1.5 active:opacity-70 transition-opacity"
+          >
             <div className="w-6 h-0.5 bg-white rounded-full"></div>
             <div className="w-6 h-0.5 bg-white rounded-full"></div>
             <div className="w-4 h-0.5 bg-white rounded-full"></div>
-          </div>
+          </button>
           
           <h1 className="text-xl font-bold text-white tracking-wide">Bloum Cash</h1>
           
-          <div className="relative cursor-pointer w-10 h-10 flex items-center justify-center bg-white/10 rounded-full">
+          <button
+            onClick={() => setLocation("/notifications")}
+            className="relative w-10 h-10 flex items-center justify-center bg-white/10 rounded-full active:bg-white/20 transition-colors"
+          >
             <Bell className="w-5 h-5 text-white" />
             <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-destructive rounded-full border-2 border-[#2b50e8]"></div>
-          </div>
+          </button>
         </div>
 
         {/* Contenu scrollable */}
