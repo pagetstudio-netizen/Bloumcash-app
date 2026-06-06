@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Layout } from "@/components/layout";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/components/auth-provider";
 import { ArrowLeft, Search, Filter, Download } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -22,8 +22,16 @@ const mockTransactions = [
 ];
 
 export default function Historique() {
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("tout");
+
+  React.useEffect(() => {
+    if (!isAuthenticated) setLocation("/login");
+  }, [isAuthenticated, setLocation]);
+
+  if (!isAuthenticated) return null;
 
   const filteredTransactions = mockTransactions.filter(tx => {
     const matchesSearch = tx.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -35,8 +43,9 @@ export default function Historique() {
   });
 
   return (
-    <Layout>
-      <div className="bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 sticky top-0 z-50 shadow-md">
+    <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden">
+      {/* Header — flex-shrink-0 : ne défile jamais */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 shadow-md z-50">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <Link href="/" className="mr-4">
@@ -60,7 +69,8 @@ export default function Historique() {
         </div>
       </div>
 
-      <div className="p-4 pb-24">
+      {/* Contenu scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 pb-6">
         <Tabs defaultValue="tout" className="w-full mb-6" onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3 h-12 rounded-xl bg-muted">
             <TabsTrigger value="tout" className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">Tout</TabsTrigger>
@@ -115,6 +125,6 @@ export default function Historique() {
           )}
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }

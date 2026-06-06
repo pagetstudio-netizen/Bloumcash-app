@@ -1,6 +1,6 @@
 import React from "react";
-import { Layout } from "@/components/layout";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/components/auth-provider";
 import { Bell, QrCode, ArrowLeftRight, Clock, Grid, ChevronRight, ChevronDown } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -27,11 +27,19 @@ const mockChartData = [
 ];
 
 export default function Dashboard() {
+  const { isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
+
+  React.useEffect(() => {
+    if (!isAuthenticated) setLocation("/login");
+  }, [isAuthenticated, setLocation]);
+
+  if (!isAuthenticated) return null;
+
   return (
-    <Layout>
-      <div className="pb-32">
-        {/* Header */}
-        <div className="sticky top-0 z-50 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-6 py-4 flex items-center justify-between shadow-md rounded-b-3xl">
+    <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden">
+      {/* Header — flex-shrink-0 : ne défile jamais */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-6 py-4 flex items-center justify-between shadow-md rounded-b-3xl z-50">
           <div className="w-10 h-10 flex flex-col justify-center gap-1.5 cursor-pointer">
             <div className="w-6 h-0.5 bg-white rounded-full"></div>
             <div className="w-6 h-0.5 bg-white rounded-full"></div>
@@ -46,7 +54,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="px-5 pt-6 space-y-6">
+        {/* Contenu scrollable */}
+        <div className="flex-1 overflow-y-auto px-5 pt-6 pb-32 space-y-6">
           {/* Action Buttons */}
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -135,7 +144,6 @@ export default function Dashboard() {
           </motion.div>
         </div>
       </div>
-    </Layout>
   );
 }
 

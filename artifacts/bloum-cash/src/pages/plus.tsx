@@ -1,5 +1,4 @@
 import React from "react";
-import { Layout } from "@/components/layout";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
@@ -45,8 +44,9 @@ export default function Plus() {
   ];
 
   return (
-    <Layout>
-      <div className="bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 sticky top-0 z-50 shadow-md">
+    <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden">
+      {/* Header — flex-shrink-0 : ne défile jamais */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 shadow-md z-50">
         <div className="flex items-center">
           <Link href="/" className="mr-4">
             <ArrowLeft className="w-6 h-6" />
@@ -55,7 +55,8 @@ export default function Plus() {
         </div>
       </div>
 
-      <div className="p-4 pb-24 space-y-6">
+      {/* Contenu scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-6">
         {/* Profile summary */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
@@ -122,6 +123,6 @@ export default function Plus() {
           </p>
         </motion.div>
       </div>
-    </Layout>
+    </div>
   );
 }
