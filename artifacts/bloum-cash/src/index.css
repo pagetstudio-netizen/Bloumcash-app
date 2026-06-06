@@ -2,10 +2,14 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-/* ── Bloquer menu contextuel & appui long sur mobile ─────────── */
+/* ── Bloquer menu contextuel, appui long & copie de texte ────── */
 * {
   -webkit-touch-callout: none;
   -webkit-user-drag: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 img, button, a {
   -webkit-touch-callout: none;
@@ -17,6 +21,12 @@ img {
 }
 button img, a img {
   pointer-events: none;
+}
+input, textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 @custom-variant dark (&:is(.dark *));
