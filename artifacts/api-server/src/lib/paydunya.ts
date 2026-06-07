@@ -1,6 +1,6 @@
 import {
   OPERATOR_MAP,
-  resolveTogoOperator,
+  TOGO_OPERATOR_MAP,
   type OperatorKey,
   type OperatorConfig,
 } from "./paydunya-softpay-map";
@@ -24,6 +24,7 @@ export function isConfigured(): boolean {
   return !!(
     process.env.PAYDUNYA_MASTER_KEY &&
     process.env.PAYDUNYA_PRIVATE_KEY &&
+    process.env.PAYDUNYA_PUBLIC_KEY &&
     process.env.PAYDUNYA_TOKEN
   );
 }
@@ -33,7 +34,13 @@ export interface ChargeResult {
   message: string;
   fees?: number;
   currency?: string;
-  isPending?: boolean;
+  isPending: boolean;
+}
+
+export interface DisburseResult {
+  success: boolean;
+  message: string;
+  transactionId?: string;
 }
 
 export class PaydunyaError extends Error {
@@ -47,32 +54,41 @@ export class PaydunyaError extends Error {
   }
 }
 
+type Logger = {
+  info: (obj: object, msg: string) => void;
+  error: (obj: object, msg: string) => void;
+  warn: (obj: object, msg: string) => void;
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function isRetryable(status: number): boolean {
+function isRetryableStatus(status: number): boolean {
   return status === 502 || status === 503 || status === 504;
 }
+
+// ─── Core fetch with full logging ───────────────────────────────────────────
 
 async function fetchWithLogs(
   url: string,
   options: RequestInit,
-  logger: { info: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void; warn: (obj: object, msg: string) => void }
+  logger: Logger
 ): Promise<{ data: unknown; status: number }> {
   const startMs = Date.now();
+
   const headersToLog = { ...(options.headers as Record<string, string>) };
-  headersToLog["PAYDUNYA-MASTER-KEY"] = headersToLog["PAYDUNYA-MASTER-KEY"] ? "***set***" : "***missing***";
-  headersToLog["PAYDUNYA-PRIVATE-KEY"] = headersToLog["PAYDUNYA-PRIVATE-KEY"] ? "***set***" : "***missing***";
-  headersToLog["PAYDUNYA-TOKEN"] = headersToLog["PAYDUNYA-TOKEN"] ? "***set***" : "***missing***";
-  headersToLog["PAYDUNYA-PUBLIC-KEY"] = headersToLog["PAYDUNYA-PUBLIC-KEY"] ? "***set***" : "***missing***";
+  headersToLog["PAYDUNYA-MASTER-KEY"] = headersToLog["PAYDUNYA-MASTER-KEY"] ? "***set***" : "***MISSING***";
+  headersToLog["PAYDUNYA-PRIVATE-KEY"] = headersToLog["PAYDUNYA-PRIVATE-KEY"] ? "***set***" : "***MISSING***";
+  headersToLog["PAYDUNYA-PUBLIC-KEY"] = headersToLog["PAYDUNYA-PUBLIC-KEY"] ? "***set***" : "***MISSING***";
+  headersToLog["PAYDUNYA-TOKEN"] = headersToLog["PAYDUNYA-TOKEN"] ? "***set***" : "***MISSING***";
 
   logger.info(
     {
       url,
       method: options.method,
       headers: headersToLog,
-      body: options.body,
+      payload: options.body,
     },
     "PayDunya → request"
   );
@@ -100,14 +116,20 @@ async function fetchWithLogs(
       status: response.status,
       contentType,
       elapsed,
-      bodyPreview: rawText.slice(0, 500),
+      bodyPreview: rawText.slice(0, 600),
     },
     "PayDunya ← response"
   );
 
-  if (contentType.includes("text/html")) {
+  // ── Détection HTML — endpoint invalide, token expiré, compte restreint ──
+  if (contentType.includes("text/html") || rawText.trimStart().startsWith("<!")) {
     logger.error(
-      { url, status: response.status, contentType, bodyPreview: rawText.slice(0, 200) },
+      {
+        url,
+        status: response.status,
+        contentType,
+        bodyPreview: rawText.slice(0, 300),
+      },
       "PayDunya returned HTML instead of JSON. Possible invalid endpoint, expired token, authentication issue, or restricted account."
     );
     throw new PaydunyaError(
@@ -117,11 +139,12 @@ async function fetchWithLogs(
     );
   }
 
+  // ── Parse JSON ──
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
   } catch {
-    logger.error({ url, rawText: rawText.slice(0, 300) }, "PayDunya returned non-JSON body");
+    logger.error({ url, rawText: rawText.slice(0, 400) }, "PayDunya returned non-JSON body");
     throw new PaydunyaError(
       "PayDunya a retourné une réponse invalide (non-JSON).",
       "INVALID_JSON",
@@ -132,20 +155,23 @@ async function fetchWithLogs(
   return { data: parsed, status: response.status };
 }
 
+// ─── Retry wrapper — seulement pour erreurs réseau et 5xx temporaires ────────
+
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
-  logger: Parameters<typeof fetchWithLogs>[2]
+  logger: Logger
 ): Promise<{ data: unknown; status: number }> {
   let lastErr: unknown;
+
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const result = await fetchWithLogs(url, options, logger);
 
-      if (isRetryable(result.status) && attempt < MAX_RETRIES) {
+      if (isRetryableStatus(result.status) && attempt < MAX_RETRIES) {
         logger.warn(
           { url, status: result.status, attempt },
-          `PayDunya retryable error (${result.status}), retrying in ${RETRY_DELAY_MS}ms…`
+          `PayDunya retryable HTTP error (${result.status}), retry in ${RETRY_DELAY_MS * (attempt + 1)}ms…`
         );
         await sleep(RETRY_DELAY_MS * (attempt + 1));
         continue;
@@ -153,10 +179,11 @@ async function fetchWithRetry(
 
       return result;
     } catch (err) {
+      // Ne retry que sur les erreurs réseau (NETWORK_ERROR) — jamais sur HTML, token invalide, validation
       if (err instanceof PaydunyaError && err.retryable && attempt < MAX_RETRIES) {
         logger.warn(
           { url, code: err.code, attempt },
-          `PayDunya retryable error (${err.code}), retrying in ${RETRY_DELAY_MS}ms…`
+          `PayDunya retryable error (${err.code}), retry in ${RETRY_DELAY_MS * (attempt + 1)}ms…`
         );
         await sleep(RETRY_DELAY_MS * (attempt + 1));
         lastErr = err;
@@ -165,16 +192,27 @@ async function fetchWithRetry(
       throw err;
     }
   }
+
   throw lastErr;
 }
+
+// ─── Étape 1 : Créer une invoice PayDunya → obtenir le payment_token ─────────
 
 export async function createInvoice(
   amount: number,
   description: string,
-  logger: Parameters<typeof fetchWithLogs>[2]
+  logger: Logger
 ): Promise<string> {
   if (!amount || amount <= 0) {
     throw new PaydunyaError("Le montant doit être supérieur à 0.", "INVALID_AMOUNT", false);
+  }
+
+  if (!isConfigured()) {
+    throw new PaydunyaError(
+      "Les clés PayDunya ne sont pas configurées (PAYDUNYA_MASTER_KEY / PRIVATE / PUBLIC / TOKEN).",
+      "NOT_CONFIGURED",
+      false
+    );
   }
 
   const url = `${PAYDUNYA_BASE}/checkout-invoice/create`;
@@ -184,16 +222,16 @@ export async function createInvoice(
       description,
     },
     store: {
-      name: process.env.PAYDUNYA_STORE_NAME ?? "Bloum Cash",
-      tagline: "Transferts TMoney & Moov Money au Togo",
+      name: process.env.PAYDUNYA_STORE_NAME || "Bloum Cash",
+      tagline: "Transferts TMoney & Moov Money",
       postal_address: "Lomé, Togo",
-      phone: process.env.PAYDUNYA_STORE_PHONE ?? "",
-      website_url: process.env.PAYDUNYA_CALLBACK_URL ?? "",
+      phone: process.env.PAYDUNYA_STORE_PHONE || "",
+      website_url: process.env.PAYDUNYA_CALLBACK_URL || "",
     },
     actions: {
-      cancel_url: process.env.PAYDUNYA_CALLBACK_URL ?? "",
-      return_url: process.env.PAYDUNYA_CALLBACK_URL ?? "",
-      callback_url: process.env.PAYDUNYA_CALLBACK_URL ?? "",
+      cancel_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+      return_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+      callback_url: process.env.PAYDUNYA_CALLBACK_URL || "",
     },
   });
 
@@ -219,17 +257,20 @@ export async function createInvoice(
     throw new PaydunyaError("PayDunya a retourné un token vide.", "EMPTY_TOKEN", false);
   }
 
-  logger.info({ token: token.slice(0, 8) + "…" }, "PayDunya invoice created");
+  logger.info({ token: token.slice(0, 8) + "…" }, "PayDunya invoice created ✓");
   return token;
 }
+
+// ─── Étape 2 : Débiter un wallet mobile money (SoftPay PayIn) ────────────────
 
 export async function chargeOperator(
   operatorKey: OperatorKey,
   params: { name: string; email: string; phone: string; address?: string },
   paymentToken: string,
-  logger: Parameters<typeof fetchWithLogs>[2]
+  logger: Logger
 ): Promise<ChargeResult> {
   const config: OperatorConfig | undefined = OPERATOR_MAP[operatorKey];
+
   if (!config) {
     throw new PaydunyaError(
       `Opérateur non supporté : ${operatorKey}`,
@@ -238,14 +279,14 @@ export async function chargeOperator(
     );
   }
 
-  if (!paymentToken) {
+  if (!paymentToken || paymentToken.trim() === "") {
     throw new PaydunyaError("Le payment_token est vide ou manquant.", "EMPTY_TOKEN", false);
   }
 
   const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
   if (cleanPhone.length < 8) {
     throw new PaydunyaError(
-      `Numéro de téléphone invalide : ${params.phone}`,
+      `Numéro de téléphone invalide : "${params.phone}"`,
       "INVALID_PHONE",
       false
     );
@@ -259,11 +300,12 @@ export async function chargeOperator(
     address: params.address,
   });
 
+  // ── Validation stricte des champs requis ──
   for (const field of config.requiredFields) {
-    const value = payload[field] ?? (field === "payment_token" ? paymentToken : undefined);
-    if (!value) {
+    const value = payload[field];
+    if (!value || value.trim() === "") {
       throw new PaydunyaError(
-        `Champ requis manquant pour ${config.label} : ${field}`,
+        `Champ requis manquant pour ${config.label} : "${field}"`,
         "MISSING_FIELD",
         false
       );
@@ -271,19 +313,28 @@ export async function chargeOperator(
   }
 
   const url = `${PAYDUNYA_BASE}/softpay/${config.endpoint}`;
-  const body = JSON.stringify(payload);
+
+  logger.info(
+    {
+      operator: operatorKey,
+      endpoint: url,
+      payloadFields: Object.keys(payload),
+    },
+    "PayDunya SoftPay → charge initié"
+  );
 
   const { data, status } = await fetchWithRetry(
     url,
-    { method: "POST", headers: getHeaders(), body },
+    { method: "POST", headers: getHeaders(), body: JSON.stringify(payload) },
     logger
   );
 
   const res = data as Record<string, unknown>;
 
+  // ── Erreurs d'authentification — ne pas retry ──
   if (status === 401 || status === 403) {
     throw new PaydunyaError(
-      "Authentification PayDunya échouée. Vérifiez vos clés API.",
+      "Authentification PayDunya échouée. Vérifiez vos clés API (MASTER-KEY, PRIVATE-KEY, PUBLIC-KEY, TOKEN).",
       "AUTH_FAILED",
       false
     );
@@ -291,17 +342,27 @@ export async function chargeOperator(
 
   if (status === 404) {
     throw new PaydunyaError(
-      `Endpoint PayDunya introuvable : /softpay/${config.endpoint}`,
+      `Endpoint PayDunya introuvable : /softpay/${config.endpoint}. Vérifiez le slug de l'opérateur.`,
       "ENDPOINT_NOT_FOUND",
       false
     );
   }
 
   const success = res.success === true;
-  const message = String(res.message ?? (success ? "Paiement initié" : "Paiement refusé"));
+  const message = String(
+    res.message ?? (success ? "Paiement mobile money initié" : "Paiement refusé")
+  );
 
   if (!success) {
-    logger.warn({ operator: operatorKey, status, response: res }, "PayDunya charge refused");
+    logger.warn(
+      { operator: operatorKey, endpoint: url, status, response: res },
+      "PayDunya charge refused by operator"
+    );
+  } else {
+    logger.info(
+      { operator: operatorKey, isPending: config.isPending },
+      "PayDunya charge accepted ✓"
+    );
   }
 
   return {
@@ -309,70 +370,64 @@ export async function chargeOperator(
     message,
     fees: typeof res.fees === "number" ? res.fees : undefined,
     currency: typeof res.currency === "string" ? res.currency : "XOF",
-    isPending: operatorKey === "tmoney-togo",
+    isPending: config.isPending,
   };
 }
+
+// ─── Wrapper Togo (rétro-compatibilité) ──────────────────────────────────────
 
 export async function chargeTogoWallet(
   operator: "tmoney" | "moov",
   params: { name: string; email: string; phone: string },
   paymentToken: string,
-  logger: Parameters<typeof fetchWithLogs>[2]
+  logger: Logger
 ): Promise<ChargeResult> {
-  const operatorKey: OperatorKey = operator === "tmoney" ? "tmoney-togo" : "moov-togo";
+  const operatorKey: OperatorKey = TOGO_OPERATOR_MAP[operator];
   return chargeOperator(operatorKey, params, paymentToken, logger);
 }
 
-export interface DisburseResult {
-  success: boolean;
-  message: string;
-  transactionId?: string;
-}
+// ─── Payout : Envoyer de l'argent vers un wallet (SoftPay Send) ──────────────
 
-/**
- * Envoie de l'argent vers un wallet mobile money (payout/retrait).
- * Utilise l'API Send Money de PayDunya SoftPay.
- * Opérateurs Togo supportés : "tmoney" | "moov"
- */
-export async function disburseTogoWallet(
-  operator: "tmoney" | "moov",
+export async function disburseWallet(
+  operatorKey: OperatorKey,
   params: { name: string; phone: string; amount: number; reference: string },
-  logger: Parameters<typeof fetchWithLogs>[2]
+  logger: Logger
 ): Promise<DisburseResult> {
+  const config: OperatorConfig | undefined = OPERATOR_MAP[operatorKey];
+
+  if (!config) {
+    throw new PaydunyaError(
+      `Opérateur de payout non supporté : ${operatorKey}`,
+      "UNSUPPORTED_OPERATOR",
+      false
+    );
+  }
+
   const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
   if (cleanPhone.length < 8) {
     throw new PaydunyaError(
-      `Numéro destinataire invalide : ${params.phone}`,
+      `Numéro destinataire invalide : "${params.phone}"`,
       "INVALID_PHONE",
       false
     );
   }
 
   if (params.amount <= 0) {
-    throw new PaydunyaError("Montant de payout invalide.", "INVALID_AMOUNT", false);
+    throw new PaydunyaError("Montant de payout invalide (doit être > 0).", "INVALID_AMOUNT", false);
   }
 
-  const endpoint = operator === "tmoney" ? "t-money-togo" : "moov-togo";
-  const url = `${PAYDUNYA_BASE}/softpay/${endpoint}/send`;
+  const payload = config.disbursePayloadBuilder({
+    name: params.name || "Bénéficiaire Bloum Cash",
+    phone: cleanPhone,
+    amount: params.amount,
+    reference: params.reference,
+  });
 
-  const payload =
-    operator === "tmoney"
-      ? {
-          name_t_money: params.name || "Bénéficiaire Bloum Cash",
-          phone_t_money: cleanPhone,
-          amount: params.amount,
-          ref: params.reference,
-        }
-      : {
-          moov_togo_customer_fullname: params.name || "Bénéficiaire Bloum Cash",
-          moov_togo_phone_number: cleanPhone,
-          amount: params.amount,
-          ref: params.reference,
-        };
+  const url = `${PAYDUNYA_BASE}/softpay/${config.disburseEndpoint}/send`;
 
   logger.info(
-    { operator, phone: cleanPhone, amount: params.amount, ref: params.reference },
-    "PayDunya → payout initié"
+    { operator: operatorKey, phone: cleanPhone, amount: params.amount, ref: params.reference, endpoint: url },
+    "PayDunya SoftPay → payout initié"
   );
 
   const { data, status } = await fetchWithRetry(
@@ -392,14 +447,28 @@ export async function disburseTogoWallet(
   }
 
   const success = res.success === true || res.response_code === "00";
-  const message = String(res.message ?? res.response_text ?? (success ? "Payout envoyé" : "Payout refusé"));
-  const transactionId = typeof res.transaction_id === "string" ? res.transaction_id : undefined;
+  const message = String(
+    res.message ?? res.response_text ?? (success ? "Payout envoyé" : "Payout refusé")
+  );
+  const transactionId =
+    typeof res.transaction_id === "string" ? res.transaction_id : undefined;
 
   if (!success) {
-    logger.warn({ operator, status, response: res }, "PayDunya payout refusé");
+    logger.warn({ operator: operatorKey, status, response: res }, "PayDunya payout refusé");
   } else {
-    logger.info({ operator, transactionId }, "PayDunya payout confirmé");
+    logger.info({ operator: operatorKey, transactionId }, "PayDunya payout confirmé ✓");
   }
 
   return { success, message, transactionId };
+}
+
+// ─── Wrapper Togo pour payout (rétro-compatibilité) ──────────────────────────
+
+export async function disburseTogoWallet(
+  operator: "tmoney" | "moov",
+  params: { name: string; phone: string; amount: number; reference: string },
+  logger: Logger
+): Promise<DisburseResult> {
+  const operatorKey: OperatorKey = TOGO_OPERATOR_MAP[operator];
+  return disburseWallet(operatorKey, params, logger);
 }
