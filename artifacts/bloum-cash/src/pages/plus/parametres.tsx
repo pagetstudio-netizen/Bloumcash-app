@@ -80,7 +80,7 @@ export default function Parametres() {
           label: "Changer mon PIN",
           description: "Modifier votre code d'accès",
           type: "link",
-          onClick: () => setLocation("/forgot-pin"),
+          onClick: () => setLocation("/forgot-pin?from=parametres"),
         },
         {
           icon: <Shield className="w-5 h-5 text-green-600" />,

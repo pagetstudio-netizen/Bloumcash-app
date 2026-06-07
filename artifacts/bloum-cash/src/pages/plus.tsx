@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
-  ArrowLeft, QrCode, BarChart3, HelpCircle, MessageCircleQuestion, 
+  ArrowLeft, HelpCircle, MessageCircleQuestion, 
   Phone, Settings, FileText, Shield, Info, LogOut, ChevronRight 
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -17,13 +17,6 @@ export default function Plus() {
   };
 
   const menuGroups = [
-    {
-      title: "Mon Activité",
-      items: [
-        { icon: <QrCode className="w-5 h-5" />, label: "Mon QR Code", href: "/plus/mon-qr-code" },
-        { icon: <BarChart3 className="w-5 h-5" />, label: "Mes statistiques", href: "/plus/statistiques" },
-      ]
-    },
     {
       title: "Assistance",
       items: [
