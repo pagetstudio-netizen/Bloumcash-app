@@ -19,17 +19,9 @@ router.post("/transfer/fees", async (req, res) => {
       res.status(400).json({ error: "Champs requis manquants" });
       return;
     }
-
     const amt = parseInt(String(amount));
     const fees = calculateFees(fromOperator, toOperator, amt);
-    const total = amt + fees;
-
-    res.json({
-      amount: amt,
-      fees,
-      total,
-      estimatedTime: "Instantané",
-    });
+    res.json({ amount: amt, fees, total: amt + fees, estimatedTime: "Instantané" });
   } catch (err) {
     req.log.error({ err }, "Calculate fees error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -38,7 +30,15 @@ router.post("/transfer/fees", async (req, res) => {
 
 router.post("/transfer", async (req, res) => {
   try {
-    const { fromOperator, fromPhone, toOperator, toPhone, amount, payerName, payerEmail } = req.body;
+    const {
+      fromOperator,
+      fromPhone,
+      toOperator,
+      toPhone,
+      amount,
+      payerName,
+      payerEmail,
+    } = req.body;
 
     if (!fromOperator || !fromPhone || !toOperator || !toPhone || !amount) {
       res.status(400).json({ error: "Champs requis manquants" });
@@ -46,14 +46,22 @@ router.post("/transfer", async (req, res) => {
     }
 
     const amt = parseInt(String(amount));
+    if (isNaN(amt) || amt <= 0) {
+      res.status(400).json({ error: "Montant invalide" });
+      return;
+    }
+
     const fees = calculateFees(fromOperator, toOperator, amt);
     const total = amt + fees;
-    const reference = "TR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
+    const reference =
+      "TR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 
     const name = payerName ?? "Client Bloum Cash";
-    const email = payerEmail ?? `${fromPhone.replace(/\s/g, "")}@bloumcash.tg`;
+    const email =
+      payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
 
     if (!paydunya.isConfigured()) {
+      req.log.warn("PayDunya not configured — saving transaction in demo mode");
       await db.insert(transactionsTable).values({
         reference,
         type: "outgoing",
@@ -66,10 +74,9 @@ router.post("/transfer", async (req, res) => {
         description: `Transfert ${fromOperator} → ${toOperator}`,
         status: "success",
       });
-
       res.status(201).json({
         success: true,
-        message: "Transfert effectué avec succès",
+        message: "Transfert effectué (mode démo — PayDunya non configuré)",
         reference,
         fees,
         total,
@@ -79,44 +86,51 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    let invoiceToken: string;
+    let paymentToken: string;
     try {
-      const invoice = await paydunya.createInvoice(
+      paymentToken = await paydunya.createInvoice(
         total,
-        `Transfert ${fromOperator.toUpperCase()} → ${toOperator.toUpperCase()} | ${fromPhone} → ${toPhone}`
+        `Transfert ${fromOperator.toUpperCase()}→${toOperator.toUpperCase()} | ${fromPhone}→${toPhone}`,
+        req.log
       );
-      invoiceToken = invoice.token;
-    } catch (invoiceErr) {
-      req.log.error({ err: invoiceErr }, "PayDunya invoice creation failed");
-      res.status(502).json({ error: "Impossible de contacter PayDunya. Veuillez réessayer." });
+    } catch (err) {
+      const msg =
+        err instanceof paydunya.PaydunyaError
+          ? err.message
+          : "Impossible de créer l'invoice PayDunya.";
+      req.log.error({ err }, "Invoice creation failed");
+      res.status(502).json({ error: msg });
       return;
     }
 
     let chargeResult: paydunya.ChargeResult;
     try {
-      chargeResult = await paydunya.chargeWallet(
+      chargeResult = await paydunya.chargeTogoWallet(
         fromOperator as "tmoney" | "moov",
-        name,
-        email,
-        fromPhone,
-        invoiceToken
+        { name, email, phone: fromPhone },
+        paymentToken,
+        req.log
       );
-    } catch (chargeErr) {
-      req.log.error({ err: chargeErr }, "PayDunya charge failed");
-      res.status(502).json({ error: "Erreur lors du débit. Vérifiez votre solde et réessayez." });
+    } catch (err) {
+      const isPduErr = err instanceof paydunya.PaydunyaError;
+      const msg = isPduErr
+        ? err.message
+        : "Erreur lors du débit mobile money. Veuillez réessayer.";
+      const code = isPduErr ? err.code : "CHARGE_ERROR";
+      req.log.error({ err, code }, "Charge failed");
+      res.status(502).json({ error: msg, code });
       return;
     }
 
     if (!chargeResult.success) {
       res.status(402).json({
-        error: chargeResult.message ?? "Paiement refusé par l'opérateur",
+        error: chargeResult.message,
         code: "PAYMENT_REFUSED",
       });
       return;
     }
 
-    const isPending = fromOperator === "tmoney";
-    const txStatus = isPending ? "pending" : "success";
+    const txStatus = chargeResult.isPending ? "pending" : "success";
 
     await db.insert(transactionsTable).values({
       reference,
@@ -137,12 +151,12 @@ router.post("/transfer", async (req, res) => {
       reference,
       fees,
       total,
-      isPending,
+      isPending: chargeResult.isPending ?? false,
       paydunhaConfigured: true,
     });
   } catch (err) {
     req.log.error({ err }, "Transfer error");
-    res.status(500).json({ error: "Erreur serveur" });
+    res.status(500).json({ error: "Erreur serveur interne" });
   }
 });
 
@@ -158,14 +172,8 @@ router.get("/transfer/:reference/status", async (req, res) => {
       res.status(404).json({ error: "Transaction introuvable" });
       return;
     }
-
     const tx = rows[0];
-    res.json({
-      reference: tx.reference,
-      status: tx.status,
-      amount: tx.amount,
-      fees: tx.fees,
-    });
+    res.json({ reference: tx.reference, status: tx.status, amount: tx.amount, fees: tx.fees });
   } catch (err) {
     req.log.error({ err }, "Transfer status error");
     res.status(500).json({ error: "Erreur serveur" });

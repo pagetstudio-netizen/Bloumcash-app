@@ -85,6 +85,12 @@ router.get("/qr/:reference", async (req, res) => {
 router.post("/qr/:reference/pay", async (req, res) => {
   try {
     const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
+
+    if (!payerPhone || !payerOperator) {
+      res.status(400).json({ error: "Numéro et opérateur du payeur requis" });
+      return;
+    }
+
     const rows = await db
       .select()
       .from(qrCodesTable)
@@ -98,49 +104,11 @@ router.post("/qr/:reference/pay", async (req, res) => {
 
     const qr = rows[0];
     const txRef = "BC" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
-
     const name = payerName ?? "Client Bloum Cash";
-    const email = payerEmail ?? `${(payerPhone ?? "").replace(/\s/g, "")}@bloumcash.tg`;
+    const email = payerEmail ?? `${payerPhone.replace(/\D/g, "")}@bloumcash.tg`;
 
-    if (paydunya.isConfigured() && payerPhone && payerOperator) {
-      let invoiceToken: string;
-      try {
-        const invoice = await paydunya.createInvoice(
-          qr.amount,
-          `Paiement QR Code - ${qr.businessName} | ${qr.reference}`
-        );
-        invoiceToken = invoice.token;
-      } catch (invoiceErr) {
-        req.log.error({ err: invoiceErr }, "PayDunya QR invoice failed");
-        res.status(502).json({ error: "Impossible de contacter PayDunya. Veuillez réessayer." });
-        return;
-      }
-
-      let chargeResult: paydunya.ChargeResult;
-      try {
-        chargeResult = await paydunya.chargeWallet(
-          payerOperator as "tmoney" | "moov",
-          name,
-          email,
-          payerPhone,
-          invoiceToken
-        );
-      } catch (chargeErr) {
-        req.log.error({ err: chargeErr }, "PayDunya QR charge failed");
-        res.status(502).json({ error: "Erreur lors du débit. Vérifiez votre solde." });
-        return;
-      }
-
-      if (!chargeResult.success) {
-        res.status(402).json({
-          error: chargeResult.message ?? "Paiement refusé par l'opérateur",
-          code: "PAYMENT_REFUSED",
-        });
-        return;
-      }
-
-      const isPending = payerOperator === "tmoney";
-
+    if (!paydunya.isConfigured()) {
+      req.log.warn("PayDunya not configured — QR payment in demo mode");
       const [tx] = await db
         .insert(transactionsTable)
         .values({
@@ -152,19 +120,65 @@ router.post("/qr/:reference/pay", async (req, res) => {
           fromPhone: payerPhone ?? null,
           toPhone: qr.phone,
           description: `Paiement via QR Code ${qr.reference}`,
-          status: isPending ? "pending" : "success",
+          status: "success",
         })
         .returning();
 
       res.json({
         success: true,
-        message: chargeResult.message,
+        message: "Paiement effectué avec succès (mode démo)",
         reference: txRef,
         transactionId: String(tx.id),
-        isPending,
+        isPending: false,
       });
       return;
     }
+
+    let paymentToken: string;
+    try {
+      paymentToken = await paydunya.createInvoice(
+        qr.amount,
+        `Paiement QR - ${qr.businessName} | Réf. ${qr.reference}`,
+        req.log
+      );
+    } catch (err) {
+      const msg =
+        err instanceof paydunya.PaydunyaError
+          ? err.message
+          : "Impossible de créer l'invoice PayDunya.";
+      req.log.error({ err }, "QR invoice creation failed");
+      res.status(502).json({ error: msg });
+      return;
+    }
+
+    let chargeResult: paydunya.ChargeResult;
+    try {
+      chargeResult = await paydunya.chargeTogoWallet(
+        payerOperator as "tmoney" | "moov",
+        { name, email, phone: payerPhone },
+        paymentToken,
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof paydunya.PaydunyaError;
+      const msg = isPduErr
+        ? err.message
+        : "Erreur lors du débit mobile money.";
+      const code = isPduErr ? err.code : "CHARGE_ERROR";
+      req.log.error({ err, code }, "QR charge failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+
+    if (!chargeResult.success) {
+      res.status(402).json({
+        error: chargeResult.message,
+        code: "PAYMENT_REFUSED",
+      });
+      return;
+    }
+
+    const isPending = chargeResult.isPending ?? false;
 
     const [tx] = await db
       .insert(transactionsTable)
@@ -177,20 +191,20 @@ router.post("/qr/:reference/pay", async (req, res) => {
         fromPhone: payerPhone ?? null,
         toPhone: qr.phone,
         description: `Paiement via QR Code ${qr.reference}`,
-        status: "success",
+        status: isPending ? "pending" : "success",
       })
       .returning();
 
     res.json({
       success: true,
-      message: "Paiement effectué avec succès",
+      message: chargeResult.message,
       reference: txRef,
       transactionId: String(tx.id),
-      isPending: false,
+      isPending,
     });
   } catch (err) {
     req.log.error({ err }, "Pay QR error");
-    res.status(500).json({ error: "Erreur serveur" });
+    res.status(500).json({ error: "Erreur serveur interne" });
   }
 });
 
