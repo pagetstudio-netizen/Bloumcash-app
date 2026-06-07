@@ -11,11 +11,13 @@ import {
   CheckCircle2,
   Zap,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatAmount, validateTogoPhone } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import { useModal } from "@/components/app-modal";
+import { useCreateTransfer } from "@workspace/api-client-react";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
@@ -112,6 +114,7 @@ export default function Transfert() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { showModal } = useModal();
+  const createTransfer = useCreateTransfer();
 
   const [fromOp, setFromOp] = useState<Operator>("tmoney");
   const [toOp,   setToOp]   = useState<Operator>("moov");
@@ -158,7 +161,26 @@ export default function Transfert() {
     setStep("step2");
   };
 
-  const handleConfirm = () => setStep("success");
+  const handleConfirm = async () => {
+    try {
+      await createTransfer.mutateAsync({
+        data: {
+          fromOperator: fromOp as "tmoney" | "moov",
+          toOperator: toOp as "tmoney" | "moov",
+          fromPhone: fromPhone.replace(/\s/g, ""),
+          toPhone: toPhone.replace(/\s/g, ""),
+          amount: amountNum,
+        },
+      });
+      setStep("success");
+    } catch {
+      showModal({
+        type: "error",
+        title: "Transfert échoué",
+        message: "Une erreur est survenue lors du transfert. Veuillez réessayer.",
+      });
+    }
+  };
 
   /* ────── Écran succès ────────────────────────────────────────── */
   if (step === "success") {
@@ -322,10 +344,13 @@ export default function Transfert() {
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={handleConfirm}
-                className="w-full py-4 rounded-2xl text-[15px] font-bold text-white shadow-lg active:brightness-90 transition-all"
+                disabled={createTransfer.isPending}
+                className="w-full py-4 rounded-2xl text-[15px] font-bold text-white shadow-lg active:brightness-90 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                 style={{ background: "linear-gradient(90deg,#3B4FC5 0%,#2b3aa8 100%)" }}
               >
-                Continuer →
+                {createTransfer.isPending ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Envoi en cours…</>
+                ) : "Confirmer le transfert →"}
               </motion.button>
             </div>
           </div>
