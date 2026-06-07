@@ -1,49 +1,34 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import {
-  Bell, ChevronRight, ChevronDown,
+  Bell, ChevronRight,
   Headphones, Fingerprint, UserPlus, LogOut, X, Loader2,
+  ArrowDownLeft, ArrowUpRight,
 } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { LineChart, Line, ResponsiveContainer } from "recharts";
-import {
-  useGetRecentTransactions,
-  useGetStatsSummary,
-  useGetStatsChart,
-} from "@workspace/api-client-react";
+import { useGetRecentTransactions } from "@workspace/api-client-react";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
+import banner1 from "@assets/20260607_084736_1780823957900.jpg";
+import banner2 from "@assets/20260607_085207_1780823957921.jpg";
+import banner3 from "@assets/20260607_090625_1780823957938.jpg";
 
-const STAT_PERIODS = ["Semaine", "Mois", "Année"] as const;
-type StatPeriod = (typeof STAT_PERIODS)[number];
-
-const PERIOD_API: Record<StatPeriod, "week" | "month" | "year"> = {
-  Semaine: "week",
-  Mois:    "month",
-  Année:   "year",
-};
-const PERIOD_LABEL: Record<StatPeriod, string> = {
-  Semaine: "Cette semaine",
-  Mois:    "Ce mois",
-  Année:   "Cette année",
-};
-
+const BANNERS = [banner1, banner2, banner3];
 
 export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [statPeriod, setStatPeriod] = useState<StatPeriod>("Mois");
-  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const apiPeriod = PERIOD_API[statPeriod];
-
-  const { data: recentTxs, isLoading: txLoading } = useGetRecentTransactions({ query: { enabled: isAuthenticated } });
-  const { data: statsSummary } = useGetStatsSummary({ period: apiPeriod }, { query: { enabled: isAuthenticated } });
-  const { data: chartData } = useGetStatsChart({ period: apiPeriod }, { query: { enabled: isAuthenticated } });
+  const { data: recentTxs, isLoading: txLoading } = useGetRecentTransactions({
+    query: { enabled: isAuthenticated },
+  });
 
   const unreadCount = React.useMemo(() => {
     if (!recentTxs) return 0;
@@ -56,6 +41,37 @@ export default function Dashboard() {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
 
+  const scrollTo = useCallback((index: number) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    el.scrollTo({ left: index * el.offsetWidth, behavior: "smooth" });
+    setActiveSlide(index);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    if (autoTimer.current) clearInterval(autoTimer.current);
+    autoTimer.current = setInterval(() => {
+      setActiveSlide((prev) => {
+        const next = (prev + 1) % BANNERS.length;
+        const el = carouselRef.current;
+        if (el) el.scrollTo({ left: next * el.offsetWidth, behavior: "smooth" });
+        return next;
+      });
+    }, 3500);
+  }, []);
+
+  useEffect(() => {
+    resetTimer();
+    return () => { if (autoTimer.current) clearInterval(autoTimer.current); };
+  }, [resetTimer]);
+
+  const handleCarouselScroll = () => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollLeft / el.offsetWidth);
+    if (idx !== activeSlide) setActiveSlide(idx);
+  };
+
   if (!isAuthenticated) return null;
 
   const handleLogout = () => {
@@ -63,9 +79,6 @@ export default function Dashboard() {
     logout();
     setLocation("/login");
   };
-
-  const chartPoints = chartData?.map((p) => ({ value: p.value })) ?? [];
-  const totalAmount = statsSummary?.incoming ?? 0;
 
   return (
     <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden relative">
@@ -76,22 +89,17 @@ export default function Dashboard() {
           <>
             <motion.div
               key="overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
               onClick={() => setDrawerOpen(false)}
               className="absolute inset-0 bg-black/50 z-40"
             />
             <motion.div
               key="drawer"
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 260 }}
               className="absolute top-0 left-0 h-full w-[78%] max-w-xs bg-background z-50 flex flex-col shadow-2xl"
             >
-              {/* Header simple */}
               <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border flex-shrink-0">
                 <span className="text-foreground font-bold text-base">Menu</span>
                 <button
@@ -101,10 +109,7 @@ export default function Dashboard() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-
-              {/* Boutons du menu */}
               <div className="flex-1 overflow-y-auto py-5 px-4 space-y-2.5">
-                {/* Service client */}
                 <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                     <Headphones className="w-5 h-5 text-[#1a3fc4]" />
@@ -112,8 +117,6 @@ export default function Dashboard() {
                   <span className="flex-1 text-left text-sm font-semibold text-foreground">Service client</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </button>
-
-                {/* Touch ID / Face ID */}
                 <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
                     <Fingerprint className="w-5 h-5 text-purple-600" />
@@ -121,8 +124,6 @@ export default function Dashboard() {
                   <span className="flex-1 text-left text-sm font-semibold text-foreground">Touch ID / Face ID</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </button>
-
-                {/* Recommander à un ami */}
                 <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
                   <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
                     <UserPlus className="w-5 h-5 text-green-600" />
@@ -130,8 +131,6 @@ export default function Dashboard() {
                   <span className="flex-1 text-left text-sm font-semibold text-foreground">Recommander à un ami</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </button>
-
-                {/* Se déconnecter */}
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-4 px-4 py-4 bg-red-50 rounded-2xl border border-red-100 active:bg-red-100 transition-colors"
@@ -142,14 +141,13 @@ export default function Dashboard() {
                   <span className="flex-1 text-left text-sm font-bold text-red-600">Se déconnecter</span>
                 </button>
               </div>
-
               <p className="text-center text-[11px] text-muted-foreground pb-5">Bloum Cash v1.0.0</p>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* ── HEADER ── */}
+      {/* ── HEADER — fixe ── */}
       <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-6 py-4 flex items-center justify-between shadow-md rounded-b-3xl z-30">
         <button
           onClick={() => setDrawerOpen(true)}
@@ -159,9 +157,7 @@ export default function Dashboard() {
           <div className="w-6 h-0.5 bg-white rounded-full" />
           <div className="w-4 h-0.5 bg-white rounded-full" />
         </button>
-
         <h1 className="text-xl font-bold text-white tracking-wide">Bloum Cash</h1>
-
         <button
           onClick={() => {
             localStorage.setItem("bloum_last_seen_tx", recentTxs?.[0]?.id ?? "");
@@ -178,150 +174,118 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* ── CONTENU SCROLLABLE ── */}
-      <div className="flex-1 overflow-y-auto px-5 pt-6 pb-32 space-y-6">
+      {/* ── CARTE 4 BOUTONS — fixe ── */}
+      <div className="flex-shrink-0 bg-card mx-4 mt-4 rounded-2xl shadow-sm border border-border p-4 flex justify-between items-start z-20">
+        <ActionBtn imgSrc="/icon-promotion.png" label="Promotions" to="/promotions" />
+        <ActionBtn imgSrc="/icon-transfert.png" label="Transférer" to="/transfert" />
+        <ActionBtn imgSrc="/icon-historique.png" label="Historique" to="/historique" />
+        <ActionBtn imgSrc="/icon-plus.png" label="Plus" to="/plus" />
+      </div>
 
-        {/* Boutons d'action */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card rounded-2xl shadow-sm border border-border p-4 flex justify-between items-start"
+      {/* ── CAROUSEL D'IMAGES — fixe, défilement horizontal ── */}
+      <div className="flex-shrink-0 mt-3 relative">
+        <div
+          ref={carouselRef}
+          onScroll={handleCarouselScroll}
+          onTouchStart={() => { if (autoTimer.current) clearInterval(autoTimer.current); }}
+          onTouchEnd={resetTimer}
+          className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          <ActionBtn imgSrc="/icon-promotion.png" label="Promotions" to="/promotions" />
-          <ActionBtn imgSrc="/icon-transfert.png" label="Transférer" to="/transfert" />
-          <ActionBtn imgSrc="/icon-historique.png" label="Historique" to="/historique" />
-          <ActionBtn imgSrc="/icon-plus.png" label="Plus" to="/plus" />
-        </motion.div>
-
-        {/* Transactions récentes */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden"
-        >
-          <div className="p-5 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground">Transactions récentes</h2>
-            <Link href="/historique" className="text-sm font-medium text-primary flex items-center">
-              Voir tout <ChevronRight className="w-4 h-4 ml-1" />
-            </Link>
-          </div>
-
-          {txLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            </div>
-          ) : !recentTxs || recentTxs.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              Aucune transaction pour l'instant
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {recentTxs.map((tx) => (
-                <div key={tx.id} className="p-4 flex items-center justify-between gap-3 hover:bg-muted/50 transition-colors cursor-pointer">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-12 h-12 flex-shrink-0 rounded-full flex items-center justify-center bg-muted overflow-hidden">
-                      <img
-                        src={tx.operator === "tmoney" ? tmoneyLogo : moovLogo}
-                        alt={tx.operator}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-foreground whitespace-nowrap">{tx.title}</p>
-                      <p className="text-sm text-muted-foreground whitespace-nowrap">{tx.date}{tx.time ? `, ${tx.time}` : ""}</p>
-                    </div>
-                  </div>
-                  <p className={`font-bold flex-shrink-0 whitespace-nowrap ${tx.type === "incoming" ? "text-green-600" : "text-red-600"}`}>
-                    {tx.type === "incoming" ? "+" : "-"}{formatAmount(tx.amount)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
-
-        {/* Statistiques */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] rounded-3xl shadow-lg p-5 text-white relative overflow-hidden"
-        >
-          <div className="flex justify-between items-center mb-1 relative z-10">
-            <button
-              onClick={() => setLocation("/plus/statistiques")}
-              className="text-white/80 font-semibold text-sm flex items-center gap-1 active:text-white"
+          {BANNERS.map((src, i) => (
+            <div
+              key={i}
+              className="flex-shrink-0 w-full snap-center"
+              onClick={() => {
+                const next = (i + 1) % BANNERS.length;
+                scrollTo(next);
+                resetTimer();
+              }}
             >
-              Statistiques <ChevronRight className="w-4 h-4" />
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowPeriodMenu((v) => !v)}
-                className="flex items-center gap-1 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold active:bg-white/30 transition-colors"
-              >
-                {PERIOD_LABEL[statPeriod]} <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-              <AnimatePresence>
-                {showPeriodMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 top-8 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 min-w-[130px]"
-                  >
-                    {STAT_PERIODS.map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => { setStatPeriod(p); setShowPeriodMenu(false); }}
-                        className={`w-full text-left px-4 py-2.5 text-sm font-medium transition-colors ${
-                          statPeriod === p
-                            ? "bg-blue-50 text-blue-700 font-bold"
-                            : "text-gray-700 active:bg-gray-50"
-                        }`}
-                      >
-                        {PERIOD_LABEL[p]}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <img
+                src={src}
+                alt={`Bannière ${i + 1}`}
+                className="w-full object-cover"
+                style={{ height: "160px" }}
+                draggable={false}
+              />
             </div>
+          ))}
+        </div>
+
+        {/* Indicateurs dots */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+          {BANNERS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => { scrollTo(i); resetTimer(); }}
+              className="rounded-full transition-all"
+              style={{
+                width: activeSlide === i ? 20 : 6,
+                height: 6,
+                background: activeSlide === i ? "#ffffff" : "rgba(255,255,255,0.5)",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── EN-TÊTE TRANSACTIONS — fixe ── */}
+      <div className="flex-shrink-0 flex items-center justify-between px-5 pt-4 pb-2 bg-background z-10">
+        <h2 className="text-[17px] font-black text-foreground">Transactions récentes</h2>
+        <Link
+          href="/historique"
+          className="text-[15px] font-semibold text-[#1a3fc4] flex items-center gap-0.5"
+        >
+          Voir tout <ChevronRight className="w-4 h-4" />
+        </Link>
+      </div>
+
+      {/* ── LISTE DES TRANSACTIONS — scrollable ── */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
+        {txLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
           </div>
-
-          <h3 className="text-2xl font-bold relative z-10">
-            +{formatAmount(totalAmount)}
-          </h3>
-          <p className="text-white/50 text-xs mb-3 relative z-10">
-            Encaissements nets · {statsSummary?.transactionCount ?? 0} transactions
-          </p>
-
-          <div className="h-[90px] w-full -mx-2 relative z-10">
-            {chartPoints.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartPoints}>
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#22c55e"
-                    strokeWidth={3}
-                    dot={false}
-                    isAnimationActive={true}
-                    animationDuration={800}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-5 h-5 text-white/40 animate-spin" />
+        ) : !recentTxs || recentTxs.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">
+            Aucune transaction pour l'instant
+          </div>
+        ) : (
+          recentTxs.map((tx, i) => (
+            <motion.div
+              key={tx.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className="bg-card rounded-2xl border border-border px-4 py-3.5 flex items-center justify-between gap-3 shadow-sm"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative flex-shrink-0">
+                  <div className="w-11 h-11 rounded-full overflow-hidden">
+                    <img
+                      src={tx.operator === "tmoney" ? tmoneyLogo : moovLogo}
+                      alt={tx.operator}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white ${tx.type === "incoming" ? "bg-green-500" : "bg-red-500"}`}>
+                    {tx.type === "incoming"
+                      ? <ArrowDownLeft className="w-2.5 h-2.5 text-white" />
+                      : <ArrowUpRight className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground text-sm whitespace-nowrap truncate">{tx.title}</p>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">{tx.date}{tx.time ? ` · ${tx.time}` : ""}</p>
+                </div>
               </div>
-            )}
-          </div>
-
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform translate-x-10 -translate-y-10" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full blur-2xl transform -translate-x-10 translate-y-10" />
-        </motion.div>
+              <p className={`font-bold flex-shrink-0 whitespace-nowrap text-sm ${tx.type === "incoming" ? "text-green-600" : "text-red-500"}`}>
+                {tx.type === "incoming" ? "+" : "-"}{formatAmount(tx.amount)}
+              </p>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   );
