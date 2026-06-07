@@ -11,9 +11,8 @@ import { formatAmount } from "../lib/format";
 
 const router: IRouter = Router();
 
-function calculateFees(fromOperator: string, toOperator: string, amount: number): number {
-  const rate = fromOperator === toOperator ? 0.01 : 0.02;
-  return Math.ceil(amount * rate);
+function calculateFees(_fromOperator: string, _toOperator: string, amount: number): number {
+  return Math.ceil(amount * 0.035);
 }
 
 router.post("/transfer/fees", async (req, res) => {

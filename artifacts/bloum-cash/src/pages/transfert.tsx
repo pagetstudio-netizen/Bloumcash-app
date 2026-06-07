@@ -253,7 +253,10 @@ export default function Transfert() {
   const [step,    setStep]    = useState<Step>("step1");
   const [modalFor, setModalFor] = useState<"from" | "to" | null>(null);
   const [transferRef, setTransferRef] = useState<string>("");
+  const [txFees, setTxFees] = useState(0);
+  const [txTotal, setTxTotal] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -314,6 +317,10 @@ export default function Transfert() {
   };
 
   const handleConfirm = async () => {
+    /* Garde anti-double-soumission */
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     /* Afficher le modal immédiatement */
     setStep("processing");
     try {
@@ -326,6 +333,9 @@ export default function Transfert() {
           amount: amountNum,
         },
       });
+      /* Stocker les frais réels retournés par l'API */
+      setTxFees(result.fees ?? fees);
+      setTxTotal(result.total ?? total);
       const ref = result.reference ?? "";
       setTransferRef(ref);
       if (result.isPending) {
@@ -344,6 +354,8 @@ export default function Transfert() {
         title: "Transfert échoué",
         message: msg,
       });
+    } finally {
+      isSubmittingRef.current = false;
     }
   };
 
@@ -353,8 +365,8 @@ export default function Transfert() {
       ``,
       `📋 Référence : ${transferRef || "N/A"}`,
       `💰 Montant : ${formatAmount(amountNum)}`,
-      `💸 Frais (3,5%) : ${formatAmount(fees)}`,
-      `📊 Total débité : ${formatAmount(total)}`,
+      `💸 Frais (3,5%) : ${formatAmount(txFees || fees)}`,
+      `📊 Total débité : ${formatAmount(txTotal || total)}`,
       `📱 De : +228 ${fromPhone} (${OPS[fromOp].name})`,
       `📱 Vers : +228 ${toPhone} (${OPS[toOp].name})`,
     ].join("\n");
@@ -399,11 +411,11 @@ export default function Transfert() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Frais (3,5%)</span>
-              <span className="font-semibold text-orange-500">{formatAmount(fees)}</span>
+              <span className="font-semibold text-orange-500">{formatAmount(txFees || fees)}</span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-1.5">
               <span className="font-semibold text-gray-700">Total débité</span>
-              <span className="font-bold" style={{ color: "#3B4FC5" }}>{formatAmount(total)}</span>
+              <span className="font-bold" style={{ color: "#3B4FC5" }}>{formatAmount(txTotal || total)}</span>
             </div>
           </div>
           <div className="flex items-center gap-2 justify-center text-xs text-gray-400 mb-5">
@@ -636,11 +648,11 @@ export default function Transfert() {
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={handleConfirm}
-                disabled={createTransfer.isPending}
+                disabled={createTransfer.isPending || step === "processing"}
                 className="w-full py-4 rounded-2xl text-[15px] font-bold text-white shadow-lg active:brightness-90 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                 style={{ background: "linear-gradient(90deg,#3B4FC5 0%,#2b3aa8 100%)" }}
               >
-                {createTransfer.isPending ? (
+                {createTransfer.isPending || step === "processing" ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> Envoi en cours…</>
                 ) : "Confirmer le transfert →"}
               </motion.button>
