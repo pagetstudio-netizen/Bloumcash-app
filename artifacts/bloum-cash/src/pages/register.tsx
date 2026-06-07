@@ -59,12 +59,11 @@ export default function Register() {
     <div className="h-[100dvh] w-full overflow-hidden flex flex-col md:max-w-md md:mx-auto bg-gradient-to-b from-[#1a3fc4] to-[#2b50e8]">
 
       {/* ── En-tête compact ── */}
-      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-8 pb-5 px-6">
-        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-2.5">
-          <div className="w-6 h-6 bg-[#1a3fc4] rounded-full" />
+      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-10 pb-5 px-6">
+        <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-lg mb-3">
+          <div className="w-8 h-8 bg-[#1a3fc4] rounded-full" />
         </div>
-        <h1 className="text-[17px] font-bold text-white">Bloum Cash</h1>
-        <p className="text-white/60 text-[12px] mt-0.5">Créer votre compte</p>
+        <h1 className="text-[22px] font-extrabold text-white">Bloum Cash</h1>
       </div>
 
       {/* ── Carte formulaire ── */}
@@ -92,9 +91,9 @@ export default function Register() {
 
           {/* Nom complet */}
           <div>
-            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Nom complet</label>
+            <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Nom Complet</label>
             <input
-              placeholder="Votre nom complet"
+              placeholder="Nom Complet"
               type="text"
               autoComplete="off"
               data-form-type="other"
@@ -111,7 +110,7 @@ export default function Register() {
           <div>
             <label className="text-[12px] font-semibold text-gray-600 mb-1 block">Adresse e-mail</label>
             <input
-              placeholder="nom@exemple.com"
+              placeholder="Adresse e-mail"
               type="text"
               inputMode="email"
               autoComplete="off"

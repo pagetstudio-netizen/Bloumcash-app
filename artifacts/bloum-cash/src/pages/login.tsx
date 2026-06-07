@@ -46,12 +46,12 @@ export default function Login() {
     <div className="h-[100dvh] w-full overflow-hidden flex flex-col md:max-w-md md:mx-auto bg-gradient-to-b from-[#1a3fc4] to-[#2b50e8]">
 
       {/* ── En-tête ── */}
-      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-10 pb-6 px-6">
-        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-3">
-          <div className="w-7 h-7 bg-[#1a3fc4] rounded-full" />
+      <div className="flex-shrink-0 flex flex-col items-center justify-center pt-14 pb-8 px-6">
+        <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-lg mb-4">
+          <div className="w-10 h-10 bg-[#1a3fc4] rounded-full" />
         </div>
-        <h1 className="text-[18px] font-bold text-white">Bloum Cash</h1>
-        <p className="text-white/60 text-[12px] mt-0.5">Connexion à votre compte</p>
+        <h1 className="text-[26px] font-extrabold text-white">Bloum Cash</h1>
+        <p className="text-white/70 text-[13px] mt-1">Connexion à votre compte</p>
       </div>
 
       {/* ── Carte formulaire ── */}
