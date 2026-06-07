@@ -62,7 +62,7 @@ export default function ForgotPin() {
     <div className="min-h-[100dvh] w-full bg-background flex flex-col md:mx-auto md:max-w-md relative">
       <div className="h-40 bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] flex flex-col p-6 text-white rounded-b-[2rem] pt-12">
         <button
-          onClick={() => setLocation("/login")}
+          onClick={() => setLocation(fromParametres ? "/plus/parametres" : "/login")}
           className="flex items-center text-white mb-4"
         >
           <ArrowLeft className="w-6 h-6 mr-2" /> Retour
