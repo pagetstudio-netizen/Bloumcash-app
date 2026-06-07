@@ -556,6 +556,10 @@ components:
           type: integer
         total:
           type: integer
+        isPending:
+          type: boolean
+        paydunhaConfigured:
+          type: boolean
 
     TransferFeesInput:
       type: object

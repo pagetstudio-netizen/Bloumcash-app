@@ -12,4 +12,6 @@ export interface TransferResult {
   reference: string;
   fees?: number;
   total?: number;
+  isPending?: boolean;
+  paydunhaConfigured?: boolean;
 }

@@ -218,6 +218,8 @@ export interface TransferResult {
   reference: string;
   fees?: number;
   total?: number;
+  isPending?: boolean;
+  paydunhaConfigured?: boolean;
 }
 
 export type TransferFeesInputFromOperator = typeof TransferFeesInputFromOperator[keyof typeof TransferFeesInputFromOperator];

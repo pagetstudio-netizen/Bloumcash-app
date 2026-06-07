@@ -24,7 +24,7 @@ import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
 
 type Operator = "tmoney" | "moov";
-type Step = "step1" | "step2" | "success";
+type Step = "step1" | "step2" | "pending" | "success";
 
 const OPS: Record<Operator, { name: string; logo: string }> = {
   tmoney: { name: "TMoney",     logo: tmoneyLogo },
@@ -175,12 +175,18 @@ export default function Transfert() {
         },
       });
       setTransferRef(result.reference ?? "");
-      setStep("success");
-    } catch {
+      if (result.isPending) {
+        setStep("pending");
+      } else {
+        setStep("success");
+      }
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { error?: string } } };
+      const msg = apiErr?.response?.data?.error ?? "Une erreur est survenue lors du transfert. Veuillez réessayer.";
       showModal({
         type: "error",
         title: "Transfert échoué",
-        message: "Une erreur est survenue lors du transfert. Veuillez réessayer.",
+        message: msg,
       });
     }
   };
@@ -277,6 +283,96 @@ export default function Transfert() {
               </svg>
             </div>
           </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  /* ────── Écran en attente de confirmation SMS (TMoney) ──────── */
+  if (step === "pending") {
+    return (
+      <div
+        className="h-[100dvh] w-full flex flex-col items-center justify-center px-5 md:max-w-md md:mx-auto"
+        style={{ background: "linear-gradient(160deg,#3B4FC5 0%,#2b3aa8 100%)" }}
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-white rounded-3xl p-8 w-full text-center shadow-2xl"
+        >
+          {/* Icône animée pulsation */}
+          <div className="relative w-20 h-20 mx-auto mb-5">
+            <motion.div
+              animate={{ scale: [1, 1.18, 1], opacity: [0.4, 0.15, 0.4] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-0 rounded-full"
+              style={{ background: "#FFA500" }}
+            />
+            <div className="absolute inset-0 rounded-full bg-orange-100 flex items-center justify-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+              >
+                <Loader2 className="w-9 h-9 text-orange-500" strokeWidth={2} />
+              </motion.div>
+            </div>
+          </div>
+
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Confirmation en attente</h2>
+          <p className="text-gray-500 text-sm mb-5 leading-relaxed">
+            Un <span className="font-bold text-gray-700">SMS TMoney</span> a été envoyé sur votre téléphone{" "}
+            <span className="font-bold text-gray-800">{fromPhone}</span>.
+            Validez le paiement pour finaliser le transfert.
+          </p>
+
+          {/* Recap */}
+          <div className="bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3 mb-4 text-sm space-y-1.5">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Montant envoyé</span>
+              <span className="font-semibold text-gray-800">{formatAmount(amountNum)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Destinataire</span>
+              <span className="font-semibold text-gray-800">{toPhone} ({OPS[toOp].name})</span>
+            </div>
+            <div className="flex justify-between border-t border-orange-100 pt-1.5">
+              <span className="font-semibold text-gray-500">Réf.</span>
+              <span className="font-mono text-xs font-bold text-orange-600">{transferRef}</span>
+            </div>
+          </div>
+
+          {/* Étapes à suivre */}
+          <div className="bg-gray-50 rounded-2xl px-4 py-3 mb-5 text-left space-y-2">
+            {[
+              "Ouvrez vos SMS sur votre téléphone",
+              "Lisez le SMS de T-Money reçu",
+              "Suivez les instructions pour confirmer",
+            ].map((step, i) => (
+              <div key={i} className="flex items-start gap-3 text-sm">
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[11px] font-bold text-white"
+                  style={{ background: "#3B4FC5" }}
+                >
+                  {i + 1}
+                </div>
+                <span className="text-gray-600 leading-snug">{step}</span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => setStep("success")}
+            className="w-full py-3.5 rounded-2xl text-sm font-bold text-white shadow-lg mb-3"
+            style={{ background: "linear-gradient(90deg,#3B4FC5,#2b3aa8)" }}
+          >
+            J'ai confirmé le paiement
+          </button>
+          <button
+            onClick={() => setLocation("/dashboard")}
+            className="w-full py-3 rounded-2xl text-sm font-semibold text-gray-500 bg-gray-100"
+          >
+            Retour à l'accueil
+          </button>
         </motion.div>
       </div>
     );

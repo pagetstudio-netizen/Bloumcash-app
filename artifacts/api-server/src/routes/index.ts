@@ -5,6 +5,7 @@ import transactionsRouter from "./transactions";
 import statsRouter from "./stats";
 import qrCodesRouter from "./qrcodes";
 import transferRouter from "./transfer";
+import paydunyaWebhookRouter from "./paydunya-webhook";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(transactionsRouter);
 router.use(statsRouter);
 router.use(qrCodesRouter);
 router.use(transferRouter);
+router.use(paydunyaWebhookRouter);
 
 export default router;
