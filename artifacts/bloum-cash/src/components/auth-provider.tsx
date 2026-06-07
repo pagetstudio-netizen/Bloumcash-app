@@ -26,6 +26,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(authToken);
     localStorage.setItem("bloum_user", JSON.stringify(userData));
     localStorage.setItem("bloum_token", authToken);
+
+    // Enregistrer l'utilisateur dans OneSignal via Median (app mobile uniquement)
+    if (typeof median !== "undefined" && userData.email) {
+      median.onesignal.login({ externalId: userData.email });
+    }
   };
 
   const logout = () => {
@@ -33,6 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     localStorage.removeItem("bloum_user");
     localStorage.removeItem("bloum_token");
+
+    // Désenregistrer l'utilisateur de OneSignal via Median (app mobile uniquement)
+    if (typeof median !== "undefined") {
+      median.onesignal.logout();
+    }
   };
 
   return (
