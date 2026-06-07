@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 const router: IRouter = Router();
 
@@ -15,12 +16,18 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-    if (!users.length || users[0].pin !== pin) {
+    if (!users.length) {
       res.status(401).json({ error: "Email ou PIN incorrect" });
       return;
     }
 
     const user = users[0];
+    const pinMatches = await bcrypt.compare(String(pin), user.pin);
+    if (!pinMatches) {
+      res.status(401).json({ error: "Email ou PIN incorrect" });
+      return;
+    }
+
     const token = crypto.randomBytes(32).toString("hex");
 
     res.json({
@@ -51,7 +58,8 @@ router.post("/auth/register", async (req, res) => {
       return;
     }
 
-    const [user] = await db.insert(usersTable).values({ fullName, email, pin }).returning();
+    const hashedPin = await bcrypt.hash(String(pin), 12);
+    const [user] = await db.insert(usersTable).values({ fullName, email, pin: hashedPin }).returning();
     const token = crypto.randomBytes(32).toString("hex");
 
     res.status(201).json({
