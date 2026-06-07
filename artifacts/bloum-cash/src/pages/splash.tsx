@@ -30,8 +30,8 @@ export default function Splash() {
         }}
         className="flex flex-col items-center"
       >
-        <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-xl mb-6">
-          <div className="w-12 h-12 bg-primary rounded-full" />
+        <div className="w-28 h-28 bg-white rounded-3xl flex items-center justify-center shadow-2xl mb-6 overflow-hidden">
+          <img src="/logo-512.png" alt="Bloum Cash" className="w-full h-full object-contain" />
         </div>
         <h1 className="text-3xl font-bold text-white tracking-tight">Bloum Cash</h1>
       </motion.div>

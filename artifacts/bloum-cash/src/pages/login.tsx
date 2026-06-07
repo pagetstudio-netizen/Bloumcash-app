@@ -53,22 +53,10 @@ export default function Login() {
       >
         {/* Logo */}
         <div
-          className="flex items-center justify-center mb-5 shadow-lg"
-          style={{
-            width: 76,
-            height: 76,
-            background: "#fff",
-            borderRadius: 22,
-          }}
+          className="flex items-center justify-center mb-5 shadow-lg overflow-hidden"
+          style={{ width: 76, height: 76, background: "#fff", borderRadius: 22 }}
         >
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              background: "#1a3fc4",
-              borderRadius: "50%",
-            }}
-          />
+          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 76, height: 76, objectFit: "contain" }} />
         </div>
         <h1 className="text-[24px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
         <p className="text-white/80 text-[13px] mt-1 font-normal">Connexion à votre compte</p>

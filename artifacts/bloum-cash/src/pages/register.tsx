@@ -66,22 +66,10 @@ export default function Register() {
       >
         {/* Logo */}
         <div
-          className="flex items-center justify-center mb-4 shadow-lg"
-          style={{
-            width: 66,
-            height: 66,
-            background: "#fff",
-            borderRadius: 20,
-          }}
+          className="flex items-center justify-center mb-4 shadow-lg overflow-hidden"
+          style={{ width: 66, height: 66, background: "#fff", borderRadius: 20 }}
         >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "#1a3fc4",
-              borderRadius: "50%",
-            }}
-          />
+          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 66, height: 66, objectFit: "contain" }} />
         </div>
         <h1 className="text-[22px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
       </div>
