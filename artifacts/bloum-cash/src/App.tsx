@@ -10,6 +10,7 @@ import Register from "@/pages/register";
 import ForgotPin from "@/pages/forgot-pin";
 import Dashboard from "@/pages/dashboard";
 import Encaisser from "@/pages/encaisser";
+import Promotions from "@/pages/promotions";
 import Paiement from "@/pages/paiement";
 import Transfert from "@/pages/transfert";
 import Historique from "@/pages/historique";
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/forgot-pin" component={ForgotPin} />
       <Route path="/" component={Dashboard} />
       <Route path="/encaisser" component={Encaisser} />
+      <Route path="/promotions" component={Promotions} />
       <Route path="/paiement/:reference" component={Paiement} />
       <Route path="/transfert" component={Transfert} />
       <Route path="/historique" component={Historique} />

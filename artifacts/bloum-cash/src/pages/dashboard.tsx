@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import {
-  Bell, QrCode, ArrowLeftRight, Clock, Grid, ChevronRight, ChevronDown,
+  Bell, Gift, QrCode, ArrowLeftRight, Clock, Grid, ChevronRight, ChevronDown,
   BarChart3, HelpCircle, MessageCircleQuestion, Phone, Settings,
   FileText, Shield, Info, LogOut, X,
 } from "lucide-react";
@@ -209,7 +209,7 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card rounded-2xl shadow-sm border border-border p-4 flex justify-between items-start"
         >
-          <ActionBtn icon={<QrCode />} label="Encaisser" to="/encaisser" />
+          <ActionBtn icon={<Gift />} label="Promotions" to="/promotions" />
           <ActionBtn icon={<ArrowLeftRight />} label="Transférer" to="/transfert" />
           <ActionBtn icon={<Clock />} label="Historique" to="/historique" />
           <ActionBtn icon={<Grid />} label="Plus" to="/plus" />
