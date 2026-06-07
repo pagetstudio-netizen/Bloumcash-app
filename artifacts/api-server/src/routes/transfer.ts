@@ -160,6 +160,7 @@ router.post("/transfer", async (req, res) => {
       description: `Transfert ${fromOperator} → ${toOperator}`,
       status: txStatus,
       userId,
+      paydunyaToken: paymentToken,
     });
 
     /* ── Étape 3 : Si Moov (instantané) → déclencher le payout vers destinataire ── */
@@ -216,10 +217,9 @@ router.get("/transfer/:reference/status", async (req, res) => {
     const tx = rows[0];
 
     /* ── Confirmer le statut via PayDunya si la transaction est encore pending ── */
-    if (tx.status === "pending" && paydunya.isConfigured()) {
+    if (tx.status === "pending" && paydunya.isConfigured() && tx.paydunyaToken) {
       try {
-        const invoiceToken = tx.reference;
-        const confirmed = await paydunya.confirmInvoice(invoiceToken, req.log);
+        const confirmed = await paydunya.confirmInvoice(tx.paydunyaToken, req.log);
         if (confirmed.completed) {
           await db
             .update(transactionsTable)
