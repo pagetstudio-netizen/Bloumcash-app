@@ -4,6 +4,7 @@ import { transactionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
+import { extractUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -61,6 +62,9 @@ router.post("/transfer", async (req, res) => {
       payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
 
     /* ── Mode démo — PayDunya non configuré ── */
+    const currentUser = extractUser(req);
+    const userId = currentUser?.id ?? null;
+
     if (!paydunya.isConfigured()) {
       req.log.warn("PayDunya not configured — saving transaction in demo mode");
       await db.insert(transactionsTable).values({
@@ -75,6 +79,7 @@ router.post("/transfer", async (req, res) => {
         fees,
         description: `Transfert ${fromOperator} → ${toOperator}`,
         status: "success",
+        userId,
       });
       res.status(201).json({
         success: true,
@@ -150,6 +155,7 @@ router.post("/transfer", async (req, res) => {
       description: `Transfert ${fromOperator} → ${toOperator}`,
       status: txStatus,
       paydunyaToken: paymentToken,
+      userId,
     });
 
     /* ── Étape 3 : Si Moov (instantané) → déclencher le payout immédiatement ── */

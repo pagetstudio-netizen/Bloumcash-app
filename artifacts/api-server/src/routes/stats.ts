@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { transactionsTable } from "@workspace/db";
-import { desc, gte, eq } from "drizzle-orm";
+import { and, gte, eq } from "drizzle-orm";
+import { requireUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -24,7 +25,6 @@ function getPeriodStart(period?: string): Date {
       return d;
     }
     default: {
-      // month
       const d = new Date(now);
       d.setDate(1);
       d.setHours(0, 0, 0, 0);
@@ -33,15 +33,16 @@ function getPeriodStart(period?: string): Date {
   }
 }
 
-router.get("/stats/summary", async (req, res) => {
+router.get("/stats/summary", requireUser, async (req, res) => {
   try {
+    const userId = req.currentUser!.id;
     const period = (req.query.period as string) || "month";
     const since = getPeriodStart(period);
 
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(gte(transactionsTable.createdAt, since));
+      .where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, since)));
 
     let incoming = 0;
     let outgoing = 0;
@@ -64,16 +65,16 @@ router.get("/stats/summary", async (req, res) => {
   }
 });
 
-router.get("/stats/chart", async (req, res) => {
+router.get("/stats/chart", requireUser, async (req, res) => {
   try {
+    const userId = req.currentUser!.id;
     const period = (req.query.period as string) || "month";
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(gte(transactionsTable.createdAt, getPeriodStart(period)))
+      .where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, getPeriodStart(period))))
       .orderBy(transactionsTable.createdAt);
 
-    // Group by day
     const grouped: Record<string, number> = {};
     for (const row of rows) {
       const d = new Date(row.createdAt);
@@ -90,19 +91,18 @@ router.get("/stats/chart", async (req, res) => {
 
     const points = Object.entries(grouped).map(([label, value]) => ({
       label,
-      value: Math.round(value / 1000), // in thousands
+      value: Math.round(value / 1000),
     }));
 
-    // If no data, return dummy chart data
     if (!points.length) {
       res.json([
-        { label: "01/06", value: 200 },
-        { label: "02/06", value: 250 },
-        { label: "03/06", value: 180 },
-        { label: "04/06", value: 300 },
-        { label: "05/06", value: 270 },
-        { label: "06/06", value: 350 },
-        { label: "07/06", value: 500 },
+        { label: "01/06", value: 0 },
+        { label: "02/06", value: 0 },
+        { label: "03/06", value: 0 },
+        { label: "04/06", value: 0 },
+        { label: "05/06", value: 0 },
+        { label: "06/06", value: 0 },
+        { label: "07/06", value: 0 },
       ]);
       return;
     }

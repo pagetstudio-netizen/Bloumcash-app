@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { transactionsTable } from "@workspace/db";
-import { desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import crypto from "crypto";
+import { requireUser, extractUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -40,13 +41,19 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect) {
   };
 }
 
-router.get("/transactions", async (req, res) => {
+router.get("/transactions", requireUser, async (req, res) => {
   try {
+    const userId = req.currentUser!.id;
     const { search, filter, period } = req.query as Record<string, string>;
 
-    let query = db.select().from(transactionsTable).orderBy(desc(transactionsTable.createdAt));
+    let conditions = eq(transactionsTable.userId, userId);
 
-    const rows = await query;
+    let rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(conditions)
+      .orderBy(desc(transactionsTable.createdAt));
+
     let result = rows.map(formatTransaction);
 
     if (filter === "incoming") result = result.filter((t) => t.type === "incoming");
@@ -68,6 +75,7 @@ router.get("/transactions", async (req, res) => {
     } else if (period === "week") {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
+      result = result.filter((t) => new Date(t.date) >= weekAgo);
     }
 
     res.json(result);
@@ -77,9 +85,15 @@ router.get("/transactions", async (req, res) => {
   }
 });
 
-router.get("/transactions/recent", async (req, res) => {
+router.get("/transactions/recent", requireUser, async (req, res) => {
   try {
-    const rows = await db.select().from(transactionsTable).orderBy(desc(transactionsTable.createdAt)).limit(5);
+    const userId = req.currentUser!.id;
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(eq(transactionsTable.userId, userId))
+      .orderBy(desc(transactionsTable.createdAt))
+      .limit(5);
     res.json(rows.map(formatTransaction));
   } catch (err) {
     req.log.error({ err }, "Recent transactions error");
@@ -87,10 +101,15 @@ router.get("/transactions/recent", async (req, res) => {
   }
 });
 
-router.get("/transactions/:id", async (req, res) => {
+router.get("/transactions/:id", requireUser, async (req, res) => {
   try {
+    const userId = req.currentUser!.id;
     const id = parseInt(req.params.id);
-    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
+    const rows = await db
+      .select()
+      .from(transactionsTable)
+      .where(and(eq(transactionsTable.id, id), eq(transactionsTable.userId, userId)))
+      .limit(1);
     if (!rows.length) {
       res.status(404).json({ error: "Transaction introuvable" });
       return;
@@ -102,8 +121,9 @@ router.get("/transactions/:id", async (req, res) => {
   }
 });
 
-router.post("/transactions", async (req, res) => {
+router.post("/transactions", requireUser, async (req, res) => {
   try {
+    const userId = req.currentUser!.id;
     const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;
     const reference = "BC" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 
@@ -119,6 +139,7 @@ router.post("/transactions", async (req, res) => {
         toPhone: toPhone ?? null,
         description: description ?? null,
         status: "success",
+        userId,
       })
       .returning();
 

@@ -1,0 +1,151 @@
+Analyse complètement l’intégration PayDunya SoftPay actuelle de DrimPay et corrige tous les endpoints et payloads selon la documentation officielle PayDunya.
+
+Documentation officielle :
+"PayDunya SoftPay Documentation" (https://developers.paydunya.com/doc/FR/softpay?utm)
+
+PROBLÈME ACTUEL :
+DrimPay appelle :
+/api/v1/softpay/tmoney
+
+et reçoit une page HTML de connexion PayDunya au lieu d’une réponse JSON.
+
+CAUSE :
+L’endpoint est incorrect.
+PayDunya utilise des slugs précis pour chaque opérateur.
+
+CORRECTIONS OBLIGATOIRES :
+
+1. Corriger tous les endpoints SoftPay.
+
+Exemples corrects :
+
+TMoney Togo
+https://app.paydunya.com/api/v1/softpay/t-money-togo
+
+Moov Togo
+https://app.paydunya.com/api/v1/softpay/moov-togo
+
+
+
+
+2. Ne plus utiliser un payload générique.
+
+Chaque opérateur possède ses propres champs obligatoires.
+
+Exemple TMoney Togo :
+{
+"name_t_money": "John Doe",
+"email_t_money": "[email protected]",
+"phone_t_money": "90909090",
+"payment_token": "TOKEN"
+}
+
+Exemple Moov Togo :
+{
+"moov_togo_customer_fullname": "John Doe",
+"moov_togo_email": "[email protected]",
+"moov_togo_customer_address": "Lome",
+"moov_togo_phone_number": "96969696",
+"payment_token": "TOKEN"
+}
+
+Exemple MTN Benin :
+{
+"mtn_benin_customer_fullname": "John Doe",
+"mtn_benin_email": "[email protected]",
+"mtn_benin_phone_number": "66414231",
+"mtn_benin_wallet_provider": "MTNBENIN",
+"payment_token": "TOKEN"
+}
+
+3. Créer un système operator mapping propre :
+
+operator => {
+endpoint,
+payloadBuilder,
+country,
+requiredFields
+}
+
+4. Toujours envoyer les headers :
+
+Accept: application/json
+Content-Type: application/json
+PAYDUNYA-MASTER-KEY
+PAYDUNYA-PRIVATE-KEY
+PAYDUNYA-PUBLIC-KEY
+PAYDUNYA-TOKEN
+
+5. Corriger complètement le flow :
+
+Étape 1 :
+POST /checkout-invoice/create
+
+Récupérer :
+response.token
+
+Étape 2 :
+Utiliser ce token comme :
+payment_token
+
+dans l’appel SoftPay.
+
+6. Ajouter logs détaillés :
+
+- endpoint appelé
+- payload envoyé
+- headers envoyés
+- status HTTP
+- content-type reçu
+- body reçu
+- temps de réponse
+
+7. Détecter automatiquement les erreurs HTML.
+
+Si PayDunya retourne :
+text/html
+
+logger :
+"PayDunya returned HTML instead of JSON. Possible invalid endpoint, expired token, authentication issue, or restricted account."
+
+8. Ajouter validation stricte :
+
+- token vide
+- mauvais endpoint
+- mauvais payload
+- numéro invalide
+- pays non supporté
+
+9. Ajouter retry intelligent uniquement :
+
+- timeout réseau
+- 5xx temporaires
+
+Jamais sur :
+
+- erreurs validation
+- HTML login page
+- token invalide
+
+10. Créer un fichier séparé :
+    paydunya-softpay-map.ts
+
+contenant tous les opérateurs supportés.
+
+11. Vérifier que tous les endpoints utilisés existent réellement dans la documentation officielle PayDunya.
+
+12. Corriger également les opérateurs futurs de manière scalable.
+
+13. Ne jamais faire crash le serveur si PayDunya retourne une réponse inattendue.
+
+14. Générer une intégration production-ready stable pour bloum cash compatible :
+
+- Replit
+- Plesk
+- Node.js production
+
+15. Ajouter fallback error handling :
+    Même si PayDunya renvoie du HTML ou une erreur inconnue, l’API DrimPay doit toujours retourner une réponse JSON propre au frontend.
+
+OBJECTIF FINAL :
+Le système SoftPay bloum cash doit fonctionner correctement avec les vrais endpoints PayDunya et déclencher les prompts Mobile Money directement sur le téléphone du client sans afficher de page HTML PayDunya.

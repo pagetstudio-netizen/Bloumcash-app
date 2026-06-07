@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import { signUserToken } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -28,7 +28,7 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = signUserToken({ id: user.id, email: user.email });
 
     res.json({
       token,
@@ -60,7 +60,7 @@ router.post("/auth/register", async (req, res) => {
 
     const hashedPin = await bcrypt.hash(String(pin), 12);
     const [user] = await db.insert(usersTable).values({ fullName, email, pin: hashedPin }).returning();
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = signUserToken({ id: user.id, email: user.email });
 
     res.status(201).json({
       token,
