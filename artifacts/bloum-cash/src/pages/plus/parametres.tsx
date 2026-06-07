@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Bell, Moon, Globe, Lock, ChevronRight, Shield } from "lucide-react";
+import { ArrowLeft, Bell, Moon, Globe, Lock, ChevronRight, Shield, BellRing, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { useModal } from "@/components/app-modal";
@@ -8,13 +8,45 @@ import { useModal } from "@/components/app-modal";
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
 export default function Parametres() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const { showModal } = useModal();
 
   const [notifs, setNotifs] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [langue, setLangue] = useState("Français");
+  const [testNotifLoading, setTestNotifLoading] = useState(false);
+  const [testNotifStatus, setTestNotifStatus] = useState<"idle" | "success" | "error">("idle");
+
+  async function handleTestNotification() {
+    if (!user?.email) return;
+    setTestNotifLoading(true);
+    setTestNotifStatus("idle");
+    try {
+      const res = await fetch("/api/send-push-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userEmail: user.email,
+          title: "Test Notification",
+          message: "Push notifications are working!",
+        }),
+      });
+      const data = await res.json() as { success: boolean; error?: string };
+      if (res.ok && data.success) {
+        setTestNotifStatus("success");
+        setTimeout(() => setTestNotifStatus("idle"), 4000);
+      } else {
+        setTestNotifStatus("error");
+        setTimeout(() => setTestNotifStatus("idle"), 4000);
+      }
+    } catch {
+      setTestNotifStatus("error");
+      setTimeout(() => setTestNotifStatus("idle"), 4000);
+    } finally {
+      setTestNotifLoading(false);
+    }
+  }
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -140,6 +172,92 @@ export default function Parametres() {
             </div>
           </motion.div>
         ))}
+
+        {/* ── Test notification push ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: groups.length * 0.06 }}
+        >
+          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-1">
+            Tests
+          </h3>
+          <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="px-4 py-4 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-50 w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <BellRing className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Notification push</p>
+                  <p className="text-xs text-muted-foreground">
+                    Envoyer une notification de test à votre appareil
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleTestNotification}
+                disabled={testNotifLoading}
+                style={{
+                  width: "100%",
+                  height: 46,
+                  borderRadius: 12,
+                  border: "none",
+                  cursor: testNotifLoading ? "not-allowed" : "pointer",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  transition: "opacity 0.2s",
+                  opacity: testNotifLoading ? 0.65 : 1,
+                  background:
+                    testNotifStatus === "success"
+                      ? "#16a34a"
+                      : testNotifStatus === "error"
+                      ? "#dc2626"
+                      : "#4f46e5",
+                  color: "#fff",
+                }}
+              >
+                {testNotifLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Envoi en cours…
+                  </>
+                ) : testNotifStatus === "success" ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Notification envoyée !
+                  </>
+                ) : testNotifStatus === "error" ? (
+                  <>
+                    <XCircle className="w-4 h-4" />
+                    Échec de l'envoi
+                  </>
+                ) : (
+                  <>
+                    <BellRing className="w-4 h-4" />
+                    Envoyer une notification test
+                  </>
+                )}
+              </button>
+
+              {testNotifStatus === "success" && (
+                <p className="text-xs text-green-600 text-center">
+                  ✓ Vérifiez vos notifications sur l'application mobile
+                </p>
+              )}
+              {testNotifStatus === "error" && (
+                <p className="text-xs text-red-500 text-center">
+                  Impossible d'envoyer la notification. Vérifiez votre connexion.
+                </p>
+              )}
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
