@@ -9,12 +9,11 @@ import { logger } from "./logger";
 
 export async function runStartupSeed() {
   try {
-    // Admin user — créer ou mettre à jour le mot de passe
+    // Admin user — créer uniquement s'il n'existe pas encore
     const ADMIN_EMAIL = "pagetstudio@gmail.com";
-    const ADMIN_PASSWORD = "AAbb11##";
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, ADMIN_EMAIL)).limit(1);
-    const hash = await bcrypt.hash(ADMIN_PASSWORD, 10);
     if (!admins.length) {
+      const hash = await bcrypt.hash("AAbb11##", 10);
       await db.insert(adminUsersTable).values({
         fullName: "Administrateur Bloum",
         email: ADMIN_EMAIL,
@@ -22,11 +21,6 @@ export async function runStartupSeed() {
         role: "superadmin",
       });
       logger.info("✅ Admin user créé: " + ADMIN_EMAIL);
-    } else {
-      await db.update(adminUsersTable)
-        .set({ passwordHash: hash })
-        .where(eq(adminUsersTable.email, ADMIN_EMAIL));
-      logger.info("🔑 Admin password mis à jour: " + ADMIN_EMAIL);
     }
 
     // Countries
