@@ -1,5 +1,5 @@
 import React from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, HelpCircle, MessageCircleQuestion, 
