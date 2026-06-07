@@ -43,43 +43,45 @@ export default function Login() {
 
   return (
     <div
-      className="h-[100dvh] w-full overflow-hidden flex flex-col md:max-w-md md:mx-auto"
+      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto"
       style={{ background: "#f0f2f5" }}
     >
       {/* ── En-tête bleu ── */}
       <div
-        className="flex-shrink-0 flex flex-col items-center pt-14 pb-16 px-6"
-        style={{ background: "linear-gradient(160deg, #1a3fc4 0%, #2b50e8 100%)" }}
+        className="flex-shrink-0 flex flex-col items-center pt-14 pb-20 px-6"
+        style={{ background: "#2d52e8" }}
       >
-        {/* Logo */}
         <div
-          className="flex items-center justify-center mb-5 shadow-lg overflow-hidden"
-          style={{ width: 76, height: 76, background: "#fff", borderRadius: 22 }}
+          className="flex items-center justify-center mb-5 overflow-hidden"
+          style={{
+            width: 72,
+            height: 72,
+            background: "#fff",
+            borderRadius: 20,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
+          }}
         >
-          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 76, height: 76, objectFit: "contain" }} />
+          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 72, height: 72, objectFit: "contain" }} />
         </div>
         <h1 className="text-[24px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
-        <p className="text-white/80 text-[13px] mt-1 font-normal">Connexion à votre compte</p>
+        <p className="text-white/80 text-[13px] mt-1">Connexion à votre compte</p>
       </div>
 
       {/* ── Carte blanche ── */}
       <div
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-y-auto"
         style={{
           background: "#fff",
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          marginTop: -22,
-          paddingLeft: 24,
-          paddingRight: 24,
-          paddingTop: 28,
-          paddingBottom: 20,
-          boxShadow: "0 -4px 24px rgba(0,0,0,0.10)",
+          borderTopLeftRadius: 32,
+          borderTopRightRadius: 32,
+          marginTop: -28,
+          padding: "28px 24px 28px 24px",
+          boxShadow: "0 -6px 30px rgba(0,0,0,0.10)",
         }}
       >
         <h2
-          className="text-center font-bold text-gray-900 mb-7"
-          style={{ fontSize: 20 }}
+          className="text-center font-extrabold text-gray-900 mb-7"
+          style={{ fontSize: 22 }}
         >
           Connexion
         </h2>
@@ -88,17 +90,14 @@ export default function Login() {
           onSubmit={form.handleSubmit(onSubmit)}
           autoComplete="off"
           data-form-type="other"
-          className="flex flex-col gap-4 flex-1"
+          className="flex flex-col gap-5"
         >
           <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
           <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
 
           {/* Email */}
           <div>
-            <label
-              className="block mb-1.5 font-semibold text-gray-700"
-              style={{ fontSize: 13 }}
-            >
+            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
               Adresse e-mail
             </label>
             <input
@@ -110,10 +109,10 @@ export default function Login() {
               {...form.register("email")}
               style={{
                 width: "100%",
-                height: 52,
+                height: 54,
                 borderRadius: 12,
-                border: errors.email ? "1.5px solid #f87171" : "1.5px solid #d1d5db",
-                background: errors.email ? "#fef2f2" : "#fff",
+                border: errors.email ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+                background: errors.email ? "#fef2f2" : "#f9fafb",
                 padding: "0 16px",
                 fontSize: 15,
                 color: "#111827",
@@ -122,24 +121,17 @@ export default function Login() {
               }}
             />
             {errors.email && (
-              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.email.message}</p>
+              <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.email.message}</p>
             )}
           </div>
 
           {/* Mot de passe */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label
-                className="font-semibold text-gray-700"
-                style={{ fontSize: 13 }}
-              >
+            <div className="flex items-center justify-between mb-2">
+              <label className="font-semibold text-gray-800" style={{ fontSize: 14 }}>
                 Mot de passe
               </label>
-              <Link
-                href="/forgot-pin"
-                className="font-semibold"
-                style={{ fontSize: 13, color: "#1a3fc4" }}
-              >
+              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: "#2d52e8" }}>
                 Code PIN oublié ?
               </Link>
             </div>
@@ -152,10 +144,10 @@ export default function Login() {
                 {...form.register("pin")}
                 style={{
                   width: "100%",
-                  height: 52,
+                  height: 54,
                   borderRadius: 12,
-                  border: errors.pin ? "1.5px solid #f87171" : "1.5px solid #d1d5db",
-                  background: errors.pin ? "#fef2f2" : "#fff",
+                  border: errors.pin ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+                  background: errors.pin ? "#fef2f2" : "#f9fafb",
                   padding: "0 48px 0 16px",
                   fontSize: 15,
                   color: "#111827",
@@ -173,12 +165,9 @@ export default function Login() {
               </button>
             </div>
             {errors.pin && (
-              <p className="text-[11px] text-red-500 mt-0.5 ml-1">{errors.pin.message}</p>
+              <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.pin.message}</p>
             )}
           </div>
-
-          {/* Spacer pousse le bouton vers le bas */}
-          <div className="flex-1" />
 
           {/* Bouton connexion */}
           <button
@@ -186,15 +175,15 @@ export default function Login() {
             disabled={loginMutation.isPending}
             style={{
               width: "100%",
-              height: 54,
+              height: 56,
               borderRadius: 14,
-              background: "linear-gradient(90deg, #1a3fc4 0%, #2b50e8 100%)",
+              background: "#2d52e8",
               color: "#fff",
               fontSize: 16,
               fontWeight: 700,
               border: "none",
               cursor: "pointer",
-              boxShadow: "0 4px 16px rgba(26,63,196,0.35)",
+              marginTop: 4,
               opacity: loginMutation.isPending ? 0.65 : 1,
             }}
           >
@@ -202,13 +191,12 @@ export default function Login() {
           </button>
 
           {/* Lien inscription */}
-          <p className="text-center text-gray-500" style={{ fontSize: 13, paddingBottom: 4 }}>
+          <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
             Nouveau sur Bloum Cash ?{" "}
-            <Link href="/register" style={{ color: "#1a3fc4", fontWeight: 700 }}>
+            <Link href="/register" style={{ color: "#2d52e8", fontWeight: 700 }}>
               S'inscrire
             </Link>
           </p>
-
         </form>
       </div>
     </div>
