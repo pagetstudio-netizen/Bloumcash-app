@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { transactionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import * as paydunya from "../lib/paydunya";
+import type { DisburseStatus } from "../lib/paydunya";
 
 const router: IRouter = Router();
 
@@ -130,6 +131,59 @@ router.post("/paydunya/webhook", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "PayDunya webhook — erreur serveur");
     res.status(500).json({ error: "Erreur serveur webhook" });
+  }
+});
+
+// ─── Webhook PayDunya Disbursement v2 ────────────────────────────────────────
+// PayDunya appelle cet endpoint quand le statut d'un déboursement change.
+// Payload attendu : { disburse_invoice, status, ... }
+
+router.post("/paydunya/disburse-webhook", async (req, res) => {
+  try {
+    const payload = req.body as Record<string, unknown>;
+    req.log.info({ payload }, "PayDunya disburse webhook reçu");
+
+    const disburseToken =
+      (payload?.disburse_invoice as string | undefined) ??
+      (payload?.token as string | undefined);
+
+    const status = (payload?.status as string | undefined)?.toLowerCase() as DisburseStatus | undefined;
+
+    req.log.info(
+      { disburseTokenPrefix: disburseToken ? disburseToken.slice(0, 8) + "…" : "?", status },
+      "PayDunya disburse webhook — traitement"
+    );
+
+    // Retrouver la transaction via le disburse_token (stocké dans paydunyaToken)
+    if (disburseToken) {
+      const rows = await db
+        .select()
+        .from(transactionsTable)
+        .where(eq(transactionsTable.paydunyaToken, disburseToken))
+        .limit(1);
+
+      if (rows.length) {
+        const tx = rows[0];
+        if (status === "success") {
+          await db
+            .update(transactionsTable)
+            .set({ status: "success" })
+            .where(eq(transactionsTable.reference, tx.reference));
+          req.log.info({ reference: tx.reference }, "PayDunya disburse webhook: payout confirmé ✔");
+        } else if (status === "failed") {
+          await db
+            .update(transactionsTable)
+            .set({ status: "failed" })
+            .where(eq(transactionsTable.reference, tx.reference));
+          req.log.warn({ reference: tx.reference }, "PayDunya disburse webhook: payout échoué ✖");
+        }
+      }
+    }
+
+    res.json({ received: true, status });
+  } catch (err) {
+    req.log.error({ err }, "PayDunya disburse webhook — erreur serveur");
+    res.status(500).json({ error: "Erreur serveur webhook disburse" });
   }
 });
 

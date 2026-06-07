@@ -525,16 +525,47 @@ export async function confirmInvoice(
   return { status, completed: status === "completed", rawPaydunyaResponse: data };
 }
 
-// ─── Payout : POST /softpay/{operator}/send ───────────────────────────────────
+// ─── Payout : API v2 /disburse/ ───────────────────────────────────────────────
+// Flux officiel PayDunya :
+//   1. POST /api/v2/disburse/get-invoice  → disburse_token
+//   2. POST /api/v2/disburse/submit-invoice { disburse_invoice, disburse_id }
+//   3. POST /api/v2/disburse/check-status  { disburse_invoice }  (optionnel)
+//
+// withdraw_mode : "t-money-togo" | "moov-togo" | ...
+// account_alias : numéro bénéficiaire sans indicatif pays (ex: "99935673")
+
+function getBaseUrlV2(): string {
+  if (process.env.PAYDUNYA_SANDBOX === "true") {
+    return "https://app.paydunya.com/sandbox-api/v2";
+  }
+  return "https://app.paydunya.com/api/v2";
+}
+
+/** withdraw_mode PayDunya v2 selon l'opérateur Togo */
+const WITHDRAW_MODE: Partial<Record<OperatorKey, string>> = {
+  "tmoney-togo": "t-money-togo",
+  "moov-togo":   "moov-togo",
+};
+
+export type DisburseStatus = "created" | "pending" | "success" | "failed";
+
+export interface DisburseStatusResult {
+  status: DisburseStatus;
+  rawPaydunyaResponse: Record<string, unknown>;
+}
 
 export async function disburseWallet(
   operatorKey: OperatorKey,
   params: { name: string; phone: string; amount: number; reference: string },
   logger: Logger
 ): Promise<DisburseResult> {
-  const config: OperatorConfig | undefined = OPERATOR_MAP[operatorKey];
-  if (!config) {
+  if (!OPERATOR_MAP[operatorKey]) {
     throw new PaydunyaError(`Opérateur de payout non supporté : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
+  }
+
+  const withdrawMode = WITHDRAW_MODE[operatorKey];
+  if (!withdrawMode) {
+    throw new PaydunyaError(`Aucun withdraw_mode v2 pour l'opérateur : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
   }
 
   const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
@@ -545,51 +576,112 @@ export async function disburseWallet(
     throw new PaydunyaError("Montant de payout invalide (doit être > 0).", "INVALID_AMOUNT");
   }
 
-  const payload = config.disbursePayloadBuilder({
-    name:      params.name || "Bénéficiaire Bloum Cash",
-    phone:     cleanPhone,
-    amount:    params.amount,
-    reference: params.reference,
-  });
+  const callbackUrl =
+    process.env.PAYDUNYA_DISBURSE_CALLBACK_URL ||
+    process.env.PAYDUNYA_CALLBACK_URL ||
+    `https://${process.env.REPLIT_DEV_DOMAIN ?? "bloumcash.com"}/api/paydunya/disburse-webhook`;
 
-  const url = `${getBaseUrl()}/softpay/${config.disburseEndpoint}/send`;
+  const baseV2 = getBaseUrlV2();
 
+  // ── Étape 1 : obtenir le disburse_token ──────────────────────────────────────
   logger.info(
-    { operator: operatorKey, phone: cleanPhone, amount: params.amount, ref: params.reference },
-    "PayDunya ▶ SoftPay payout"
+    { operator: operatorKey, withdrawMode, phone: cleanPhone, amount: params.amount, ref: params.reference },
+    "PayDunya ▶ disburse/get-invoice (v2)"
   );
 
-  const { data, status } = await paydunyaFetchWithRetry(
-    url,
-    { method: "POST", headers: getHeaders(), body: JSON.stringify(payload) },
+  const { data: inv, status: invStatus } = await paydunyaFetchWithRetry(
+    `${baseV2}/disburse/get-invoice`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        account_alias:  cleanPhone,
+        amount:         params.amount,
+        withdraw_mode:  withdrawMode,
+        callback_url:   callbackUrl,
+      }),
+    },
     logger
   );
 
-  if (status === 401) {
-    throw new PaydunyaError(
-      `[/softpay/${config.disburseEndpoint}/send] HTTP 401 — Authentification refusée pour le payout.`,
-      "AUTH_FAILED",
-      false,
-      data
+  // response_code "00" = succès ; récupérer disburse_token
+  const disburseToken =
+    (inv.disburse_token as string | undefined) ??
+    (inv.token as string | undefined);
+
+  if (inv.response_code !== "00" || !disburseToken) {
+    const rawMsg = String(inv.response_text ?? inv.message ?? JSON.stringify(inv));
+    logger.error(
+      { httpStatus: invStatus, responseCode: inv.response_code, paydunya_raw: inv },
+      `PayDunya ✖ disburse/get-invoice échoué — ${rawMsg}`
     );
+    return {
+      success: false,
+      message: `[disburse/get-invoice] ${rawMsg}`,
+      rawPaydunyaResponse: inv,
+    };
   }
 
-  const success = data.success === true || data.response_code === "00";
-  const rawMsg = String(data.message ?? data.response_text ?? "");
-  const message = rawMsg || (success ? "Payout envoyé avec succès." : "Payout refusé (aucun message PayDunya).");
+  logger.info(
+    { disburseTokenPrefix: disburseToken.slice(0, 8) + "…" },
+    "PayDunya ✔ disburse_token obtenu — soumission en cours"
+  );
+
+  // ── Étape 2 : soumettre le déboursement ──────────────────────────────────────
+  const { data: sub, status: subStatus } = await paydunyaFetchWithRetry(
+    `${baseV2}/disburse/submit-invoice`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        disburse_invoice: disburseToken,
+        disburse_id:      params.reference,
+      }),
+    },
+    logger
+  );
+
+  const success = sub.response_code === "00" || sub.success === true;
+  const rawMsg  = String(sub.response_text ?? sub.message ?? "");
+  const message = rawMsg || (success ? "Payout initié avec succès." : "Payout refusé (aucun message PayDunya).");
 
   if (!success) {
-    logger.warn({ operator: operatorKey, httpStatus: status, paydunya_raw: data }, `PayDunya ✖ payout refusé — ${rawMsg}`);
+    logger.warn(
+      { operator: operatorKey, httpStatus: subStatus, paydunya_raw: sub },
+      `PayDunya ✖ disburse/submit-invoice refusé — ${rawMsg}`
+    );
   } else {
-    logger.info({ operator: operatorKey, transactionId: data.transaction_id }, "PayDunya ✔ payout confirmé");
+    logger.info(
+      { operator: operatorKey, disburseToken: disburseToken.slice(0, 8) + "…", ref: params.reference },
+      "PayDunya ✔ disburse soumis"
+    );
   }
 
   return {
     success,
     message,
-    transactionId: typeof data.transaction_id === "string" ? data.transaction_id : undefined,
-    rawPaydunyaResponse: data,
+    transactionId: disburseToken,
+    rawPaydunyaResponse: sub,
   };
+}
+
+/** Vérifier le statut d'un déboursement v2 par son disburse_token */
+export async function checkDisburseStatus(
+  disburseToken: string,
+  logger: Logger
+): Promise<DisburseStatusResult> {
+  const { data } = await paydunyaFetchWithRetry(
+    `${getBaseUrlV2()}/disburse/check-status`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ disburse_invoice: disburseToken }),
+    },
+    logger
+  );
+
+  const status = (data.status ?? data.disburse_status ?? "pending") as DisburseStatus;
+  return { status, rawPaydunyaResponse: data };
 }
 
 export async function disburseTogoWallet(
