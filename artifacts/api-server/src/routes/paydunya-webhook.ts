@@ -61,6 +61,9 @@ router.post("/paydunya/webhook", async (req, res) => {
     );
 
     if (status === "completed") {
+      /* ── Vérifier si la transaction était déjà "success" (Moov — payout déjà fait) ── */
+      const wasAlreadySuccess = tx.status === "success";
+
       /* ── Marquer le payin comme confirmé ── */
       await db
         .update(transactionsTable)
@@ -68,12 +71,15 @@ router.post("/paydunya/webhook", async (req, res) => {
         .where(eq(transactionsTable.paydunyaToken, token));
 
       req.log.info(
-        { reference: tx.reference },
-        "PayDunya webhook: payin confirmé — déclenchement payout vers destinataire"
+        { reference: tx.reference, wasAlreadySuccess },
+        "PayDunya webhook: payin confirmé"
       );
 
-      /* ── Déclencher le payout vers le destinataire ── */
-      if (tx.toPhone && tx.toOperator && tx.amount > 0) {
+      /* ── Déclencher le payout UNIQUEMENT si la transaction était encore pending ──
+         Si elle était déjà "success", le payout a été fait directement (Moov immédiat)
+         → évite le double paiement */
+      if (!wasAlreadySuccess && tx.toPhone && tx.toOperator && tx.amount > 0) {
+        req.log.info({ reference: tx.reference }, "PayDunya webhook: déclenchement payout vers destinataire");
         try {
           const payoutResult = await paydunya.disburseTogoWallet(
             tx.toOperator as "tmoney" | "moov",
@@ -103,10 +109,15 @@ router.post("/paydunya/webhook", async (req, res) => {
             "Erreur payout destinataire — payin OK mais retrait échoué"
           );
         }
+      } else if (wasAlreadySuccess) {
+        req.log.info(
+          { reference: tx.reference },
+          "PayDunya webhook: payout déjà effectué (Moov immédiat) — pas de double envoi"
+        );
       } else {
         req.log.warn(
           { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
-          "PayDunya webhook: infos destinataire manquantes — pas de payout"
+          "PayDunya webhook: infos destinataire manquantes — payout impossible"
         );
       }
 

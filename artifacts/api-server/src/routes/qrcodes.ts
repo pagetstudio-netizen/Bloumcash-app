@@ -185,6 +185,7 @@ router.post("/qr/:reference/pay", async (req, res) => {
 
     const isPending = chargeResult.isPending ?? false;
 
+    /* ── Sauvegarder la transaction avec toutes les infos payout ── */
     const [tx] = await db
       .insert(transactionsTable)
       .values({
@@ -195,10 +196,37 @@ router.post("/qr/:reference/pay", async (req, res) => {
         operator: qr.operator,
         fromPhone: payerPhone ?? null,
         toPhone: qr.phone,
+        toOperator: qr.operator,            /* requis pour le payout webhook */
+        paydunyaToken: paymentToken,        /* requis pour retrouver la tx dans le webhook */
         description: `Paiement via QR Code ${qr.reference}`,
         status: isPending ? "pending" : "success",
       })
       .returning();
+
+    /* ── Payout immédiat si paiement non-pending (Moov — instantané) ── */
+    if (!isPending && qr.phone && qr.operator) {
+      req.log.info(
+        { reference: txRef, toOperator: qr.operator, toPhone: qr.phone, amount: qr.amount },
+        "QR pay: payin immédiat — déclenchement payout bénéficiaire"
+      );
+      try {
+        const payoutResult = await paydunya.disburseTogoWallet(
+          qr.operator as "tmoney" | "moov",
+          { name: qr.businessName, phone: qr.phone, amount: qr.amount, reference: txRef },
+          req.log
+        );
+        if (payoutResult.success) {
+          req.log.info({ reference: txRef, transactionId: payoutResult.transactionId }, "QR payout bénéficiaire OK");
+        } else {
+          req.log.error({ reference: txRef, message: payoutResult.message }, "QR payout bénéficiaire REFUSÉ");
+          /* Marquer pending pour suivi manuel */
+          await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
+        }
+      } catch (payoutErr) {
+        req.log.error({ err: payoutErr, reference: txRef }, "Erreur payout QR — payin OK mais retrait échoué");
+        await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
+      }
+    }
 
     res.json({
       success: true,
