@@ -12,9 +12,11 @@ export const transactionsTable = pgTable("transactions", {
   operator: text("operator").notNull(),
   fromPhone: text("from_phone"),
   toPhone: text("to_phone"),
+  toOperator: text("to_operator"),
   fees: integer("fees").default(0),
   description: text("description"),
   userId: integer("user_id"),
+  paydunyaToken: text("paydunya_token"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

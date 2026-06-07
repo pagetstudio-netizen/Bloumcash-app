@@ -60,6 +60,7 @@ router.post("/transfer", async (req, res) => {
     const email =
       payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
 
+    /* ── Mode démo — PayDunya non configuré ── */
     if (!paydunya.isConfigured()) {
       req.log.warn("PayDunya not configured — saving transaction in demo mode");
       await db.insert(transactionsTable).values({
@@ -70,6 +71,7 @@ router.post("/transfer", async (req, res) => {
         operator: fromOperator,
         fromPhone,
         toPhone,
+        toOperator,
         fees,
         description: `Transfert ${fromOperator} → ${toOperator}`,
         status: "success",
@@ -86,6 +88,7 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
+    /* ── Étape 1 : Créer l'invoice PayDunya ── */
     let paymentToken: string;
     try {
       paymentToken = await paydunya.createInvoice(
@@ -103,6 +106,7 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
+    /* ── Étape 2 : Débiter le wallet de l'expéditeur (payin) ── */
     let chargeResult: paydunya.ChargeResult;
     try {
       chargeResult = await paydunya.chargeTogoWallet(
@@ -132,6 +136,7 @@ router.post("/transfer", async (req, res) => {
 
     const txStatus = chargeResult.isPending ? "pending" : "success";
 
+    /* ── Sauvegarder la transaction avec le token PayDunya ── */
     await db.insert(transactionsTable).values({
       reference,
       type: "outgoing",
@@ -140,10 +145,36 @@ router.post("/transfer", async (req, res) => {
       operator: fromOperator,
       fromPhone,
       toPhone,
+      toOperator,
       fees,
       description: `Transfert ${fromOperator} → ${toOperator}`,
       status: txStatus,
+      paydunyaToken: paymentToken,
     });
+
+    /* ── Étape 3 : Si Moov (instantané) → déclencher le payout immédiatement ── */
+    if (!chargeResult.isPending && toPhone && toOperator) {
+      req.log.info(
+        { reference, toOperator, toPhone, amount: amt },
+        "Payin confirmé — déclenchement payout vers destinataire"
+      );
+      try {
+        const payoutResult = await paydunya.disburseTogoWallet(
+          toOperator as "tmoney" | "moov",
+          { name: "Bénéficiaire Bloum Cash", phone: toPhone, amount: amt, reference },
+          req.log
+        );
+        if (payoutResult.success) {
+          req.log.info({ reference, transactionId: payoutResult.transactionId }, "Payout destinataire OK");
+        } else {
+          req.log.warn({ reference, message: payoutResult.message }, "Payout destinataire refusé — transaction reste pending");
+          await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, reference));
+        }
+      } catch (payoutErr) {
+        req.log.error({ err: payoutErr, reference }, "Erreur payout destinataire — transaction marquée pending");
+        await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, reference));
+      }
+    }
 
     res.status(201).json({
       success: true,

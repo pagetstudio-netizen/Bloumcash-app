@@ -322,3 +322,84 @@ export async function chargeTogoWallet(
   const operatorKey: OperatorKey = operator === "tmoney" ? "tmoney-togo" : "moov-togo";
   return chargeOperator(operatorKey, params, paymentToken, logger);
 }
+
+export interface DisburseResult {
+  success: boolean;
+  message: string;
+  transactionId?: string;
+}
+
+/**
+ * Envoie de l'argent vers un wallet mobile money (payout/retrait).
+ * Utilise l'API Send Money de PayDunya SoftPay.
+ * Opérateurs Togo supportés : "tmoney" | "moov"
+ */
+export async function disburseTogoWallet(
+  operator: "tmoney" | "moov",
+  params: { name: string; phone: string; amount: number; reference: string },
+  logger: Parameters<typeof fetchWithLogs>[2]
+): Promise<DisburseResult> {
+  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
+  if (cleanPhone.length < 8) {
+    throw new PaydunyaError(
+      `Numéro destinataire invalide : ${params.phone}`,
+      "INVALID_PHONE",
+      false
+    );
+  }
+
+  if (params.amount <= 0) {
+    throw new PaydunyaError("Montant de payout invalide.", "INVALID_AMOUNT", false);
+  }
+
+  const endpoint = operator === "tmoney" ? "t-money-togo" : "moov-togo";
+  const url = `${PAYDUNYA_BASE}/softpay/${endpoint}/send`;
+
+  const payload =
+    operator === "tmoney"
+      ? {
+          name_t_money: params.name || "Bénéficiaire Bloum Cash",
+          phone_t_money: cleanPhone,
+          amount: params.amount,
+          ref: params.reference,
+        }
+      : {
+          moov_togo_customer_fullname: params.name || "Bénéficiaire Bloum Cash",
+          moov_togo_phone_number: cleanPhone,
+          amount: params.amount,
+          ref: params.reference,
+        };
+
+  logger.info(
+    { operator, phone: cleanPhone, amount: params.amount, ref: params.reference },
+    "PayDunya → payout initié"
+  );
+
+  const { data, status } = await fetchWithRetry(
+    url,
+    { method: "POST", headers: getHeaders(), body: JSON.stringify(payload) },
+    logger
+  );
+
+  const res = data as Record<string, unknown>;
+
+  if (status === 401 || status === 403) {
+    throw new PaydunyaError(
+      "Authentification PayDunya échouée pour le payout.",
+      "AUTH_FAILED",
+      false
+    );
+  }
+
+  const success = res.success === true || res.response_code === "00";
+  const message = String(res.message ?? res.response_text ?? (success ? "Payout envoyé" : "Payout refusé"));
+  const transactionId = typeof res.transaction_id === "string" ? res.transaction_id : undefined;
+
+  if (!success) {
+    logger.warn({ operator, status, response: res }, "PayDunya payout refusé");
+  } else {
+    logger.info({ operator, transactionId }, "PayDunya payout confirmé");
+  }
+
+  return { success, message, transactionId };
+}
