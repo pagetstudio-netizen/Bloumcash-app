@@ -16,12 +16,14 @@ export default function Parametres() {
   const [darkMode, setDarkMode] = useState(false);
   const [langue, setLangue] = useState("Français");
   const [testNotifLoading, setTestNotifLoading] = useState(false);
-  const [testNotifStatus, setTestNotifStatus] = useState<"idle" | "success" | "error">("idle");
+  const [testNotifStatus, setTestNotifStatus] = useState<"idle" | "success" | "error" | "not_subscribed">("idle");
+  const [testNotifError, setTestNotifError] = useState("");
 
   async function handleTestNotification() {
     if (!user?.email) return;
     setTestNotifLoading(true);
     setTestNotifStatus("idle");
+    setTestNotifError("");
     try {
       const res = await fetch("/api/send-push-notification", {
         method: "POST",
@@ -32,17 +34,22 @@ export default function Parametres() {
           message: "Push notifications are working!",
         }),
       });
-      const data = await res.json() as { success: boolean; error?: string };
+      const data = await res.json() as { success: boolean; notSubscribed?: boolean; error?: string };
       if (res.ok && data.success) {
         setTestNotifStatus("success");
-        setTimeout(() => setTestNotifStatus("idle"), 4000);
+        setTimeout(() => setTestNotifStatus("idle"), 5000);
+      } else if (data.notSubscribed) {
+        setTestNotifStatus("not_subscribed");
+        setTimeout(() => setTestNotifStatus("idle"), 8000);
       } else {
         setTestNotifStatus("error");
-        setTimeout(() => setTestNotifStatus("idle"), 4000);
+        setTestNotifError(data.error ?? "Erreur inconnue");
+        setTimeout(() => setTestNotifStatus("idle"), 6000);
       }
     } catch {
       setTestNotifStatus("error");
-      setTimeout(() => setTestNotifStatus("idle"), 4000);
+      setTestNotifError("Erreur réseau. Réessayez.");
+      setTimeout(() => setTestNotifStatus("idle"), 6000);
     } finally {
       setTestNotifLoading(false);
     }
@@ -218,6 +225,8 @@ export default function Parametres() {
                       ? "#16a34a"
                       : testNotifStatus === "error"
                       ? "#dc2626"
+                      : testNotifStatus === "not_subscribed"
+                      ? "#d97706"
                       : "#4f46e5",
                   color: "#fff",
                 }}
@@ -231,6 +240,11 @@ export default function Parametres() {
                   <>
                     <CheckCircle className="w-4 h-4" />
                     Notification envoyée !
+                  </>
+                ) : testNotifStatus === "not_subscribed" ? (
+                  <>
+                    <XCircle className="w-4 h-4" />
+                    Appareil non abonné
                   </>
                 ) : testNotifStatus === "error" ? (
                   <>
@@ -247,12 +261,17 @@ export default function Parametres() {
 
               {testNotifStatus === "success" && (
                 <p className="text-xs text-green-600 text-center">
-                  ✓ Vérifiez vos notifications sur l'application mobile
+                  ✓ Vérifiez vos notifications sur l'application mobile Bloum Cash
+                </p>
+              )}
+              {testNotifStatus === "not_subscribed" && (
+                <p className="text-xs text-amber-600 text-center leading-relaxed">
+                  ⚠️ Votre appareil n'est pas encore abonné. Ouvrez l'application mobile Bloum Cash (via Median) et acceptez les notifications push, puis réessayez.
                 </p>
               )}
               {testNotifStatus === "error" && (
                 <p className="text-xs text-red-500 text-center">
-                  Impossible d'envoyer la notification. Vérifiez votre connexion.
+                  {testNotifError || "Erreur inattendue. Réessayez."}
                 </p>
               )}
             </div>

@@ -12,21 +12,12 @@ export function isOneSignalConfigured(): boolean {
 }
 
 export interface PushNotificationOptions {
-  /** Email de l'utilisateur cible (utilisé comme external_id) */
   externalUserId: string;
-  /** Titre de la notification */
   title: string;
-  /** Corps du message */
   message: string;
-  /** Données supplémentaires envoyées avec la notification (ex: référence transaction) */
   data?: Record<string, string>;
 }
 
-/**
- * Envoie une notification push à un utilisateur identifié par son email (external_id).
- * Ne lève jamais d'exception — les erreurs sont retournées silencieusement pour
- * ne pas bloquer le flux principal de l'API.
- */
 export async function sendPushNotification(
   options: PushNotificationOptions,
   log?: { warn: (obj: object, msg: string) => void; info: (obj: object, msg: string) => void }
@@ -38,9 +29,7 @@ export async function sendPushNotification(
 
   const payload = {
     app_id: ONESIGNAL_APP_ID,
-    include_aliases: {
-      external_id: [options.externalUserId],
-    },
+    include_aliases: { external_id: [options.externalUserId] },
     target_channel: "push",
     headings: { fr: options.title, en: options.title },
     contents: { fr: options.message, en: options.message },
@@ -57,12 +46,17 @@ export async function sendPushNotification(
       body: JSON.stringify(payload),
     });
 
-    const body = await response.json() as { id?: string; errors?: unknown };
+    const body = await response.json() as { id?: string; errors?: unknown; recipients?: number };
 
-    if (!response.ok || body.errors) {
-      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal — échec d'envoi de la notification");
+    const errorsArr = Array.isArray(body.errors) ? body.errors as string[] : [];
+    const notSubscribed = errorsArr.some((e: string) => e.toLowerCase().includes("not subscribed"));
+
+    if (notSubscribed) {
+      log?.warn({ externalUserId: options.externalUserId }, "OneSignal — appareil non abonné (pas encore ouvert l'app Median)");
+    } else if (!response.ok || body.errors) {
+      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal — échec envoi");
     } else {
-      log?.info({ notificationId: body.id, externalUserId: options.externalUserId }, "OneSignal — notification envoyée");
+      log?.info({ notificationId: body.id, recipients: body.recipients, externalUserId: options.externalUserId }, "OneSignal — notification envoyée");
     }
   } catch (err) {
     log?.warn({ err, externalUserId: options.externalUserId }, "OneSignal — erreur réseau lors de l'envoi");
