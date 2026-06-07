@@ -82,3 +82,4 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+SUPABASE_DATABASE_URL = "postgresql://postgres.dtnyxkuzjbwyqyyooutb:qdhHvceMFn6xNpGA@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
