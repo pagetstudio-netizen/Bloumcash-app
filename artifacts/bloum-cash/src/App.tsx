@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppModalProvider } from "@/components/app-modal";
+import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 import Splash from "@/pages/splash";
 import Login from "@/pages/login";
@@ -34,7 +35,16 @@ import Produits from "@/pages/encaisser/produits";
 import Boutiques from "@/pages/encaisser/boutiques";
 import EncaisserWhatsApp from "@/pages/encaisser/whatsapp";
 
-const queryClient = new QueryClient();
+setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+});
 
 function Router() {
   return (

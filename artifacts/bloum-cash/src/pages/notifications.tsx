@@ -1,82 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Bell, CheckCheck, Trash2, ArrowRightLeft, QrCode, ShieldCheck, Info } from "lucide-react";
+import { ArrowLeft, Bell, CheckCheck, Trash2, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
+import { useListTransactions } from "@workspace/api-client-react";
+import { formatAmount } from "@/lib/utils";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
-type Notif = {
-  id: string;
-  icon: React.ReactNode;
-  iconBg: string;
-  title: string;
-  body: string;
-  time: string;
-  read: boolean;
-};
+const LS_KEY = "bloum_read_notifs";
 
-const INITIAL: Notif[] = [
-  {
-    id: "1",
-    icon: <ArrowRightLeft className="w-5 h-5 text-blue-600" />,
-    iconBg: "bg-blue-50",
-    title: "Transfert reçu",
-    body: "Vous avez reçu 150 000 FCFA via TMoney de +228 90 11 22 33.",
-    time: "Il y a 5 min",
-    read: false,
-  },
-  {
-    id: "2",
-    icon: <QrCode className="w-5 h-5 text-green-600" />,
-    iconBg: "bg-green-50",
-    title: "Paiement QR Code",
-    body: "Paiement de 25 000 FCFA encaissé via votre QR Code (Réf. QRBT7A).",
-    time: "Il y a 32 min",
-    read: false,
-  },
-  {
-    id: "3",
-    icon: <ArrowRightLeft className="w-5 h-5 text-purple-600" />,
-    iconBg: "bg-purple-50",
-    title: "Transfert envoyé",
-    body: "Vous avez transféré 75 000 FCFA à +228 99 44 55 66 via Moov Money.",
-    time: "Hier, 18:20",
-    read: true,
-  },
-  {
-    id: "4",
-    icon: <ShieldCheck className="w-5 h-5 text-orange-600" />,
-    iconBg: "bg-orange-50",
-    title: "Connexion détectée",
-    body: "Nouvelle connexion à votre compte Bloum Cash depuis un appareil Android.",
-    time: "Hier, 09:04",
-    read: true,
-  },
-  {
-    id: "5",
-    icon: <QrCode className="w-5 h-5 text-green-600" />,
-    iconBg: "bg-green-50",
-    title: "Paiement QR Code",
-    body: "Paiement de 320 000 FCFA encaissé via votre QR Code (Réf. QRXY12).",
-    time: "04 Juin, 14:10",
-    read: true,
-  },
-  {
-    id: "6",
-    icon: <Info className="w-5 h-5 text-gray-500" />,
-    iconBg: "bg-gray-100",
-    title: "Mise à jour Bloum Cash",
-    body: "La version 1.0.1 est disponible. Nouvelles fonctionnalités et corrections.",
-    time: "03 Juin",
-    read: true,
-  },
-];
+function getReadIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) || "[]")); }
+  catch { return new Set(); }
+}
+function saveReadIds(ids: Set<string>) {
+  localStorage.setItem(LS_KEY, JSON.stringify([...ids]));
+}
 
 export default function Notifications() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const [notifs, setNotifs] = useState<Notif[]>(INITIAL);
+  const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
+
+  const { data: transactions, isLoading } = useListTransactions(
+    {},
+    { query: { enabled: isAuthenticated } }
+  );
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -84,11 +35,46 @@ export default function Notifications() {
 
   if (!isAuthenticated) return null;
 
+  const notifs = useMemo(() => {
+    if (!transactions) return [];
+    return transactions
+      .filter((tx) => !deletedIds.has(tx.id))
+      .map((tx) => ({
+        id: tx.id,
+        icon: tx.type === "incoming"
+          ? <ArrowDownLeft className="w-5 h-5 text-green-600" />
+          : <ArrowUpRight  className="w-5 h-5 text-blue-600"  />,
+        iconBg: tx.type === "incoming" ? "bg-green-50" : "bg-blue-50",
+        title: tx.title,
+        body: tx.type === "incoming"
+          ? `Vous avez reçu ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.fromPhone ? ` de +228 ${tx.fromPhone}` : ""}.`
+          : `Vous avez transféré ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.toPhone ? ` vers +228 ${tx.toPhone}` : ""}.`,
+        time: tx.time ? `${tx.date}, ${tx.time}` : tx.date,
+        read: readIds.has(tx.id),
+        status: tx.status,
+      }));
+  }, [transactions, readIds, deletedIds]);
+
   const unreadCount = notifs.filter((n) => !n.read).length;
 
-  const markAllRead = () => setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-  const markRead = (id: string) => setNotifs((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-  const deleteNotif = (id: string) => setNotifs((prev) => prev.filter((n) => n.id !== id));
+  const markRead = (id: string) => {
+    const next = new Set(readIds).add(id);
+    setReadIds(next);
+    saveReadIds(next);
+  };
+
+  const markAllRead = () => {
+    const next = new Set(notifs.map((n) => n.id));
+    setReadIds(next);
+    saveReadIds(next);
+  };
+
+  const deleteNotif = (id: string) => {
+    setDeletedIds((prev) => new Set(prev).add(id));
+    const next = new Set(readIds);
+    next.delete(id);
+    saveReadIds(next);
+  };
 
   return (
     <div className={BG}>
@@ -101,8 +87,8 @@ export default function Notifications() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold">Notifications</h1>
             {unreadCount > 0 && (
-              <span className="bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
-                {unreadCount}
+              <span className="bg-red-500 text-white text-[10px] font-bold min-w-[20px] h-5 rounded-full flex items-center justify-center px-1">
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </div>
@@ -118,13 +104,17 @@ export default function Notifications() {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto">
-        {notifs.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-7 h-7 text-primary animate-spin" />
+          </div>
+        ) : notifs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
               <Bell className="w-8 h-8 text-muted-foreground" />
             </div>
             <p className="font-semibold text-foreground">Aucune notification</p>
-            <p className="text-sm text-muted-foreground">Vos alertes de paiement et actualités apparaîtront ici.</p>
+            <p className="text-sm text-muted-foreground">Vos alertes de paiement apparaîtront ici.</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -133,18 +123,16 @@ export default function Notifications() {
                 key={notif.id}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04 }}
+                transition={{ delay: i * 0.03 }}
                 onClick={() => markRead(notif.id)}
                 className={`flex items-start gap-3 px-4 py-4 cursor-pointer active:bg-muted/60 transition-colors ${
                   notif.read ? "bg-background" : "bg-blue-50/60"
                 }`}
               >
-                {/* Icon */}
                 <div className={`${notif.iconBg} w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5`}>
                   {notif.icon}
                 </div>
 
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <p className={`text-sm leading-snug ${notif.read ? "font-medium text-foreground" : "font-bold text-foreground"}`}>
@@ -160,7 +148,6 @@ export default function Notifications() {
                   <p className="text-[10px] text-muted-foreground/70 mt-1">{notif.time}</p>
                 </div>
 
-                {/* Delete */}
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteNotif(notif.id); }}
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0 mt-0.5"
