@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, AlertCircle, ArrowDown, ArrowUp, Edit3, X, Calendar } from "lucide-react";
+import { Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, AlertCircle, ArrowDown, ArrowUp, Edit3, X, Calendar, SendHorizonal, CheckCircle2, XCircle } from "lucide-react";
 import AdminLayout, { adminFetch } from "./layout";
 import { formatAmount } from "@/lib/utils";
 
@@ -37,6 +37,15 @@ const PERIODS = [
   { label: "30 jours", value: "month" },
 ];
 
+interface DisburseResult {
+  success: boolean;
+  reference?: string;
+  transactionId?: string;
+  message?: string;
+  error?: string;
+  code?: string;
+}
+
 export default function AdminTransactions() {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [total, setTotal] = useState(0);
@@ -52,7 +61,16 @@ export default function AdminTransactions() {
   const [actionLoading, setActionLoading] = useState(false);
   const [toast, setToast] = useState("");
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
+  /* ── Disburse manuel ── */
+  const [disburseOpen, setDisburseOpen] = useState(false);
+  const [dOperator, setDOperator] = useState<"tmoney" | "moov">("tmoney");
+  const [dPhone, setDPhone] = useState("");
+  const [dAmount, setDAmount] = useState("");
+  const [dMotif, setDMotif] = useState("");
+  const [dLoading, setDLoading] = useState(false);
+  const [dResult, setDResult] = useState<DisburseResult | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -81,8 +99,33 @@ export default function AdminTransactions() {
     } finally { setActionLoading(false); }
   };
 
-  const pages = Math.max(1, Math.ceil(total / 50));
+  const openDisburse = () => {
+    setDPhone(""); setDAmount(""); setDMotif(""); setDResult(null);
+    setDOperator("tmoney"); setDisburseOpen(true);
+  };
 
+  const handleDisburse = async () => {
+    if (!dPhone.trim() || !dAmount) return;
+    setDLoading(true); setDResult(null);
+    try {
+      const r = await adminFetch("/admin/disburse", {
+        method: "POST",
+        body: JSON.stringify({ operator: dOperator, phone: dPhone.trim(), amount: parseInt(dAmount), motif: dMotif.trim() || undefined }),
+      });
+      const data = await r.json() as DisburseResult;
+      setDResult(data);
+      if (data.success) {
+        showToast(`✓ Déboursement envoyé — réf. ${data.reference}`);
+        load();
+      }
+    } catch {
+      setDResult({ success: false, error: "Erreur réseau" });
+    } finally { setDLoading(false); }
+  };
+
+  const closeDisburse = () => { setDisburseOpen(false); setDResult(null); };
+
+  const pages = Math.max(1, Math.ceil(total / 50));
   const totalAmount = txs.reduce((s, t) => s + t.amount, 0);
   const totalFees = txs.reduce((s, t) => s + t.fees, 0);
   const successCount = txs.filter(t => t.status === "success").length;
@@ -131,7 +174,7 @@ export default function AdminTransactions() {
           </div>
         )}
 
-        {/* Filters */}
+        {/* Filters + actions */}
         <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -155,8 +198,16 @@ export default function AdminTransactions() {
           <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
-          <button onClick={exportCSV} className="flex items-center gap-1.5 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">
+          <button onClick={exportCSV} className="flex items-center gap-1.5 px-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
             Export CSV
+          </button>
+          {/* ── Débourser manuellement ── */}
+          <button
+            onClick={openDisburse}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm transition-colors"
+          >
+            <SendHorizonal className="w-4 h-4" />
+            Débourser manuellement
           </button>
         </div>
 
@@ -228,7 +279,7 @@ export default function AdminTransactions() {
         </div>
       </div>
 
-      {/* Force status modal */}
+      {/* ── Force status modal ── */}
       {forceModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
@@ -249,6 +300,149 @@ export default function AdminTransactions() {
               <button onClick={() => setForceModal(null)} className="flex-1 py-2.5 bg-gray-100 rounded-xl text-sm font-medium">Annuler</button>
               <button onClick={handleForce} disabled={actionLoading} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-60">
                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Déboursement manuel modal ── */}
+      {disburseOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <SendHorizonal className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-sm">Déboursement manuel</h3>
+                  <p className="text-xs text-gray-400">Envoyer des fonds via PayDunya</p>
+                </div>
+              </div>
+              <button onClick={closeDisburse} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {/* Résultat si déjà soumis */}
+              {dResult && (
+                <div className={`rounded-xl p-4 flex items-start gap-3 ${dResult.success ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+                  {dResult.success
+                    ? <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                    : <XCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  }
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold ${dResult.success ? "text-green-800" : "text-red-700"}`}>
+                      {dResult.success ? "Déboursement envoyé avec succès" : "Déboursement refusé"}
+                    </p>
+                    {dResult.message && <p className="text-xs mt-1 text-gray-600 break-words">{dResult.message}</p>}
+                    {dResult.error && <p className="text-xs mt-1 text-red-600 break-words">{dResult.error}</p>}
+                    {dResult.reference && (
+                      <p className="text-xs mt-1 font-mono text-gray-500">Réf : {dResult.reference}</p>
+                    )}
+                    {dResult.transactionId && (
+                      <p className="text-xs font-mono text-gray-400">TX ID : {dResult.transactionId}</p>
+                    )}
+                    {dResult.code && !dResult.success && (
+                      <p className="text-xs mt-1 text-red-500 font-mono">Code : {dResult.code}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Opérateur */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">Opérateur</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["tmoney", "moov"] as const).map(op => (
+                    <button
+                      key={op}
+                      onClick={() => setDOperator(op)}
+                      className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                        dOperator === op
+                          ? op === "tmoney"
+                            ? "border-blue-600 bg-blue-50 text-blue-700"
+                            : "border-orange-500 bg-orange-50 text-orange-700"
+                          : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      }`}
+                    >
+                      {op === "tmoney" ? "🔵 TMoney" : "🟠 Moov Money"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Numéro destinataire */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Numéro destinataire
+                  <span className="text-gray-400 font-normal ml-1">
+                    {dOperator === "tmoney" ? "(TMoney : 90-93…)" : "(Moov : 96-99…)"}
+                  </span>
+                </label>
+                <input
+                  type="tel"
+                  value={dPhone}
+                  onChange={e => setDPhone(e.target.value)}
+                  placeholder={dOperator === "tmoney" ? "ex: 92123456" : "ex: 97123456"}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Montant */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Montant (FCFA)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={1}
+                    value={dAmount}
+                    onChange={e => setDAmount(e.target.value)}
+                    placeholder="ex: 5000"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-16 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">FCFA</span>
+                </div>
+                {dAmount && parseInt(dAmount) > 0 && (
+                  <p className="text-xs text-blue-600 mt-1">{formatAmount(parseInt(dAmount))}</p>
+                )}
+              </div>
+
+              {/* Motif */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Motif <span className="font-normal text-gray-400">(optionnel)</span>
+                </label>
+                <input
+                  type="text"
+                  value={dMotif}
+                  onChange={e => setDMotif(e.target.value)}
+                  placeholder="ex: Remboursement, correction transaction…"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-5 flex gap-3">
+              <button
+                onClick={closeDisburse}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-medium text-gray-700 transition-colors"
+              >
+                Fermer
+              </button>
+              <button
+                onClick={handleDisburse}
+                disabled={dLoading || !dPhone.trim() || !dAmount || parseInt(dAmount) <= 0}
+                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+              >
+                {dLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Envoi…</>
+                  : <><SendHorizonal className="w-4 h-4" /> Envoyer</>
+                }
               </button>
             </div>
           </div>

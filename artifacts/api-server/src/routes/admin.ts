@@ -13,6 +13,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { requireAdmin, signAdminToken } from "../middleware/admin-auth";
+import * as paydunya from "../lib/paydunya";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -653,6 +654,95 @@ router.put("/admin/banners/reorder", requireAdmin, async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Reorder banners error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+/* ─────────────────────────── DISBURSE MANUEL ─────────────────────────── */
+router.post("/admin/disburse", requireAdmin, async (req, res) => {
+  try {
+    const { operator, phone, amount, motif } = req.body as {
+      operator?: string;
+      phone?: string;
+      amount?: number | string;
+      motif?: string;
+    };
+
+    if (!operator || !phone || !amount) {
+      res.status(400).json({ error: "Opérateur, numéro et montant requis" });
+      return;
+    }
+
+    if (operator !== "tmoney" && operator !== "moov") {
+      res.status(400).json({ error: "Opérateur invalide — valeurs acceptées : tmoney, moov" });
+      return;
+    }
+
+    const amt = parseInt(String(amount));
+    if (isNaN(amt) || amt <= 0) {
+      res.status(400).json({ error: "Montant invalide (doit être > 0)" });
+      return;
+    }
+
+    if (!paydunya.isConfigured()) {
+      res.status(503).json({
+        error: "PayDunya non configuré — ajoutez les clés API dans les secrets Replit",
+        code: "NOT_CONFIGURED",
+      });
+      return;
+    }
+
+    const reference = "ADM" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
+    const description = motif?.trim() || `Déboursement manuel admin vers ${phone}`;
+
+    req.log.info(
+      { operator, phone, amount: amt, reference },
+      "Admin disburse manuel — déclenchement"
+    );
+
+    const result = await paydunya.disburseTogoWallet(
+      operator,
+      { name: "Bénéficiaire Bloum Cash", phone, amount: amt, reference },
+      req.log
+    );
+
+    /* Logguer la transaction dans la DB quelle que soit l'issue */
+    await db.insert(transactionsTable).values({
+      reference,
+      type: "outgoing",
+      title: `Déboursement admin — ${phone} (${operator})`,
+      amount: amt,
+      operator,
+      toPhone: phone,
+      toOperator: operator,
+      fees: 0,
+      description,
+      status: result.success ? "success" : "failed",
+    });
+
+    if (result.success) {
+      req.log.info({ reference, transactionId: result.transactionId }, "Admin disburse OK");
+      res.json({
+        success: true,
+        reference,
+        transactionId: result.transactionId,
+        message: result.message,
+      });
+    } else {
+      req.log.warn({ reference, message: result.message }, "Admin disburse refusé par PayDunya");
+      res.status(402).json({
+        success: false,
+        reference,
+        message: result.message,
+        code: "PAYMENT_REFUSED",
+      });
+    }
+  } catch (err) {
+    const isPdu = err instanceof paydunya.PaydunyaError;
+    req.log.error({ err }, "Admin disburse — erreur");
+    res.status(isPdu ? 502 : 500).json({
+      error: isPdu ? (err as paydunya.PaydunyaError).message : "Erreur serveur interne",
+      code:  isPdu ? (err as paydunya.PaydunyaError).code : "SERVER_ERROR",
+    });
+  }
 });
 
 export default router;
