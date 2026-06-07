@@ -2,6 +2,11 @@
 
 # compiled output
 dist
+
+# env secrets (ne jamais committer)
+.env
+.env.local
+.env.production
 tmp
 out-tsc
 *.tsbuildinfo
