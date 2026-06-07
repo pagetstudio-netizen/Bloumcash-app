@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "median-js-bridge": "^2.16.0",
-    "qrcode.react": "^4.2.0"
+    "qrcode.react": "^4.2.0",
+    "react-onesignal": "^3.5.5"
   }
 }

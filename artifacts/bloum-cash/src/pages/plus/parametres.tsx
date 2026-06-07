@@ -266,7 +266,7 @@ export default function Parametres() {
               )}
               {testNotifStatus === "not_subscribed" && (
                 <p className="text-xs text-amber-600 text-center leading-relaxed">
-                  ⚠️ Votre appareil n'est pas encore abonné. Ouvrez l'application mobile Bloum Cash (via Median) et acceptez les notifications push, puis réessayez.
+                  ⚠️ Votre appareil n'est pas encore abonné aux notifications. Acceptez la demande de permission dans votre navigateur et réessayez.
                 </p>
               )}
               {testNotifStatus === "error" && (

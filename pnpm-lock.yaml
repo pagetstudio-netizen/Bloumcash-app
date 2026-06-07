@@ -231,6 +231,9 @@ importers:
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.1.0)
+      react-onesignal:
+        specifier: ^3.5.5
+        version: 3.5.5
     devDependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -2762,6 +2765,10 @@ packages:
 
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
+
+  react-onesignal@3.5.5:
+    resolution: {integrity: sha512-5C4F2jUvT534hBY9Wjl7E9tdIn8KWJtsRH1yfR7wUWYXjrIVowajdVxCk3PUs0n5GGxrUug5L2yuLw/JWJ6zig==}
+    engines: {node: '>=18'}
 
   react-refresh@0.18.0:
     resolution: {integrity: sha512-QgT5//D3jfjJb6Gsjxv0Slpj23ip+HtOpnNgnb2S5zU3CB26G/IDPGoy4RJB42wzFE46DRsstbW6tKHoKbhAxw==}
@@ -5349,6 +5356,8 @@ snapshots:
   react-is@16.13.1: {}
 
   react-is@18.3.1: {}
+
+  react-onesignal@3.5.5: {}
 
   react-refresh@0.18.0: {}
 

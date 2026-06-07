@@ -9,10 +9,12 @@ import paydunyaWebhookRouter from "./paydunya-webhook";
 import paydunyaDiagnoseRouter from "./paydunya-diagnose";
 import adminRouter from "./admin";
 import pushNotificationRouter from "./push-notification";
+import configRouter from "./config";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(configRouter);
 router.use(authRouter);
 router.use(transactionsRouter);
 router.use(statsRouter);

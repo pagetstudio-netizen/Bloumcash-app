@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@workspace/api-client-react/src/generated/api.schemas";
+import OneSignal from "react-onesignal";
+import { isMedianApp } from "@/lib/utils";
 
 interface AuthState {
   user: User | null;
@@ -11,7 +13,52 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
-/** Demande la permission de notifications si elle n'a pas encore été accordée/refusée. */
+/* ── OneSignal Web SDK (navigateur) ─────────────────────────────────────── */
+
+let oneSignalInitialized = false;
+
+async function initOneSignalWeb(): Promise<void> {
+  if (oneSignalInitialized || isMedianApp) return;
+  try {
+    const res = await fetch("/api/config");
+    const cfg = await res.json() as { onesignalAppId?: string };
+    const appId = cfg.onesignalAppId;
+    if (!appId) return;
+
+    await OneSignal.init({
+      appId,
+      serviceWorkerPath: "/OneSignalSDKWorker.js",
+      notifyButton: { enable: false },
+      promptOptions: {
+        slidedown: {
+          enabled: true,
+          actionMessage: "Activez les notifications pour recevoir vos alertes de transaction en temps réel.",
+          acceptButtonText: "Oui, activer",
+          cancelButtonText: "Plus tard",
+        },
+      },
+    });
+    oneSignalInitialized = true;
+  } catch {
+    // OneSignal non disponible, on continue sans
+  }
+}
+
+async function subscribeWebNotifications(email: string): Promise<void> {
+  if (isMedianApp || !oneSignalInitialized) return;
+  try {
+    await OneSignal.login(email);
+    const permission = await OneSignal.Notifications.permission;
+    if (!permission) {
+      await OneSignal.Slidedown.promptPush();
+    }
+  } catch {
+    // Silencieux — l'utilisateur peut refuser
+  }
+}
+
+/* ── Median native ──────────────────────────────────────────────────────── */
+
 function requestNotificationPermissionIfNeeded(delayMs = 2000) {
   if (typeof median === "undefined") return;
   median.onesignal.getPermissionStatus((result) => {
@@ -25,21 +72,43 @@ function requestNotificationPermissionIfNeeded(delayMs = 2000) {
   });
 }
 
+/* ── Provider ───────────────────────────────────────────────────────────── */
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem("bloum_user");
     return saved ? JSON.parse(saved) : null;
   });
-  
+
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem("bloum_token");
   });
 
-  /* Au démarrage : si l'utilisateur est déjà connecté (session restaurée),
-     vérifier le statut des notifications et demander si besoin. */
+  /* Initialiser OneSignal Web au montage (une seule fois, hors Median) */
   useEffect(() => {
-    if (token && typeof median !== "undefined") {
+    if (!isMedianApp) {
+      initOneSignalWeb();
+    }
+  }, []);
+
+  /* Si l'utilisateur est déjà connecté (session restaurée), abonner aux notifs */
+  useEffect(() => {
+    if (!token) return;
+
+    const storedUser = localStorage.getItem("bloum_user");
+    const storedEmail = storedUser ? (JSON.parse(storedUser) as User).email : null;
+
+    if (isMedianApp) {
       requestNotificationPermissionIfNeeded(3000);
+    } else if (storedEmail && oneSignalInitialized) {
+      subscribeWebNotifications(storedEmail);
+    } else if (storedEmail && !isMedianApp) {
+      // Attendre que OneSignal soit prêt (init asynchrone)
+      const trySubscribe = async () => {
+        await initOneSignalWeb();
+        await subscribeWebNotifications(storedEmail);
+      };
+      trySubscribe();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -50,11 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("bloum_user", JSON.stringify(userData));
     localStorage.setItem("bloum_token", authToken);
 
-    if (typeof median !== "undefined" && userData.email) {
-      // Lier cet utilisateur à OneSignal
-      median.onesignal.login({ externalId: userData.email });
-      // Demander la permission de notifications si pas encore décidé
-      requestNotificationPermissionIfNeeded(2000);
+    if (isMedianApp) {
+      if (typeof median !== "undefined" && userData.email) {
+        median.onesignal.login({ externalId: userData.email });
+        requestNotificationPermissionIfNeeded(2000);
+      }
+    } else if (userData.email) {
+      subscribeWebNotifications(userData.email);
     }
   };
 
@@ -64,8 +135,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("bloum_user");
     localStorage.removeItem("bloum_token");
 
-    if (typeof median !== "undefined") {
-      median.onesignal.logout();
+    if (isMedianApp) {
+      if (typeof median !== "undefined") {
+        median.onesignal.logout();
+      }
+    } else {
+      OneSignal.logout().catch(() => {});
     }
   };
 
