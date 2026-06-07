@@ -208,6 +208,13 @@ export default function Login() {
               S'inscrire
             </Link>
           </p>
+
+          {/* Lien admin discret */}
+          <p className="text-center" style={{ fontSize: 11, paddingBottom: 2 }}>
+            <Link href="/admin/login" style={{ color: "#9ca3af" }}>
+              Accès Administration
+            </Link>
+          </p>
         </form>
       </div>
     </div>
