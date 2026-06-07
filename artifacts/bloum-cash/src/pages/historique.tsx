@@ -98,40 +98,52 @@ export default function Historique() {
               transition={{ delay: i * 0.04 }}
               className="bg-card rounded-xl p-4 border border-border shadow-sm"
             >
-              <div className="flex justify-between items-start gap-3 mb-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="relative flex-shrink-0">
-                    <div className="w-11 h-11 rounded-full overflow-hidden">
-                      <img src={OP[tx.operator as OpKey]?.logo ?? tmoneyLogo} alt="" className="w-full h-full object-cover" />
-                    </div>
-                    <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white ${tx.type === "incoming" ? "bg-green-500" : "bg-red-500"}`}>
-                      {tx.type === "incoming"
-                        ? <ArrowDownLeft className="w-2.5 h-2.5 text-white" />
-                        : <ArrowUpRight  className="w-2.5 h-2.5 text-white" />}
-                    </div>
+              {/* Ligne principale : logo + infos + montant */}
+              <div className="flex items-start gap-3 mb-3">
+                {/* Logo opérateur */}
+                <div className="relative flex-shrink-0">
+                  <div className="w-11 h-11 rounded-full overflow-hidden">
+                    <img src={OP[tx.operator as OpKey]?.logo ?? tmoneyLogo} alt="" className="w-full h-full object-cover" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-foreground text-sm whitespace-nowrap">{tx.title}</p>
-                    <p className="text-xs text-muted-foreground whitespace-nowrap">{tx.date}{tx.time ? ` · ${tx.time}` : ""}</p>
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white ${tx.type === "incoming" ? "bg-green-500" : "bg-red-500"}`}>
+                    {tx.type === "incoming"
+                      ? <ArrowDownLeft className="w-2.5 h-2.5 text-white" />
+                      : <ArrowUpRight  className="w-2.5 h-2.5 text-white" />}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className={`font-bold text-base whitespace-nowrap ${tx.type === "incoming" ? "text-green-600" : "text-red-500"}`}>
+
+                {/* Titre + date — prend tout l'espace disponible */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-foreground text-sm truncate">{tx.title}</p>
+                  <p className="text-xs text-muted-foreground truncate">{tx.date}{tx.time ? ` · ${tx.time}` : ""}</p>
+                </div>
+
+                {/* Montant + statut — largeur fixe à droite */}
+                <div className="text-right flex-shrink-0 ml-1">
+                  <p className={`font-bold text-sm ${tx.type === "incoming" ? "text-green-600" : "text-red-500"}`}>
                     {tx.type === "incoming" ? "+" : "-"}{formatAmount(tx.amount)}
                   </p>
                   <div className={`mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    tx.status === "success" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"
+                    tx.status === "success" ? "bg-green-50 text-green-600" :
+                    tx.status === "pending" ? "bg-yellow-50 text-yellow-600" : "bg-red-50 text-red-500"
                   }`}>
-                    {tx.status === "success" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                    {tx.status === "success" ? "Effectué" : "Échoué"}
+                    {tx.status === "success"
+                      ? <><CheckCircle2 className="w-3 h-3" />Effectué</>
+                      : tx.status === "pending"
+                      ? <><Loader2 className="w-3 h-3 animate-spin" />En attente</>
+                      : <><XCircle className="w-3 h-3" />Échoué</>}
                   </div>
                 </div>
               </div>
-              <div className="pt-3 border-t border-border flex justify-between items-center">
-                <span className="text-[11px] text-muted-foreground font-mono">Réf : {tx.reference}</span>
+
+              {/* Référence + bouton détails */}
+              <div className="pt-3 border-t border-border flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground font-mono truncate flex-1">
+                  Réf : {tx.reference}
+                </span>
                 <button
                   onClick={() => setSelected(tx)}
-                  className="text-xs font-semibold text-[#1a3fc4] bg-blue-50 px-3 py-1 rounded-full"
+                  className="flex-shrink-0 text-xs font-semibold text-[#1a3fc4] bg-blue-50 px-3 py-1 rounded-full"
                 >
                   Détails
                 </button>
