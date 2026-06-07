@@ -1,26 +1,28 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { transactionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { transactionsTable, usersTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import * as paydunya from "../lib/paydunya";
 import type { DisburseStatus } from "../lib/paydunya";
+import { sendPushNotification } from "../lib/onesignal";
+import { formatAmount } from "../lib/format";
 
 const router: IRouter = Router();
 
+/**
+ * POST /api/paydunya/webhook
+ *
+ * Appelé par PayDunya quand le statut d'un paiement change.
+ *
+ * FLUX CRITIQUE :
+ *  - "completed" → déclencher le payout UNIQUEMENT si payoutSent=false (atomique)
+ *  - "cancelled"/"failed" → marquer la transaction échouée, JAMAIS de payout
+ */
 router.post("/paydunya/webhook", async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya webhook reçu");
 
-    /* ── Extraire token + statut depuis le payload PayDunya ──
-       Structure réelle PayDunya :
-       {
-         data: {
-           status: "completed",          ← ici
-           invoice: { token: "...", … }, ← token ici
-         }
-       }
-    ── */
     const dataNode = payload?.data as Record<string, unknown> | undefined;
     const invoiceData = dataNode?.invoice as Record<string, unknown> | undefined;
 
@@ -30,8 +32,8 @@ router.post("/paydunya/webhook", async (req, res) => {
       (payload?.token as string | undefined);
 
     const status =
-      (dataNode?.status as string | undefined) ??          // ← chemin correct
-      (invoiceData?.status as string | undefined) ??       // fallback (certains formats)
+      (dataNode?.status as string | undefined) ??
+      (invoiceData?.status as string | undefined) ??
       (payload?.status as string | undefined);
 
     if (!token) {
@@ -45,8 +47,7 @@ router.post("/paydunya/webhook", async (req, res) => {
       "PayDunya webhook — traitement"
     );
 
-    /* ── CORRECTION CRITIQUE : trouver la transaction par son token PayDunya ── */
-    /* (avant, le code mettait à jour TOUTES les transactions en attente — bug grave) */
+    /* Trouver la transaction par son token PayDunya */
     const rows = await db
       .select()
       .from(transactionsTable)
@@ -58,7 +59,6 @@ router.post("/paydunya/webhook", async (req, res) => {
         { token: token.slice(0, 8) + "…" },
         "PayDunya webhook: aucune transaction trouvée pour ce token"
       );
-      /* Répondre 200 pour que PayDunya ne re-essaie pas indéfiniment */
       res.json({ received: true, status, matched: false });
       return;
     }
@@ -69,67 +69,124 @@ router.post("/paydunya/webhook", async (req, res) => {
       "PayDunya webhook — transaction trouvée"
     );
 
+    /* ──────────────────────────────────────────────────────────────────────────
+       PAIEMENT CONFIRMÉ PAR PAYDUNYA
+       → Déclencher le payout atomiquement (évite le double payout si webhook
+         et polling arrivent simultanément).
+       ────────────────────────────────────────────────────────────────────────── */
     if (status === "completed") {
-      /* ── Vérifier si la transaction était déjà "success" (Moov — payout déjà fait) ── */
-      const wasAlreadySuccess = tx.status === "success";
 
-      /* ── Marquer le payin comme confirmé ── */
-      await db
+      /* Mise à jour atomique : payoutSent passe à true SEULEMENT si elle était false.
+         Si payoutSent était déjà true (polling a géré avant), updated sera vide. */
+      const updated = await db
         .update(transactionsTable)
-        .set({ status: "success" })
-        .where(eq(transactionsTable.paydunyaToken, token));
+        .set({ payoutSent: true })
+        .where(
+          and(
+            eq(transactionsTable.paydunyaToken, token),
+            eq(transactionsTable.payoutSent, false)
+          )
+        )
+        .returning({ id: transactionsTable.id, reference: transactionsTable.reference });
 
-      req.log.info(
-        { reference: tx.reference, wasAlreadySuccess },
-        "PayDunya webhook: payin confirmé"
-      );
-
-      /* ── Déclencher le payout UNIQUEMENT si la transaction était encore pending ──
-         Si elle était déjà "success", le payout a été fait directement (Moov immédiat)
-         → évite le double paiement */
-      if (!wasAlreadySuccess && tx.toPhone && tx.toOperator && tx.amount > 0) {
-        req.log.info({ reference: tx.reference }, "PayDunya webhook: déclenchement payout vers destinataire");
-        try {
-          const payoutResult = await paydunya.disburseTogoWallet(
-            tx.toOperator as "tmoney" | "moov",
-            {
-              name: "Bénéficiaire Bloum Cash",
-              phone: tx.toPhone,
-              amount: tx.amount,
-              reference: tx.reference,
-            },
-            req.log
-          );
-
-          if (payoutResult.success) {
-            req.log.info(
-              { reference: tx.reference, transactionId: payoutResult.transactionId },
-              "PayDunya payout destinataire OK"
-            );
-          } else {
-            req.log.error(
-              { reference: tx.reference, message: payoutResult.message },
-              "PayDunya payout destinataire REFUSÉ — vérifier manuellement"
-            );
-          }
-        } catch (payoutErr) {
-          req.log.error(
-            { err: payoutErr, reference: tx.reference },
-            "Erreur payout destinataire — payin OK mais retrait échoué"
-          );
-        }
-      } else if (wasAlreadySuccess) {
+      if (updated.length === 0) {
         req.log.info(
           { reference: tx.reference },
-          "PayDunya webhook: payout déjà effectué (Moov immédiat) — pas de double envoi"
+          "PayDunya webhook: payout déjà déclenché (polling ou webhook précédent) — skip"
         );
-      } else {
-        req.log.warn(
+        res.json({ received: true, status, reference: tx.reference, skipped: true });
+        return;
+      }
+
+      req.log.info(
+        { reference: tx.reference },
+        "PayDunya webhook: payin confirmé — déclenchement payout vers destinataire"
+      );
+
+      if (!tx.toPhone || !tx.toOperator || tx.amount <= 0) {
+        req.log.error(
           { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
-          "PayDunya webhook: infos destinataire manquantes — payout impossible"
+          "PayDunya webhook: infos destinataire manquantes — payout impossible. INTERVENTION MANUELLE REQUISE."
+        );
+        await db
+          .update(transactionsTable)
+          .set({ status: "payout_failed" })
+          .where(eq(transactionsTable.reference, tx.reference));
+        res.json({ received: true, status, reference: tx.reference });
+        return;
+      }
+
+      try {
+        const payoutResult = await paydunya.disburseTogoWallet(
+          tx.toOperator as "tmoney" | "moov",
+          {
+            name: "Bénéficiaire Bloum Cash",
+            phone: tx.toPhone,
+            amount: tx.amount,
+            reference: tx.reference,
+          },
+          req.log
+        );
+
+        if (payoutResult.success) {
+          await db
+            .update(transactionsTable)
+            .set({ status: "success" })
+            .where(eq(transactionsTable.reference, tx.reference));
+
+          req.log.info(
+            { reference: tx.reference, transactionId: payoutResult.transactionId },
+            "PayDunya webhook: payout destinataire OK → transaction SUCCESS"
+          );
+
+          /* Notification push à l'expéditeur */
+          if (tx.userId) {
+            const userRows = await db
+              .select({ email: usersTable.email })
+              .from(usersTable)
+              .where(eq(usersTable.id, tx.userId))
+              .limit(1);
+            if (userRows.length && userRows[0].email) {
+              sendPushNotification(
+                {
+                  externalUserId: userRows[0].email,
+                  title: "Transfert confirmé ✅",
+                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone} a été confirmé avec succès.`,
+                  data: { type: "transfer_confirmed", reference: tx.reference },
+                },
+                req.log
+              );
+            }
+          }
+
+        } else {
+          /* Payout refusé — le payin a réussi mais le retrait a échoué.
+             Marquer payout_failed pour intervention manuelle. */
+          await db
+            .update(transactionsTable)
+            .set({ status: "payout_failed" })
+            .where(eq(transactionsTable.reference, tx.reference));
+
+          req.log.error(
+            { reference: tx.reference, message: payoutResult.message },
+            "PayDunya webhook: payout refusé après payin confirmé — INTERVENTION MANUELLE REQUISE"
+          );
+        }
+      } catch (payoutErr) {
+        await db
+          .update(transactionsTable)
+          .set({ status: "payout_failed" })
+          .where(eq(transactionsTable.reference, tx.reference));
+
+        req.log.error(
+          { err: payoutErr, reference: tx.reference },
+          "PayDunya webhook: erreur payout après payin confirmé — INTERVENTION MANUELLE REQUISE"
         );
       }
 
+    /* ──────────────────────────────────────────────────────────────────────────
+       PAIEMENT ANNULÉ OU ÉCHOUÉ — ne jamais déclencher de payout
+       ────────────────────────────────────────────────────────────────────────── */
     } else if (status === "cancelled" || status === "failed") {
       await db
         .update(transactionsTable)
@@ -138,8 +195,29 @@ router.post("/paydunya/webhook", async (req, res) => {
 
       req.log.warn(
         { reference: tx.reference, status },
-        "PayDunya webhook: paiement échoué/annulé"
+        "PayDunya webhook: paiement annulé/échoué — aucun payout effectué"
       );
+
+      /* Notification push à l'expéditeur */
+      if (tx.userId) {
+        const userRows = await db
+          .select({ email: usersTable.email })
+          .from(usersTable)
+          .where(eq(usersTable.id, tx.userId))
+          .limit(1);
+        if (userRows.length && userRows[0].email) {
+          sendPushNotification(
+            {
+              externalUserId: userRows[0].email,
+              title: "Transfert annulé ❌",
+              message: `Votre transfert de ${formatAmount(tx.amount)} a été annulé ou a échoué.`,
+              data: { type: "transfer_failed", reference: tx.reference },
+            },
+            req.log
+          );
+        }
+      }
+
     } else {
       req.log.info(
         { status, reference: tx.reference },
@@ -154,10 +232,10 @@ router.post("/paydunya/webhook", async (req, res) => {
   }
 });
 
-// ─── Webhook PayDunya Disbursement v2 ────────────────────────────────────────
-// PayDunya appelle cet endpoint quand le statut d'un déboursement change.
-// Payload attendu : { disburse_invoice, status, ... }
-
+/**
+ * POST /api/paydunya/disburse-webhook
+ * Appelé par PayDunya quand le statut d'un déboursement change.
+ */
 router.post("/paydunya/disburse-webhook", async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
@@ -174,7 +252,6 @@ router.post("/paydunya/disburse-webhook", async (req, res) => {
       "PayDunya disburse webhook — traitement"
     );
 
-    // Retrouver la transaction via le disburse_token (stocké dans paydunyaToken)
     if (disburseToken) {
       const rows = await db
         .select()
@@ -193,9 +270,9 @@ router.post("/paydunya/disburse-webhook", async (req, res) => {
         } else if (status === "failed") {
           await db
             .update(transactionsTable)
-            .set({ status: "failed" })
+            .set({ status: "payout_failed" })
             .where(eq(transactionsTable.reference, tx.reference));
-          req.log.warn({ reference: tx.reference }, "PayDunya disburse webhook: payout échoué ✖");
+          req.log.warn({ reference: tx.reference }, "PayDunya disburse webhook: payout échoué — INTERVENTION MANUELLE REQUISE ✖");
         }
       }
     }

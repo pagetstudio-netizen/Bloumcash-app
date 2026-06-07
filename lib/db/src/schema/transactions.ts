@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,7 +8,7 @@ export const transactionsTable = pgTable("transactions", {
   type: text("type").notNull(),
   title: text("title").notNull(),
   amount: integer("amount").notNull(),
-  status: text("status").notNull().default("success"),
+  status: text("status").notNull().default("pending"),
   operator: text("operator").notNull(),
   fromPhone: text("from_phone"),
   toPhone: text("to_phone"),
@@ -17,6 +17,7 @@ export const transactionsTable = pgTable("transactions", {
   description: text("description"),
   userId: integer("user_id"),
   paydunyaToken: text("paydunya_token"),
+  payoutSent: boolean("payout_sent").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

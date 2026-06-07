@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { transactionsTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import { extractUser } from "../middleware/user-auth";
@@ -80,6 +80,7 @@ router.post("/transfer", async (req, res) => {
         fees,
         description: `Transfert ${fromOperator} → ${toOperator}`,
         status: "success",
+        payoutSent: true,
         userId,
       });
       res.status(201).json({
@@ -94,7 +95,17 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    /* ── Étape 1 (doc officielle) : Créer une checkout invoice → obtenir le payment_token ── */
+    /* ──────────────────────────────────────────────────────────────────────────
+       FLUX CORRECT PayDunya :
+       1. createInvoice  → obtenir le payment_token
+       2. chargeTogoWallet → envoyer le push USSD au payeur
+       3. Sauvegarder en status "pending" — AUCUN payout à ce stade
+       4. L'utilisateur valide sur son téléphone avec son code secret
+       5. PayDunya appelle le webhook /api/paydunya/webhook (status: "completed")
+       6. Le webhook déclenche le payout vers le destinataire
+       ────────────────────────────────────────────────────────────────────────── */
+
+    /* ── Étape 1 : Créer une checkout invoice → obtenir le payment_token ── */
     const operatorKey = TOGO_OPERATOR_MAP[fromOperator as "tmoney" | "moov"];
     const operatorConfig = OPERATOR_MAP[operatorKey];
     const channels = operatorConfig?.channels ?? [operatorKey];
@@ -118,7 +129,7 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    /* ── Étape 2 (doc officielle) : Débiter le wallet de l'expéditeur via SoftPay ── */
+    /* ── Étape 2 : Envoyer le push USSD au payeur via SoftPay ── */
     let chargeResult: paydunya.ChargeResult;
     try {
       chargeResult = await paydunya.chargeTogoWallet(
@@ -130,7 +141,7 @@ router.post("/transfer", async (req, res) => {
       const isPduErr = err instanceof paydunya.PaydunyaError;
       const msg = isPduErr
         ? err.message
-        : "Erreur lors du débit mobile money. Veuillez réessayer.";
+        : "Erreur lors de la demande de paiement mobile money. Veuillez réessayer.";
       const code = isPduErr ? err.code : "CHARGE_ERROR";
       req.log.error({ err, code }, "Charge failed");
       res.status(502).json({ error: msg, code });
@@ -145,9 +156,9 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    const txStatus = chargeResult.isPending ? "pending" : "success";
-
-    /* ── Sauvegarder la transaction ── */
+    /* ── Étape 3 : Sauvegarder en PENDING — le payout sera déclenché UNIQUEMENT
+       après confirmation officielle de PayDunya via webhook ou polling.
+       NE JAMAIS créditer le destinataire avant cette confirmation. ── */
     try {
       await db.insert(transactionsTable).values({
         reference,
@@ -160,16 +171,15 @@ router.post("/transfer", async (req, res) => {
         toOperator,
         fees,
         description: `Transfert ${fromOperator} → ${toOperator}`,
-        status: txStatus,
+        status: "pending",
+        payoutSent: false,
         userId,
         paydunyaToken: paymentToken,
       });
     } catch (dbErr) {
-      // CRITIQUE : PayDunya a déjà débité l'envoyeur — on logue toutes les infos
-      // pour permettre une récupération manuelle via le dashboard PayDunya.
       req.log.error({
         err: dbErr,
-        CRITICAL: "PAYDUNYA_CHARGE_OK_BUT_DB_INSERT_FAILED",
+        CRITICAL: "PAYDUNYA_CHARGE_SENT_BUT_DB_INSERT_FAILED",
         reference,
         paydunyaToken: paymentToken,
         fromPhone,
@@ -178,54 +188,21 @@ router.post("/transfer", async (req, res) => {
         toOperator,
         amount: amt,
         fees,
-      }, "⚠️ CRITIQUE — Paiement PayDunya réussi mais échec DB. Récupération manuelle requise via PayDunya dashboard.");
-      // On continue quand même pour retourner une réponse au client
+      }, "⚠️ CRITIQUE — Push PayDunya envoyé mais échec insertion DB. Récupération manuelle requise.");
     }
 
-    /* ── Étape 3 : Si Moov (instantané) → déclencher le payout vers destinataire ── */
-    if (!chargeResult.isPending && toPhone && toOperator) {
-      req.log.info(
-        { reference, toOperator, toPhone, amount: amt },
-        "Payin confirmé — déclenchement payout vers destinataire"
-      );
-      try {
-        const payoutResult = await paydunya.disburseTogoWallet(
-          toOperator as "tmoney" | "moov",
-          { name: "Bénéficiaire Bloum Cash", phone: toPhone, amount: amt, reference },
-          req.log
-        );
-        if (payoutResult.success) {
-          req.log.info({ reference, transactionId: payoutResult.transactionId }, "Payout destinataire OK");
-        } else {
-          req.log.warn({ reference, message: payoutResult.message }, "Payout destinataire refusé — transaction reste pending");
-          await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, reference));
-        }
-      } catch (payoutErr) {
-        req.log.error({ err: payoutErr, reference }, "Erreur payout destinataire — transaction marquée pending");
-        await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, reference));
-      }
-    }
-
-    // ── Notification push à l'expéditeur si paiement confirmé immédiatement ──
-    if (!chargeResult.isPending && payerEmail) {
-      sendPushNotification(
-        {
-          externalUserId: payerEmail,
-          title: "Transfert envoyé ✅",
-          message: `Votre transfert de ${formatAmount(amt)} vers ${toPhone} a été effectué avec succès.`,
-          data: { type: "transfer_success", reference },
-        },
-        req.log
-      );
-    }
+    req.log.info(
+      { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt },
+      "Demande de paiement envoyée — en attente de validation par le payeur"
+    );
 
     res.status(201).json({
       success: true,
-      message: chargeResult.message,
+      message: "Demande de paiement envoyée. Veuillez valider sur votre téléphone mobile.",
       reference,
       fees,
       total,
-      isPending: chargeResult.isPending ?? false,
+      isPending: true,
       paydunhaConfigured: true,
     });
   } catch (err) {
@@ -234,6 +211,13 @@ router.post("/transfer", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/transfer/:reference/status
+ *
+ * Polling endpoint — vérifie le statut d'une transaction via PayDunya.
+ * Si PayDunya confirme le paiement (completed) ET que le payout n'a pas encore
+ * été déclenché (payoutSent = false), déclenche le payout atomiquement.
+ */
 router.get("/transfer/:reference/status", async (req, res) => {
   try {
     const rows = await db
@@ -248,45 +232,105 @@ router.get("/transfer/:reference/status", async (req, res) => {
     }
     const tx = rows[0];
 
-    /* ── Confirmer le statut via PayDunya si la transaction est encore pending ── */
+    /* ── Vérifier le statut via PayDunya si la transaction est encore pending ── */
     if (tx.status === "pending" && paydunya.isConfigured() && tx.paydunyaToken) {
       try {
         const confirmed = await paydunya.confirmInvoice(tx.paydunyaToken, req.log);
-        if (confirmed.completed) {
-          await db
-            .update(transactionsTable)
-            .set({ status: "success" })
-            .where(eq(transactionsTable.reference, tx.reference));
-          tx.status = "success";
 
-          // Notification push — paiement TMoney confirmé en différé
-          if (tx.userId) {
-            const userRows = await db
-              .select({ email: usersTable.email, fullName: usersTable.fullName })
-              .from(usersTable)
-              .where(eq(usersTable.id, tx.userId))
-              .limit(1);
-            if (userRows.length && userRows[0].email) {
-              sendPushNotification(
+        if (confirmed.completed) {
+          /* ── ATOMIQUE : marquer payoutSent=true seulement si ce n'était pas déjà fait ──
+             Utilise le WHERE payoutSent=false pour éviter un double payout si le webhook
+             et le polling arrivent en même temps. */
+          const updated = await db
+            .update(transactionsTable)
+            .set({ payoutSent: true })
+            .where(
+              and(
+                eq(transactionsTable.reference, tx.reference),
+                eq(transactionsTable.payoutSent, false)
+              )
+            )
+            .returning({ id: transactionsTable.id });
+
+          if (updated.length > 0) {
+            /* C'est ce processus qui doit déclencher le payout */
+            req.log.info({ reference: tx.reference }, "Polling: payin confirmé — déclenchement payout");
+
+            try {
+              const payoutResult = await paydunya.disburseTogoWallet(
+                tx.toOperator as "tmoney" | "moov",
                 {
-                  externalUserId: userRows[0].email,
-                  title: "Transfert confirmé ✅",
-                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a été confirmé.`,
-                  data: { type: "transfer_confirmed", reference: tx.reference },
+                  name: "Bénéficiaire Bloum Cash",
+                  phone: tx.toPhone!,
+                  amount: tx.amount,
+                  reference: tx.reference,
                 },
                 req.log
               );
+
+              if (payoutResult.success) {
+                await db
+                  .update(transactionsTable)
+                  .set({ status: "success" })
+                  .where(eq(transactionsTable.reference, tx.reference));
+                tx.status = "success";
+                req.log.info({ reference: tx.reference }, "Polling: payout destinataire OK → success");
+
+                /* Notification push à l'expéditeur */
+                if (tx.userId) {
+                  const userRows = await db
+                    .select({ email: usersTable.email })
+                    .from(usersTable)
+                    .where(eq(usersTable.id, tx.userId))
+                    .limit(1);
+                  if (userRows.length && userRows[0].email) {
+                    sendPushNotification(
+                      {
+                        externalUserId: userRows[0].email,
+                        title: "Transfert confirmé ✅",
+                        message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a été confirmé.`,
+                        data: { type: "transfer_confirmed", reference: tx.reference },
+                      },
+                      req.log
+                    );
+                  }
+                }
+              } else {
+                await db
+                  .update(transactionsTable)
+                  .set({ status: "payout_failed" })
+                  .where(eq(transactionsTable.reference, tx.reference));
+                tx.status = "payout_failed";
+                req.log.error({ reference: tx.reference, msg: payoutResult.message }, "Polling: payout refusé après payin confirmé — INTERVENTION MANUELLE REQUISE");
+              }
+            } catch (payoutErr) {
+              await db
+                .update(transactionsTable)
+                .set({ status: "payout_failed" })
+                .where(eq(transactionsTable.reference, tx.reference));
+              tx.status = "payout_failed";
+              req.log.error({ err: payoutErr, reference: tx.reference }, "Polling: erreur payout après payin confirmé — INTERVENTION MANUELLE REQUISE");
             }
+          } else {
+            /* payoutSent était déjà true — le webhook a déjà géré ça */
+            req.log.info({ reference: tx.reference }, "Polling: payout déjà déclenché par le webhook — skip");
+            /* Recharger le statut actuel depuis la DB */
+            const fresh = await db
+              .select({ status: transactionsTable.status })
+              .from(transactionsTable)
+              .where(eq(transactionsTable.reference, tx.reference))
+              .limit(1);
+            if (fresh.length) tx.status = fresh[0].status;
           }
+
         } else if (confirmed.status === "failed" || confirmed.status === "cancelled") {
           await db
             .update(transactionsTable)
             .set({ status: "failed" })
             .where(eq(transactionsTable.reference, tx.reference));
           tx.status = "failed";
-          req.log.warn({ reference: tx.reference, paydunya_status: confirmed.status }, "Transaction marquée échouée via polling PayDunya");
+          req.log.warn({ reference: tx.reference, paydunya_status: confirmed.status }, "Polling: transaction marquée échouée/annulée");
 
-          // Notification push — transfert échoué
           if (tx.userId) {
             const userRows = await db
               .select({ email: usersTable.email })
