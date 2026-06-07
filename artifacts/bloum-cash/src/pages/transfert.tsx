@@ -337,8 +337,8 @@ export default function Transfert() {
     } catch (err: unknown) {
       if (pollRef.current) clearInterval(pollRef.current);
       setStep("step2");
-      const apiErr = err as { response?: { data?: { error?: string } } };
-      const msg = apiErr?.response?.data?.error ?? "Une erreur est survenue lors du transfert. Veuillez réessayer.";
+      const apiErr = err as { data?: { error?: string }; message?: string };
+      const msg = apiErr?.data?.error ?? apiErr?.message ?? "Une erreur est survenue lors du transfert. Veuillez réessayer.";
       showModal({
         type: "error",
         title: "Transfert échoué",
