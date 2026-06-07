@@ -62,10 +62,6 @@ externalPort = 3002
 
 [[ports]]
 localPort = 5000
-externalPort = 5000
-
-[[ports]]
-localPort = 8080
 externalPort = 80
 
 [[ports]]
@@ -82,4 +78,3 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-SUPABASE_DATABASE_URL = "postgresql://postgres.dtnyxkuzjbwyqyyooutb:qdhHvceMFn6xNpGA@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
