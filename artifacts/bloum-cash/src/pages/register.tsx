@@ -76,7 +76,7 @@ export default function Register() {
 
       {/* ── Carte blanche ── */}
       <div
-        className="flex-1 flex flex-col overflow-hidden"
+        className="flex-1 flex flex-col overflow-y-auto"
         style={{
           background: "#fff",
           borderTopLeftRadius: 28,
