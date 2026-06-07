@@ -4,6 +4,7 @@ import { usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { signUserToken } from "../middleware/user-auth";
+import { sendPushNotification } from "../lib/onesignal";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,22 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const token = signUserToken({ id: user.id, email: user.email });
+
+    // Enregistrer l'email comme external_id OneSignal et envoyer notification de bienvenue
+    await db
+      .update(usersTable)
+      .set({ onesignalExternalUserId: user.email })
+      .where(eq(usersTable.id, user.id));
+
+    sendPushNotification(
+      {
+        externalUserId: user.email,
+        title: "Bloum Cash",
+        message: `Bienvenue, ${user.fullName} ! Vous êtes maintenant connecté.`,
+        data: { type: "login" },
+      },
+      req.log
+    );
 
     res.json({
       token,
@@ -59,8 +76,21 @@ router.post("/auth/register", async (req, res) => {
     }
 
     const hashedPin = await bcrypt.hash(String(pin), 12);
-    const [user] = await db.insert(usersTable).values({ fullName, email, pin: hashedPin }).returning();
+    const [user] = await db
+      .insert(usersTable)
+      .values({ fullName, email, pin: hashedPin, onesignalExternalUserId: email })
+      .returning();
     const token = signUserToken({ id: user.id, email: user.email });
+
+    sendPushNotification(
+      {
+        externalUserId: user.email,
+        title: "Bienvenue sur Bloum Cash 🎉",
+        message: `Bonjour ${user.fullName}, votre compte est créé. Commencez à transférer de l'argent !`,
+        data: { type: "register" },
+      },
+      req.log
+    );
 
     res.status(201).json({
       token,

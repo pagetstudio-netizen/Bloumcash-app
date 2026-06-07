@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { transactionsTable } from "@workspace/db";
+import { transactionsTable, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import { extractUser } from "../middleware/user-auth";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
+import { sendPushNotification } from "../lib/onesignal";
+import { formatAmount } from "../lib/format";
 
 const router: IRouter = Router();
 
@@ -205,6 +207,19 @@ router.post("/transfer", async (req, res) => {
       }
     }
 
+    // ── Notification push à l'expéditeur si paiement confirmé immédiatement ──
+    if (!chargeResult.isPending && payerEmail) {
+      sendPushNotification(
+        {
+          externalUserId: payerEmail,
+          title: "Transfert envoyé ✅",
+          message: `Votre transfert de ${formatAmount(amt)} vers ${toPhone} a été effectué avec succès.`,
+          data: { type: "transfer_success", reference },
+        },
+        req.log
+      );
+    }
+
     res.status(201).json({
       success: true,
       message: chargeResult.message,
@@ -244,6 +259,26 @@ router.get("/transfer/:reference/status", async (req, res) => {
             .set({ status: "success" })
             .where(eq(transactionsTable.reference, tx.reference));
           tx.status = "success";
+
+          // Notification push — paiement TMoney confirmé en différé
+          if (tx.userId) {
+            const userRows = await db
+              .select({ email: usersTable.email, fullName: usersTable.fullName })
+              .from(usersTable)
+              .where(eq(usersTable.id, tx.userId))
+              .limit(1);
+            if (userRows.length && userRows[0].email) {
+              sendPushNotification(
+                {
+                  externalUserId: userRows[0].email,
+                  title: "Transfert confirmé ✅",
+                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a été confirmé.`,
+                  data: { type: "transfer_confirmed", reference: tx.reference },
+                },
+                req.log
+              );
+            }
+          }
         } else if (confirmed.status === "failed" || confirmed.status === "cancelled") {
           await db
             .update(transactionsTable)
@@ -251,6 +286,26 @@ router.get("/transfer/:reference/status", async (req, res) => {
             .where(eq(transactionsTable.reference, tx.reference));
           tx.status = "failed";
           req.log.warn({ reference: tx.reference, paydunya_status: confirmed.status }, "Transaction marquée échouée via polling PayDunya");
+
+          // Notification push — transfert échoué
+          if (tx.userId) {
+            const userRows = await db
+              .select({ email: usersTable.email })
+              .from(usersTable)
+              .where(eq(usersTable.id, tx.userId))
+              .limit(1);
+            if (userRows.length && userRows[0].email) {
+              sendPushNotification(
+                {
+                  externalUserId: userRows[0].email,
+                  title: "Transfert échoué ❌",
+                  message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu être effectué. Veuillez réessayer.`,
+                  data: { type: "transfer_failed", reference: tx.reference },
+                },
+                req.log
+              );
+            }
+          }
         }
       } catch {
         /* ignore — on retourne le statut actuel en DB */
