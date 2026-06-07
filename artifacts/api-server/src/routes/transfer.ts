@@ -244,6 +244,13 @@ router.get("/transfer/:reference/status", async (req, res) => {
             .set({ status: "success" })
             .where(eq(transactionsTable.reference, tx.reference));
           tx.status = "success";
+        } else if (confirmed.status === "failed" || confirmed.status === "cancelled") {
+          await db
+            .update(transactionsTable)
+            .set({ status: "failed" })
+            .where(eq(transactionsTable.reference, tx.reference));
+          tx.status = "failed";
+          req.log.warn({ reference: tx.reference, paydunya_status: confirmed.status }, "Transaction marquée échouée via polling PayDunya");
         }
       } catch {
         /* ignore — on retourne le statut actuel en DB */

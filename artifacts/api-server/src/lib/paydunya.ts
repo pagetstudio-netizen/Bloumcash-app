@@ -20,6 +20,27 @@ import {
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /**
+ * URL publique de l'app Replit (webhook callback).
+ * Priorité : PAYDUNYA_CALLBACK_URL → REPLIT_DOMAINS (prod) → REPLIT_DEV_DOMAIN (dev) → fallback
+ */
+function getAppBaseUrl(): string {
+  if (process.env.PAYDUNYA_CALLBACK_URL) {
+    return process.env.PAYDUNYA_CALLBACK_URL.replace(/\/$/, "");
+  }
+  // En production déployée, REPLIT_DOMAINS contient le(s) domaine(s) publics
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const firstDomain = replitDomains.split(",")[0].trim();
+    return `https://${firstDomain}`;
+  }
+  // En développement, REPLIT_DEV_DOMAIN = domaine temporaire de preview
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return "https://bloumcash.com";
+}
+
+/**
  * URL de base de l'API PayDunya.
  * Priorité : PAYDUNYA_BASE_URL → PAYDUNYA_SANDBOX=true → production live
  */
@@ -322,9 +343,9 @@ export async function createInvoice(
       website_url:    "",
     },
     actions: {
-      cancel_url:   process.env.PAYDUNYA_CALLBACK_URL || "",
-      return_url:   process.env.PAYDUNYA_CALLBACK_URL || "",
-      callback_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+      cancel_url:   `${getAppBaseUrl()}/api/paydunya/webhook`,
+      return_url:   `${getAppBaseUrl()}/api/paydunya/webhook`,
+      callback_url: `${getAppBaseUrl()}/api/paydunya/webhook`,
     },
   };
 
@@ -578,8 +599,7 @@ export async function disburseWallet(
 
   const callbackUrl =
     process.env.PAYDUNYA_DISBURSE_CALLBACK_URL ||
-    process.env.PAYDUNYA_CALLBACK_URL ||
-    `https://${process.env.REPLIT_DEV_DOMAIN ?? "bloumcash.com"}/api/paydunya/disburse-webhook`;
+    `${getAppBaseUrl()}/api/paydunya/disburse-webhook`;
 
   const baseV2 = getBaseUrlV2();
 
