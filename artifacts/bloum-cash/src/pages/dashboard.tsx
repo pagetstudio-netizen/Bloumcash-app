@@ -2,9 +2,8 @@ import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import {
-  Bell, Gift, ArrowLeftRight, Clock, Grid, ChevronRight, ChevronDown,
-  HelpCircle, MessageCircleQuestion, Phone, Settings,
-  FileText, Shield, Info, LogOut, X, Loader2,
+  Bell, ChevronRight, ChevronDown,
+  Headphones, Fingerprint, UserPlus, LogOut, X, Loader2,
 } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -32,25 +31,6 @@ const PERIOD_LABEL: Record<StatPeriod, string> = {
   Année:   "Cette année",
 };
 
-const menuGroups = [
-  {
-    title: "Assistance",
-    items: [
-      { icon: <HelpCircle className="w-5 h-5" />, label: "Centre d'aide", href: "/plus/aide" },
-      { icon: <MessageCircleQuestion className="w-5 h-5" />, label: "FAQ", href: "/plus/faq" },
-      { icon: <Phone className="w-5 h-5" />, label: "Support WhatsApp", href: "/plus/whatsapp", color: "text-green-500" },
-    ],
-  },
-  {
-    title: "Préférences & Légal",
-    items: [
-      { icon: <Settings className="w-5 h-5" />, label: "Paramètres", href: "/plus/parametres" },
-      { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions" },
-      { icon: <Shield className="w-5 h-5" />, label: "Confidentialité", href: "/plus/confidentialite" },
-      { icon: <Info className="w-5 h-5" />, label: "À propos", href: "/plus/apropos" },
-    ],
-  },
-];
 
 export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -111,62 +91,59 @@ export default function Dashboard() {
               transition={{ type: "spring", damping: 28, stiffness: 260 }}
               className="absolute top-0 left-0 h-full w-[78%] max-w-xs bg-background z-50 flex flex-col shadow-2xl"
             >
-              <div className="bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] px-5 pt-5 pb-4 flex-shrink-0">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-white font-bold text-base">Menu</span>
-                  <button
-                    onClick={() => setDrawerOpen(false)}
-                    className="w-8 h-8 flex items-center justify-center bg-white/15 rounded-full text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0">
-                    {user?.fullName?.substring(0, 2).toUpperCase() || "BC"}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-white font-bold text-sm leading-tight truncate">{user?.fullName || "Utilisateur"}</p>
-                    <p className="text-white/60 text-xs truncate">{user?.email || "email@exemple.com"}</p>
-                    <span className="inline-block mt-1 bg-green-400/20 text-green-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Vérifié
-                    </span>
-                  </div>
-                </div>
+              {/* Header simple */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border flex-shrink-0">
+                <span className="text-foreground font-bold text-base">Menu</span>
+                <button
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center bg-muted rounded-full text-muted-foreground active:bg-muted/80 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto py-4 px-4 space-y-5">
-                {menuGroups.map((group) => (
-                  <div key={group.title}>
-                    <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-widest mb-2 ml-1">
-                      {group.title}
-                    </p>
-                    <div className="bg-card rounded-2xl border border-border overflow-hidden divide-y divide-border">
-                      {group.items.map((item, i) => (
-                        <Link key={i} href={item.href} onClick={() => setDrawerOpen(false)}>
-                          <div className="flex items-center gap-3 px-4 py-3 active:bg-muted transition-colors cursor-pointer">
-                            <div className={`p-1.5 rounded-xl bg-muted ${item.color || "text-foreground"}`}>
-                              {item.icon}
-                            </div>
-                            <span className="flex-1 text-sm font-medium text-foreground">{item.label}</span>
-                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
+              {/* Boutons du menu */}
+              <div className="flex-1 overflow-y-auto py-5 px-4 space-y-2.5">
+                {/* Service client */}
+                <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <Headphones className="w-5 h-5 text-[#1a3fc4]" />
                   </div>
-                ))}
-
-                <button
-                  onClick={handleLogout}
-                  className="w-full bg-red-50 text-red-600 font-bold py-3 px-4 rounded-2xl border border-red-100 flex items-center justify-center gap-2 active:bg-red-100 transition-colors text-sm"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Déconnexion
+                  <span className="flex-1 text-left text-sm font-semibold text-foreground">Service client</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 </button>
 
-                <p className="text-center text-[11px] text-muted-foreground pb-2">Bloum Cash v1.0.0</p>
+                {/* Touch ID / Face ID */}
+                <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
+                    <Fingerprint className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <span className="flex-1 text-left text-sm font-semibold text-foreground">Touch ID / Face ID</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </button>
+
+                {/* Recommander à un ami */}
+                <button className="w-full flex items-center gap-4 px-4 py-4 bg-card rounded-2xl border border-border active:bg-muted transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                    <UserPlus className="w-5 h-5 text-green-600" />
+                  </div>
+                  <span className="flex-1 text-left text-sm font-semibold text-foreground">Recommander à un ami</span>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                </button>
+
+                {/* Se déconnecter */}
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-4 px-4 py-4 bg-red-50 rounded-2xl border border-red-100 active:bg-red-100 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <LogOut className="w-5 h-5 text-red-600" />
+                  </div>
+                  <span className="flex-1 text-left text-sm font-bold text-red-600">Se déconnecter</span>
+                </button>
               </div>
+
+              <p className="text-center text-[11px] text-muted-foreground pb-5">Bloum Cash v1.0.0</p>
             </motion.div>
           </>
         )}
