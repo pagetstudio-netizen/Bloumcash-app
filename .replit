@@ -86,3 +86,5 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+PAYDUNYA_MASTER_KEY = "tClgCK2F-Pq5z-asuL-eLow-HmkFBvF4zf1m"
+PAYDUNYA_PRIVATE_KEY = "live_private_ly1cE55vom9Sad81K1AhU9IWsid"
