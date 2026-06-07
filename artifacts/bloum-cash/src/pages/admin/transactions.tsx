@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, AlertCircle, ArrowDown, ArrowUp, Edit3, X } from "lucide-react";
+import { Search, RefreshCw, Loader2, ChevronLeft, ChevronRight, AlertCircle, ArrowDown, ArrowUp, Edit3, X, Calendar } from "lucide-react";
 import AdminLayout, { adminFetch } from "./layout";
 import { formatAmount } from "@/lib/utils";
 
@@ -30,6 +30,13 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   outgoing: <ArrowUp className="w-3 h-3 text-red-600" />,
 };
 
+const PERIODS = [
+  { label: "Tout", value: "" },
+  { label: "Aujourd'hui", value: "today" },
+  { label: "7 jours", value: "week" },
+  { label: "30 jours", value: "month" },
+];
+
 export default function AdminTransactions() {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [total, setTotal] = useState(0);
@@ -37,6 +44,7 @@ export default function AdminTransactions() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [period, setPeriod] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [forceModal, setForceModal] = useState<Tx | null>(null);
@@ -53,13 +61,14 @@ export default function AdminTransactions() {
       if (search) params.set("search", search);
       if (statusFilter) params.set("status", statusFilter);
       if (typeFilter) params.set("type", typeFilter);
+      if (period) params.set("period", period);
       const r = await adminFetch(`/admin/transactions?${params}`);
       if (!r.ok) { setError("Erreur chargement"); return; }
       const d = await r.json();
       setTxs(d.transactions);
       setTotal(d.total);
     } catch { setError("Erreur réseau"); } finally { setLoading(false); }
-  }, [page, search, statusFilter, typeFilter]);
+  }, [page, search, statusFilter, typeFilter, period]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -74,11 +83,15 @@ export default function AdminTransactions() {
 
   const pages = Math.max(1, Math.ceil(total / 50));
 
+  const totalAmount = txs.reduce((s, t) => s + t.amount, 0);
+  const totalFees = txs.reduce((s, t) => s + t.fees, 0);
+  const successCount = txs.filter(t => t.status === "success").length;
+
   const exportCSV = () => {
-    const headers = ["ID", "Référence", "Type", "Titre", "Montant", "Frais", "Statut", "Opérateur", "De", "Vers", "Date"];
-    const rows = txs.map(t => [t.id, t.reference, t.type, `"${t.title}"`, t.amount, t.fees, t.status, t.operator, t.fromPhone ?? "", t.toPhone ?? "", new Date(t.createdAt).toLocaleString("fr-FR")]);
+    const headers = ["ID", "Référence", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "De", "Vers", "UserID", "Date"];
+    const rows = txs.map(t => [t.id, t.reference, t.type, `"${t.title}"`, t.amount, t.fees, t.status, t.operator, t.fromPhone ?? "", t.toPhone ?? "", t.userId ?? "", new Date(t.createdAt).toLocaleString("fr-FR")]);
     const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = `transactions_${Date.now()}.csv`; a.click();
   };
@@ -88,6 +101,36 @@ export default function AdminTransactions() {
       {toast && <div className="fixed top-4 right-4 bg-green-600 text-white text-sm px-4 py-2 rounded-xl shadow-lg z-50">{toast}</div>}
 
       <div className="space-y-4">
+        {/* Period tabs */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+          <div className="flex bg-white border border-gray-200 rounded-xl p-1 gap-1">
+            {PERIODS.map(p => (
+              <button key={p.value} onClick={() => { setPeriod(p.value); setPage(1); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p.value ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick stats for current view */}
+        {!loading && txs.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Transactions affichées", value: String(txs.length), sub: `${successCount} réussies` },
+              { label: "Volume total", value: formatAmount(totalAmount), sub: "montant brut" },
+              { label: "Commissions", value: formatAmount(totalFees), sub: "frais collectés" },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+                <div className="text-lg font-bold text-gray-900">{s.value}</div>
+                <div className="text-xs text-gray-500">{s.label}</div>
+                <div className="text-xs text-gray-400">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
           <div className="relative flex-1 min-w-48">
@@ -109,7 +152,7 @@ export default function AdminTransactions() {
             <option value="incoming">Dépôt</option>
             <option value="outgoing">Retrait</option>
           </select>
-          <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-4 py-2.5 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
+          <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2.5 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button onClick={exportCSV} className="flex items-center gap-1.5 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">
@@ -128,29 +171,41 @@ export default function AdminTransactions() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Réf.", "Type", "Montant", "Statut", "Opérateur", "De → Vers", "Date", ""].map(h => (
+                  {["Réf.", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "De → Vers", "Date", ""].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
+                  <tr><td colSpan={10} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
                 ) : txs.length === 0 ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-sm text-gray-400">Aucune transaction</td></tr>
+                  <tr><td colSpan={10} className="py-12 text-center text-sm text-gray-400">Aucune transaction</td></tr>
                 ) : txs.map(t => (
-                  <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500 truncate max-w-24">{t.reference.slice(-12)}</td>
+                  <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500 truncate max-w-24" title={t.reference}>{t.reference.slice(-12)}</td>
                     <td className="px-4 py-3">
-                      <span className="flex items-center gap-1">{TYPE_ICONS[t.type] ?? null}<span className="text-gray-600 text-xs capitalize">{t.type}</span></span>
+                      <span className="flex items-center gap-1">{TYPE_ICONS[t.type] ?? null}<span className="text-gray-600 text-xs capitalize">{t.type === "incoming" ? "Dépôt" : t.type === "outgoing" ? "Retrait" : t.type}</span></span>
                     </td>
+                    <td className="px-4 py-3 text-xs text-gray-600 max-w-32 truncate" title={t.title}>{t.title}</td>
                     <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap">{formatAmount(t.amount)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status] ?? "bg-gray-100 text-gray-600"}`}>{t.status}</span>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {t.fees > 0
+                        ? <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{formatAmount(t.fees)}</span>
+                        : <span className="text-xs text-gray-300">—</span>
+                      }
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{t.operator}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status] ?? "bg-gray-100 text-gray-600"}`}>
+                        {t.status === "success" ? "Succès" : t.status === "pending" ? "En attente" : t.status === "failed" ? "Échoué" : t.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{t.operator}</td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{t.fromPhone ?? "—"} → {t.toPhone ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(t.createdAt).toLocaleDateString("fr-FR")}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                      <div>{new Date(t.createdAt).toLocaleDateString("fr-FR")}</div>
+                      <div className="text-gray-300">{new Date(t.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</div>
+                    </td>
                     <td className="px-4 py-3">
                       <button onClick={() => { setForceModal(t); setNewStatus(t.status); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Forcer statut">
                         <Edit3 className="w-3.5 h-3.5" />
@@ -181,8 +236,9 @@ export default function AdminTransactions() {
               <h3 className="font-bold text-gray-900">Forcer le statut</h3>
               <button onClick={() => setForceModal(null)}><X className="w-4 h-4 text-gray-400" /></button>
             </div>
-            <p className="text-sm text-gray-500 mb-1 font-mono">{forceModal.reference}</p>
-            <p className="text-sm text-gray-600 mb-4">{formatAmount(forceModal.amount)}</p>
+            <p className="text-xs text-gray-500 mb-1 font-mono">{forceModal.reference}</p>
+            <p className="text-sm font-semibold text-gray-800 mb-1">{formatAmount(forceModal.amount)}</p>
+            {forceModal.fees > 0 && <p className="text-xs text-blue-600 mb-4">Commission : {formatAmount(forceModal.fees)}</p>}
             <select value={newStatus} onChange={e => setNewStatus(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="success">Succès</option>
@@ -190,8 +246,8 @@ export default function AdminTransactions() {
               <option value="failed">Échoué</option>
             </select>
             <div className="flex gap-2">
-              <button onClick={() => setForceModal(null)} className="flex-1 py-2 bg-gray-100 rounded-xl text-sm">Annuler</button>
-              <button onClick={handleForce} disabled={actionLoading} className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-60">
+              <button onClick={() => setForceModal(null)} className="flex-1 py-2.5 bg-gray-100 rounded-xl text-sm font-medium">Annuler</button>
+              <button onClick={handleForce} disabled={actionLoading} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-60">
                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmer"}
               </button>
             </div>

@@ -7,7 +7,7 @@ import {
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
   dashboardBannersTable,
 } from "@workspace/db";
-import { eq, desc, sql, asc, count } from "drizzle-orm";
+import { eq, desc, sql, asc, count, and, gte } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import fs from "fs";
@@ -72,6 +72,65 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
   } catch (err) { req.log.error({ err }, "Admin stats error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
+/* ─────────────────────────── CHARTS ─────────────────────────── */
+router.get("/admin/stats/charts", requireAdmin, async (req, res) => {
+  try {
+    const days = parseInt((req.query.days as string) ?? "30");
+    const since = new Date(); since.setDate(since.getDate() - days); since.setHours(0, 0, 0, 0);
+
+    const txRows = await db.execute(sql`
+      SELECT
+        DATE(created_at AT TIME ZONE 'UTC') AS day,
+        COUNT(*) AS tx_count,
+        COALESCE(SUM(CASE WHEN type = 'incoming' THEN amount ELSE 0 END), 0) AS deposits,
+        COALESCE(SUM(CASE WHEN type = 'outgoing' THEN amount ELSE 0 END), 0) AS withdrawals,
+        COALESCE(SUM(fees), 0) AS commissions
+      FROM transactions
+      WHERE created_at >= ${since.toISOString()}
+      GROUP BY DATE(created_at AT TIME ZONE 'UTC')
+      ORDER BY day
+    `);
+
+    const userRows = await db.execute(sql`
+      SELECT
+        DATE(created_at AT TIME ZONE 'UTC') AS day,
+        COUNT(*) AS new_users
+      FROM users
+      WHERE created_at >= ${since.toISOString()}
+      GROUP BY DATE(created_at AT TIME ZONE 'UTC')
+      ORDER BY day
+    `);
+
+    const allDays: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      allDays.push(d.toISOString().split("T")[0]);
+    }
+
+    const txMap = new Map<string, { tx_count: number; deposits: number; withdrawals: number; commissions: number }>();
+    for (const r of txRows.rows as Array<{ day: string; tx_count: string; deposits: string; withdrawals: string; commissions: string }>) {
+      txMap.set(String(r.day).split("T")[0], { tx_count: Number(r.tx_count), deposits: Number(r.deposits), withdrawals: Number(r.withdrawals), commissions: Number(r.commissions) });
+    }
+
+    const userMap = new Map<string, number>();
+    for (const r of userRows.rows as Array<{ day: string; new_users: string }>) {
+      userMap.set(String(r.day).split("T")[0], Number(r.new_users));
+    }
+
+    const chart = allDays.map(day => ({
+      day,
+      label: new Date(day + "T00:00:00Z").toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }),
+      transactions: txMap.get(day)?.tx_count ?? 0,
+      deposits: txMap.get(day)?.deposits ?? 0,
+      withdrawals: txMap.get(day)?.withdrawals ?? 0,
+      commissions: txMap.get(day)?.commissions ?? 0,
+      newUsers: userMap.get(day) ?? 0,
+    }));
+
+    res.json({ chart });
+  } catch (err) { req.log.error({ err }, "Charts error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
 router.post("/admin/reset", requireAdmin, async (req, res) => {
   try {
     const now = new Date().toISOString();
@@ -92,13 +151,38 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(100, parseInt(limit));
     const offset = (pageNum - 1) * limitNum;
-    let query = db.select().from(usersTable).orderBy(desc(usersTable.createdAt));
     const users = await db.select().from(usersTable).orderBy(desc(usersTable.createdAt)).limit(limitNum).offset(offset);
     const [total] = await db.select({ count: count() }).from(usersTable);
-    const filtered = search
-      ? users.filter(u => u.fullName.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
-      : users;
-    res.json({ users: filtered.map(u => ({ id: u.id, fullName: u.fullName, email: u.email, createdAt: u.createdAt, role: "Utilisateur", status: "active" })), total: total.count, page: pageNum });
+
+    const balanceRows = await db.execute(sql`
+      SELECT
+        user_id,
+        COALESCE(SUM(CASE WHEN type = 'incoming' AND status = 'success' THEN amount ELSE 0 END), 0)
+        - COALESCE(SUM(CASE WHEN type = 'outgoing' AND status = 'success' THEN amount ELSE 0 END), 0) AS balance
+      FROM transactions
+      GROUP BY user_id
+    `);
+    const balMap = new Map<number, number>();
+    for (const r of balanceRows.rows as Array<{ user_id: number; balance: string }>) {
+      balMap.set(Number(r.user_id), Number(r.balance));
+    }
+
+    let result = users.map(u => ({
+      id: u.id,
+      fullName: u.fullName,
+      email: u.email,
+      phone: u.phone ?? null,
+      operator: u.operator ?? null,
+      status: u.status,
+      balance: balMap.get(u.id) ?? 0,
+      createdAt: u.createdAt,
+      lastLoginAt: u.lastLoginAt ?? null,
+    }));
+
+    if (search) result = result.filter(u => u.fullName.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || (u.phone ?? "").includes(search));
+    if (status) result = result.filter(u => u.status === status);
+
+    res.json({ users: result, total: total.count, page: pageNum });
   } catch (err) { req.log.error({ err }, "Admin list users error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
@@ -137,10 +221,75 @@ router.post("/admin/users/:id/reset-pin", requireAdmin, async (req, res) => {
   } catch (err) { req.log.error({ err }, "Reset PIN error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
+router.post("/admin/users/:id/credit", requireAdmin, async (req, res) => {
+  try {
+    const { amount, reason } = req.body;
+    const amt = parseInt(amount);
+    if (!amt || amt <= 0) { res.status(400).json({ error: "Montant invalide" }); return; }
+    const userId = parseInt(req.params.id);
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
+    const ref = `ADMIN-CR-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    await db.insert(transactionsTable).values({
+      userId, reference: ref, type: "incoming", title: "Crédit admin",
+      amount: amt, fees: 0, status: "success", operator: "Admin",
+      description: reason ?? "Crédit manuel par administrateur",
+    });
+    await db.insert(securityEventsTable).values({ type: "admin_credit", details: `User #${userId} crédité de ${amt} FCFA — ${reason ?? ""}` });
+    res.json({ success: true, reference: ref });
+  } catch (err) { req.log.error({ err }, "Credit user error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/users/:id/debit", requireAdmin, async (req, res) => {
+  try {
+    const { amount, reason } = req.body;
+    const amt = parseInt(amount);
+    if (!amt || amt <= 0) { res.status(400).json({ error: "Montant invalide" }); return; }
+    const userId = parseInt(req.params.id);
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
+    const ref = `ADMIN-DB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    await db.insert(transactionsTable).values({
+      userId, reference: ref, type: "outgoing", title: "Débit admin",
+      amount: amt, fees: 0, status: "success", operator: "Admin",
+      description: reason ?? "Débit manuel par administrateur",
+    });
+    await db.insert(securityEventsTable).values({ type: "admin_debit", details: `User #${userId} débité de ${amt} FCFA — ${reason ?? ""}` });
+    res.json({ success: true, reference: ref });
+  } catch (err) { req.log.error({ err }, "Debit user error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/users/:id/suspend", requireAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    await db.update(usersTable).set({ status: "suspended" }).where(eq(usersTable.id, userId));
+    await db.insert(securityEventsTable).values({ type: "user_suspended", details: `User #${userId} suspendu par ${req.admin?.email ?? "admin"}` });
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Suspend user error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/users/:id/ban", requireAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    await db.update(usersTable).set({ status: "banned" }).where(eq(usersTable.id, userId));
+    await db.insert(securityEventsTable).values({ type: "user_banned", details: `User #${userId} banni par ${req.admin?.email ?? "admin"}` });
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Ban user error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/users/:id/reactivate", requireAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    await db.update(usersTable).set({ status: "active" }).where(eq(usersTable.id, userId));
+    await db.insert(securityEventsTable).values({ type: "user_reactivated", details: `User #${userId} réactivé par ${req.admin?.email ?? "admin"}` });
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Reactivate user error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
 /* ─────────────────────────── TRANSACTIONS ─────────────────────────── */
 router.get("/admin/transactions", requireAdmin, async (req, res) => {
   try {
-    const { search, type, status, page = "1", limit = "50", confirmed } = req.query as Record<string, string>;
+    const { search, type, status, page = "1", limit = "50", confirmed, period } = req.query as Record<string, string>;
     const pageNum = Math.max(1, parseInt(page));
     const limitNum = Math.min(200, parseInt(limit));
     const offset = (pageNum - 1) * limitNum;
@@ -151,6 +300,15 @@ router.get("/admin/transactions", requireAdmin, async (req, res) => {
     if (type) filtered = filtered.filter(t => t.type === type);
     if (status) filtered = filtered.filter(t => t.status === status);
     if (confirmed === "true") filtered = filtered.filter(t => t.status === "success");
+    if (period) {
+      const now = new Date();
+      let cutoff: Date;
+      if (period === "today") { cutoff = new Date(now); cutoff.setHours(0, 0, 0, 0); }
+      else if (period === "week") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
+      else if (period === "month") { cutoff = new Date(now); cutoff.setDate(now.getDate() - 30); }
+      else cutoff = new Date(0);
+      filtered = filtered.filter(t => new Date(t.createdAt) >= cutoff);
+    }
     res.json({ transactions: filtered, total: total.count, page: pageNum });
   } catch (err) { req.log.error({ err }, "Admin list tx error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
