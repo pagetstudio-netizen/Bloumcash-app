@@ -5,28 +5,37 @@ const ACCESS_KEY = "99935673AaAbb11";
 const STORAGE_KEY = "bloum_app_unlocked";
 
 export default function AppGate() {
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const access = params.get("access");
+    const rawAccess = params.get("access") ?? "";
+    // Strip trailing # characters (some messaging apps append them when sharing)
+    const access = rawAccess.replace(/#+$/, "");
 
-    if (access === ACCESS_KEY || localStorage.getItem(STORAGE_KEY) === "true") {
+    const alreadyUnlocked = localStorage.getItem(STORAGE_KEY) === "true";
+    const isValidCode = access === ACCESS_KEY;
+
+    if (isValidCode || alreadyUnlocked) {
       localStorage.setItem(STORAGE_KEY, "true");
       const isLoggedIn = !!localStorage.getItem("bloum_token");
       if (isLoggedIn) {
-        setLocation("/dashboard");
+        // replace: true → back button won't return to the access URL
+        navigate("/dashboard", { replace: true });
       } else {
-        setLocation("/splash");
+        navigate("/login", { replace: true });
       }
     } else {
-      setLocation("/");
+      navigate("/", { replace: true });
     }
-  }, [setLocation]);
+  }, [navigate]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <div className="w-8 h-8 border-2 border-gray-300 border-t-[#1a3fc4] rounded-full animate-spin" />
+    <div className="h-[100dvh] w-full flex items-center justify-center" style={{ background: "#f0f2f5" }}>
+      <div
+        className="rounded-full animate-spin"
+        style={{ width: 40, height: 40, border: "3px solid #e5e7eb", borderTopColor: "#1a3fc4" }}
+      />
     </div>
   );
 }

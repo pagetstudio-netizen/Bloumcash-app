@@ -116,7 +116,7 @@ function App() {
       <AuthProvider>
         <AppModalProvider>
           <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <WouterRouter base="">
               <Router />
             </WouterRouter>
           </TooltipProvider>
