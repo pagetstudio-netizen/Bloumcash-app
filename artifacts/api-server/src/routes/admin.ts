@@ -7,13 +7,14 @@ import {
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
   dashboardBannersTable,
 } from "@workspace/db";
-import { eq, desc, sql, asc, count, and, gte } from "drizzle-orm";
+import { eq, desc, sql, asc, count, and, gte, isNotNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { requireAdmin, signAdminToken } from "../middleware/admin-auth";
 import * as paydunya from "../lib/paydunya";
+import { sendPushNotification, isOneSignalConfigured } from "../lib/onesignal";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -742,6 +743,57 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
       error: isPdu ? (err as paydunya.PaydunyaError).message : "Erreur serveur interne",
       code:  isPdu ? (err as paydunya.PaydunyaError).code : "SERVER_ERROR",
     });
+  }
+});
+
+/* ─────────────────── PUSH NOTIFICATION CAMPAIGNS ─────────────────── */
+
+/** Broadcast push à tous les utilisateurs ayant un onesignal_external_user_id */
+router.post("/admin/notifications/push/broadcast", requireAdmin, async (req, res) => {
+  try {
+    const { title, message } = req.body as { title?: string; message?: string };
+    if (!title?.trim() || !message?.trim()) {
+      res.status(400).json({ error: "Les champs title et message sont requis." });
+      return;
+    }
+    if (!isOneSignalConfigured()) {
+      res.status(503).json({ error: "OneSignal non configuré (ONESIGNAL_APP_ID / ONESIGNAL_API_KEY manquants)." });
+      return;
+    }
+
+    // Récupérer tous les utilisateurs avec un external_id OneSignal
+    const users = await db
+      .select({ email: usersTable.onesignalExternalUserId })
+      .from(usersTable)
+      .where(isNotNull(usersTable.onesignalExternalUserId));
+
+    if (!users.length) {
+      res.json({ success: true, sent: 0, message: "Aucun utilisateur enregistré dans OneSignal." });
+      return;
+    }
+
+    // Envoyer en parallèle (max 50 simultanés pour ne pas saturer)
+    const CHUNK = 50;
+    let sent = 0;
+    for (let i = 0; i < users.length; i += CHUNK) {
+      const chunk = users.slice(i, i + CHUNK);
+      await Promise.all(
+        chunk.map(async (u) => {
+          if (!u.email) return;
+          await sendPushNotification(
+            { externalUserId: u.email, title: title.trim(), message: message.trim(), data: { type: "campaign" } },
+            req.log
+          );
+          sent++;
+        })
+      );
+    }
+
+    req.log.info({ sent, title }, "Admin — push broadcast envoyé");
+    res.json({ success: true, sent, message: `Notification envoyée à ${sent} utilisateur(s).` });
+  } catch (err) {
+    req.log.error({ err }, "Admin push broadcast error");
+    res.status(500).json({ error: "Erreur serveur interne." });
   }
 });
 

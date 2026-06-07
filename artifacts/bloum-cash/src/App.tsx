@@ -48,6 +48,7 @@ import AdminOperators from "@/pages/admin/operators";
 import AdminBanners from "@/pages/admin/banners";
 import AdminMessages from "@/pages/admin/messages";
 import AdminBroadcast from "@/pages/admin/broadcast";
+import AdminPushCampaigns from "@/pages/admin/push-campaigns";
 import AdminBlacklist from "@/pages/admin/blacklist";
 import AdminSecurity from "@/pages/admin/security";
 import AdminSettings from "@/pages/admin/settings";
@@ -104,6 +105,7 @@ function Router() {
         <Route path="/admin/banners" component={AdminBanners} />
         <Route path="/admin/messages" component={AdminMessages} />
         <Route path="/admin/broadcast" component={AdminBroadcast} />
+        <Route path="/admin/push-campaigns" component={AdminPushCampaigns} />
         <Route path="/admin/blacklist" component={AdminBlacklist} />
         <Route path="/admin/security" component={AdminSecurity} />
         <Route path="/admin/settings" component={AdminSettings} />
