@@ -12,17 +12,26 @@ router.post("/paydunya/webhook", async (req, res) => {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya webhook reçu");
 
-    /* ── Extraire token + statut depuis le payload PayDunya ── */
-    const invoiceData = (payload?.data as Record<string, unknown>)?.invoice as
-      | Record<string, unknown>
-      | undefined;
+    /* ── Extraire token + statut depuis le payload PayDunya ──
+       Structure réelle PayDunya :
+       {
+         data: {
+           status: "completed",          ← ici
+           invoice: { token: "...", … }, ← token ici
+         }
+       }
+    ── */
+    const dataNode = payload?.data as Record<string, unknown> | undefined;
+    const invoiceData = dataNode?.invoice as Record<string, unknown> | undefined;
 
     const token =
       (invoiceData?.token as string | undefined) ??
+      (dataNode?.token as string | undefined) ??
       (payload?.token as string | undefined);
 
     const status =
-      (invoiceData?.status as string | undefined) ??
+      (dataNode?.status as string | undefined) ??          // ← chemin correct
+      (invoiceData?.status as string | undefined) ??       // fallback (certains formats)
       (payload?.status as string | undefined);
 
     if (!token) {
