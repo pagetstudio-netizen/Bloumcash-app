@@ -210,10 +210,10 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card rounded-2xl shadow-sm border border-border p-4 flex justify-between items-start"
         >
-          <ActionBtn icon={<Gift />} label="Promotions" to="/promotions" />
-          <ActionBtn icon={<ArrowLeftRight />} label="Transférer" to="/transfert" />
-          <ActionBtn icon={<Clock />} label="Historique" to="/historique" />
-          <ActionBtn icon={<Grid />} label="Plus" to="/plus" />
+          <ActionBtn imgSrc="/icon-promotion.png" label="Promotions" to="/promotions" />
+          <ActionBtn imgSrc="/icon-transfert.png" label="Transférer" to="/transfert" />
+          <ActionBtn imgSrc="/icon-historique.png" label="Historique" to="/historique" />
+          <ActionBtn imgSrc="/icon-plus.png" label="Plus" to="/plus" />
         </motion.div>
 
         {/* Transactions récentes */}
@@ -350,12 +350,12 @@ export default function Dashboard() {
   );
 }
 
-function ActionBtn({ icon, label, to }: { icon: React.ReactNode; label: string; to: string }) {
+function ActionBtn({ imgSrc, label, to }: { imgSrc: string; label: string; to: string }) {
   return (
     <Link href={to}>
       <div className="flex flex-col items-center gap-3 cursor-pointer group w-[72px]">
-        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center text-primary transition-colors">
-          {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6" })}
+        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors overflow-hidden p-1">
+          <img src={imgSrc} alt={label} className="w-10 h-10 object-contain" />
         </div>
         <span className="text-xs font-medium text-foreground text-center">{label}</span>
       </div>
