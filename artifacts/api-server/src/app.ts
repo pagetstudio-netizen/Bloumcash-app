@@ -6,7 +6,11 @@ import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+// Chemin stable quelle que soit le cwd — on se base sur __dirname injecté par esbuild
+const _appDir = typeof __dirname !== "undefined"
+  ? __dirname
+  : path.dirname(new URL(import.meta.url).pathname);
+const UPLOADS_DIR = path.resolve(_appDir, "..", "..", "..", "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app: Express = express();
@@ -38,7 +42,12 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 app.use("/api", router);
 
 /* ── SPA fallback — serve built React frontend for all non-API routes ── */
-const FRONTEND_DIST = path.resolve(process.cwd(), "..", "bloum-cash", "dist", "public");
+// __dirname est injecté par le banner esbuild → pointe vers artifacts/api-server/dist/
+// Quelque soit le cwd au démarrage (racine du dépôt ou sous-dossier), ce chemin est stable.
+const _serverDir = typeof __dirname !== "undefined"
+  ? __dirname
+  : path.dirname(new URL(import.meta.url).pathname);
+const FRONTEND_DIST = path.resolve(_serverDir, "..", "..", "..", "artifacts", "bloum-cash", "dist", "public");
 if (fs.existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST, { index: false }));
   app.get("/{*path}", (_req, res) => {
