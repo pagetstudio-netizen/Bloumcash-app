@@ -12,6 +12,7 @@ import {
   Zap,
   ArrowRight,
   Loader2,
+  MessageCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatAmount, validateTogoPhone } from "@/lib/utils";
@@ -123,6 +124,7 @@ export default function Transfert() {
   const [amount,  setAmount]  = useState("");
   const [step,    setStep]    = useState<Step>("step1");
   const [modalFor, setModalFor] = useState<"from" | "to" | null>(null);
+  const [transferRef, setTransferRef] = useState<string>("");
 
   useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -163,7 +165,7 @@ export default function Transfert() {
 
   const handleConfirm = async () => {
     try {
-      await createTransfer.mutateAsync({
+      const result = await createTransfer.mutateAsync({
         data: {
           fromOperator: fromOp as "tmoney" | "moov",
           toOperator: toOp as "tmoney" | "moov",
@@ -172,6 +174,7 @@ export default function Transfert() {
           amount: amountNum,
         },
       });
+      setTransferRef(result.reference ?? "");
       setStep("success");
     } catch {
       showModal({
@@ -180,6 +183,20 @@ export default function Transfert() {
         message: "Une erreur est survenue lors du transfert. Veuillez réessayer.",
       });
     }
+  };
+
+  const handleWhatsAppSupport = () => {
+    const msg = [
+      `Salut, j'ai besoin d'aide pour ma transaction 🙏`,
+      ``,
+      `📋 Référence : ${transferRef || "N/A"}`,
+      `💰 Montant : ${formatAmount(amountNum)}`,
+      `💸 Frais (3,5%) : ${formatAmount(fees)}`,
+      `📊 Total débité : ${formatAmount(total)}`,
+      `📱 De : +228 ${fromPhone} (${OPS[fromOp].name})`,
+      `📱 Vers : +228 ${toPhone} (${OPS[toOp].name})`,
+    ].join("\n");
+    window.open(`https://wa.me/22892299772?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
   /* ────── Écran succès ────────────────────────────────────────── */
@@ -233,10 +250,17 @@ export default function Transfert() {
           </div>
           <button
             onClick={() => setLocation("/dashboard")}
-            className="w-full py-4 text-white rounded-2xl text-sm font-bold shadow-lg active:scale-[0.98] transition-transform"
+            className="w-full py-4 text-white rounded-2xl text-sm font-bold shadow-lg active:scale-[0.98] transition-transform mb-3"
             style={{ background: "linear-gradient(90deg,#3B4FC5,#2b3aa8)" }}
           >
             Retour à l'accueil
+          </button>
+          <button
+            onClick={handleWhatsAppSupport}
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold border-2 border-green-500 text-green-600 flex items-center justify-center gap-2 active:bg-green-50 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4" />
+            Avez-vous un souci avec ce paiement ?
           </button>
         </motion.div>
       </div>
