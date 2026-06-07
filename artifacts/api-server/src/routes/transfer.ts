@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import { extractUser } from "../middleware/user-auth";
+import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
 
 const router: IRouter = Router();
 
@@ -58,13 +59,12 @@ router.post("/transfer", async (req, res) => {
       "TR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 
     const name = payerName ?? "Client Bloum Cash";
-    const email =
-      payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
+    const email = payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
 
-    /* ── Mode démo — PayDunya non configuré ── */
     const currentUser = extractUser(req);
     const userId = currentUser?.id ?? null;
 
+    /* ── Mode démo — PayDunya non configuré ── */
     if (!paydunya.isConfigured()) {
       req.log.warn("PayDunya not configured — saving transaction in demo mode");
       await db.insert(transactionsTable).values({
@@ -93,12 +93,36 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    /* ── Débiter le wallet de l'expéditeur (SoftPay direct) ── */
+    /* ── Étape 1 (doc officielle) : Créer une checkout invoice → obtenir le payment_token ── */
+    const operatorKey = TOGO_OPERATOR_MAP[fromOperator as "tmoney" | "moov"];
+    const operatorConfig = OPERATOR_MAP[operatorKey];
+    const channels = operatorConfig?.channels ?? [operatorKey];
+
+    let paymentToken: string;
+    try {
+      paymentToken = await paydunya.createInvoice(
+        total,
+        `Transfert Bloum Cash ${fromOperator} → ${toOperator} — ref ${reference}`,
+        channels,
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof paydunya.PaydunyaError;
+      const msg = isPduErr
+        ? err.message
+        : "Erreur lors de la création de l'invoice PayDunya. Veuillez réessayer.";
+      const code = isPduErr ? err.code : "INVOICE_ERROR";
+      req.log.error({ err, code }, "Invoice creation failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+
+    /* ── Étape 2 (doc officielle) : Débiter le wallet de l'expéditeur via SoftPay ── */
     let chargeResult: paydunya.ChargeResult;
     try {
       chargeResult = await paydunya.chargeTogoWallet(
         fromOperator as "tmoney" | "moov",
-        { name, email, phone: fromPhone, amount: total },
+        { name, email, phone: fromPhone, paymentToken },
         req.log
       );
     } catch (err) {
@@ -138,7 +162,7 @@ router.post("/transfer", async (req, res) => {
       userId,
     });
 
-    /* ── Étape 3 : Si Moov (instantané) → déclencher le payout immédiatement ── */
+    /* ── Étape 3 : Si Moov (instantané) → déclencher le payout vers destinataire ── */
     if (!chargeResult.isPending && toPhone && toOperator) {
       req.log.info(
         { reference, toOperator, toPhone, amount: amt },
@@ -190,6 +214,24 @@ router.get("/transfer/:reference/status", async (req, res) => {
       return;
     }
     const tx = rows[0];
+
+    /* ── Confirmer le statut via PayDunya si la transaction est encore pending ── */
+    if (tx.status === "pending" && paydunya.isConfigured()) {
+      try {
+        const invoiceToken = tx.reference;
+        const confirmed = await paydunya.confirmInvoice(invoiceToken, req.log);
+        if (confirmed.completed) {
+          await db
+            .update(transactionsTable)
+            .set({ status: "success" })
+            .where(eq(transactionsTable.reference, tx.reference));
+          tx.status = "success";
+        }
+      } catch {
+        /* ignore — on retourne le statut actuel en DB */
+      }
+    }
+
     res.json({ reference: tx.reference, status: tx.status, amount: tx.amount, fees: tx.fees });
   } catch (err) {
     req.log.error({ err }, "Transfer status error");

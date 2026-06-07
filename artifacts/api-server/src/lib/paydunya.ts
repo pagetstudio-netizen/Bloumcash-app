@@ -5,7 +5,10 @@ import {
   type OperatorConfig,
 } from "./paydunya-softpay-map";
 
-const PAYDUNYA_BASE = "https://app.paydunya.com/api/v1";
+const PAYDUNYA_BASE = process.env.PAYDUNYA_SANDBOX === "true"
+  ? "https://app.paydunya.com/sandbox-api/v1"
+  : "https://app.paydunya.com/api/v1";
+
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 
@@ -29,12 +32,17 @@ export function isConfigured(): boolean {
   );
 }
 
+export function isSandbox(): boolean {
+  return process.env.PAYDUNYA_SANDBOX === "true";
+}
+
 export interface ChargeResult {
   success: boolean;
   message: string;
   fees?: number;
   currency?: string;
   isPending: boolean;
+  invoiceToken?: string;
 }
 
 export interface DisburseResult {
@@ -84,12 +92,7 @@ async function fetchWithLogs(
   headersToLog["PAYDUNYA-TOKEN"] = headersToLog["PAYDUNYA-TOKEN"] ? "***set***" : "***MISSING***";
 
   logger.info(
-    {
-      url,
-      method: options.method,
-      headers: headersToLog,
-      payload: options.body,
-    },
+    { url, method: options.method, headers: headersToLog, payload: options.body },
     "PayDunya → request"
   );
 
@@ -111,30 +114,22 @@ async function fetchWithLogs(
   const rawText = await response.text();
 
   logger.info(
-    {
-      url,
-      status: response.status,
-      contentType,
-      elapsed,
-      bodyPreview: rawText.slice(0, 600),
-    },
+    { url, status: response.status, contentType, elapsed, bodyPreview: rawText.slice(0, 600) },
     "PayDunya ← response"
   );
 
-  // ── Détection HTML ──
   if (contentType.includes("text/html") || rawText.trimStart().startsWith("<!")) {
     logger.error(
       { url, status: response.status, contentType, bodyPreview: rawText.slice(0, 300) },
-      "PayDunya returned HTML instead of JSON."
+      "PayDunya returned HTML instead of JSON — invalid endpoint or auth error"
     );
     throw new PaydunyaError(
-      "PayDunya a retourné une page HTML au lieu de JSON. Vérifiez vos clés API.",
+      "PayDunya a retourné une page HTML. Vérifiez vos clés API et l'endpoint.",
       "HTML_RESPONSE",
       false
     );
   }
 
-  // ── Parse JSON ──
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
@@ -166,7 +161,7 @@ async function fetchWithRetry(
       if (isRetryableStatus(result.status) && attempt < MAX_RETRIES) {
         logger.warn(
           { url, status: result.status, attempt },
-          `PayDunya retryable HTTP error (${result.status}), retry in ${RETRY_DELAY_MS * (attempt + 1)}ms…`
+          `PayDunya retryable HTTP error, retry in ${RETRY_DELAY_MS * (attempt + 1)}ms…`
         );
         await sleep(RETRY_DELAY_MS * (attempt + 1));
         continue;
@@ -175,10 +170,6 @@ async function fetchWithRetry(
       return result;
     } catch (err) {
       if (err instanceof PaydunyaError && err.retryable && attempt < MAX_RETRIES) {
-        logger.warn(
-          { url, code: err.code, attempt },
-          `PayDunya retryable error (${err.code}), retry in ${RETRY_DELAY_MS * (attempt + 1)}ms…`
-        );
         await sleep(RETRY_DELAY_MS * (attempt + 1));
         lastErr = err;
         continue;
@@ -190,45 +181,99 @@ async function fetchWithRetry(
   throw lastErr;
 }
 
-// ─── Débiter un wallet mobile money (SoftPay direct — sans checkout invoice) ──
+// ─── Étape 1 : Créer une checkout invoice → obtenir le payment_token ──────────
+// Doc officielle : https://developers.paydunya.com/doc/FR/softpay
+// Flux : checkout-invoice/create → token → softpay/{operator}
+
+export async function createInvoice(
+  amount: number,
+  description: string,
+  channels: string[],
+  logger: Logger
+): Promise<string> {
+  if (!amount || amount <= 0) {
+    throw new PaydunyaError("Le montant doit être supérieur à 0.", "INVALID_AMOUNT", false);
+  }
+
+  if (!isConfigured()) {
+    throw new PaydunyaError(
+      "Les clés PayDunya ne sont pas configurées.",
+      "NOT_CONFIGURED",
+      false
+    );
+  }
+
+  const url = `${PAYDUNYA_BASE}/checkout-invoice/create`;
+
+  const body = JSON.stringify({
+    invoice: {
+      total_amount: amount,
+      description,
+      channels,
+    },
+    store: {
+      name: process.env.PAYDUNYA_STORE_NAME || "Bloum Cash",
+      tagline: "Transferts TMoney & Moov Money au Togo",
+      postal_address: "Lomé, Togo",
+      phone: process.env.PAYDUNYA_STORE_PHONE || "",
+      website_url: "",
+    },
+    actions: {
+      cancel_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+      return_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+      callback_url: process.env.PAYDUNYA_CALLBACK_URL || "",
+    },
+  });
+
+  const { data } = await fetchWithRetry(url, { method: "POST", headers: getHeaders(), body }, logger);
+
+  const res = data as Record<string, unknown>;
+
+  if (res.response_code !== "00" || !res.token) {
+    logger.error({ url, response: res }, "PayDunya invoice creation failed");
+    const detail = String(res.response_text ?? JSON.stringify(res));
+    throw new PaydunyaError(
+      `Erreur PayDunya (checkout-invoice) : ${detail}`,
+      "INVOICE_FAILED",
+      false
+    );
+  }
+
+  const token = String(res.token);
+  logger.info({ mode: isSandbox() ? "sandbox" : "live", token: token.slice(0, 8) + "…" }, "PayDunya invoice créée ✓");
+  return token;
+}
+
+// ─── Étape 2 : Débiter le wallet mobile money via SoftPay ────────────────────
 
 export async function chargeOperator(
   operatorKey: OperatorKey,
-  params: { name: string; email: string; phone: string; amount: number; address?: string },
+  params: { name: string; email: string; phone: string; paymentToken: string; address?: string },
   logger: Logger
 ): Promise<ChargeResult> {
   const config: OperatorConfig | undefined = OPERATOR_MAP[operatorKey];
 
   if (!config) {
-    throw new PaydunyaError(
-      `Opérateur non supporté : ${operatorKey}`,
-      "UNSUPPORTED_OPERATOR",
-      false
-    );
+    throw new PaydunyaError(`Opérateur non supporté : ${operatorKey}`, "UNSUPPORTED_OPERATOR", false);
   }
 
-  if (!params.amount || params.amount <= 0) {
-    throw new PaydunyaError("Le montant doit être supérieur à 0.", "INVALID_AMOUNT", false);
+  if (!params.paymentToken?.trim()) {
+    throw new PaydunyaError("Le payment_token est vide ou manquant.", "EMPTY_TOKEN", false);
   }
 
   const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
   if (cleanPhone.length < 8) {
-    throw new PaydunyaError(
-      `Numéro de téléphone invalide : "${params.phone}"`,
-      "INVALID_PHONE",
-      false
-    );
+    throw new PaydunyaError(`Numéro de téléphone invalide : "${params.phone}"`, "INVALID_PHONE", false);
   }
 
   const payload = config.payloadBuilder({
     name: params.name || "Client Bloum Cash",
     email: params.email || `${cleanPhone}@bloumcash.tg`,
     phone: cleanPhone,
-    amount: params.amount,
+    paymentToken: params.paymentToken,
     address: params.address,
   });
 
-  // ── Validation des champs requis ──
   for (const field of config.requiredFields) {
     const value = payload[field];
     if (value === undefined || value === null || String(value).trim() === "") {
@@ -243,13 +288,8 @@ export async function chargeOperator(
   const url = `${PAYDUNYA_BASE}/softpay/${config.endpoint}`;
 
   logger.info(
-    {
-      operator: operatorKey,
-      endpoint: url,
-      amount: params.amount,
-      payloadFields: Object.keys(payload),
-    },
-    "PayDunya SoftPay → charge direct (sans invoice)"
+    { operator: operatorKey, endpoint: url, mode: isSandbox() ? "sandbox" : "live", payloadFields: Object.keys(payload) },
+    "PayDunya SoftPay → charge initié"
   );
 
   const { data, status } = await fetchWithRetry(
@@ -260,8 +300,7 @@ export async function chargeOperator(
 
   const res = data as Record<string, unknown>;
 
-  // PayDunya utilise parfois 403 pour des rejets opérateur (pas d'auth)
-  // → on traite uniquement 401 comme une vraie erreur d'authentification
+  // 401 uniquement = vraie erreur d'auth. 403 peut être un rejet opérateur (body JSON valide).
   if (status === 401) {
     throw new PaydunyaError(
       "Authentification PayDunya échouée. Vérifiez vos clés API.",
@@ -272,28 +311,21 @@ export async function chargeOperator(
 
   if (status === 404) {
     throw new PaydunyaError(
-      `Endpoint PayDunya introuvable : /softpay/${config.endpoint}. Vérifiez le slug de l'opérateur.`,
+      `Endpoint PayDunya introuvable : /softpay/${config.endpoint}.`,
       "ENDPOINT_NOT_FOUND",
       false
     );
   }
 
-  // Lire le champ success dans le body — PayDunya peut retourner 403 pour des rejets métier
   const success = res.success === true;
   const message = String(
     res.message ?? (success ? "Paiement mobile money initié" : "Paiement refusé par l'opérateur")
   );
 
   if (!success) {
-    logger.warn(
-      { operator: operatorKey, endpoint: url, status, response: res },
-      "PayDunya charge refused by operator"
-    );
+    logger.warn({ operator: operatorKey, status, response: res }, "PayDunya charge refusée");
   } else {
-    logger.info(
-      { operator: operatorKey, isPending: config.isPending },
-      "PayDunya charge accepted ✓"
-    );
+    logger.info({ operator: operatorKey, isPending: config.isPending }, "PayDunya charge acceptée ✓");
   }
 
   return {
@@ -302,18 +334,40 @@ export async function chargeOperator(
     fees: typeof res.fees === "number" ? res.fees : undefined,
     currency: typeof res.currency === "string" ? res.currency : "XOF",
     isPending: config.isPending,
+    invoiceToken: params.paymentToken,
   };
 }
 
-// ─── Wrapper Togo ─────────────────────────────────────────────────────────────
+// ─── Wrapper Togo (charge) ────────────────────────────────────────────────────
 
 export async function chargeTogoWallet(
   operator: "tmoney" | "moov",
-  params: { name: string; email: string; phone: string; amount: number },
+  params: { name: string; email: string; phone: string; paymentToken: string },
   logger: Logger
 ): Promise<ChargeResult> {
   const operatorKey: OperatorKey = TOGO_OPERATOR_MAP[operator];
   return chargeOperator(operatorKey, params, logger);
+}
+
+// ─── Vérifier le statut d'une invoice (polling) ──────────────────────────────
+
+export async function confirmInvoice(
+  invoiceToken: string,
+  logger: Logger
+): Promise<{ status: string; completed: boolean }> {
+  const url = `${PAYDUNYA_BASE}/checkout-invoice/confirm/${invoiceToken}`;
+
+  const { data } = await fetchWithRetry(
+    url,
+    { method: "GET", headers: getHeaders() },
+    logger
+  );
+
+  const res = data as Record<string, unknown>;
+  const status = String(res.status ?? res.invoice_status ?? "pending").toLowerCase();
+  const completed = status === "completed";
+
+  return { status, completed };
 }
 
 // ─── Payout : Envoyer de l'argent vers un wallet (SoftPay Send) ──────────────
@@ -326,20 +380,12 @@ export async function disburseWallet(
   const config: OperatorConfig | undefined = OPERATOR_MAP[operatorKey];
 
   if (!config) {
-    throw new PaydunyaError(
-      `Opérateur de payout non supporté : ${operatorKey}`,
-      "UNSUPPORTED_OPERATOR",
-      false
-    );
+    throw new PaydunyaError(`Opérateur de payout non supporté : ${operatorKey}`, "UNSUPPORTED_OPERATOR", false);
   }
 
   const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
   if (cleanPhone.length < 8) {
-    throw new PaydunyaError(
-      `Numéro destinataire invalide : "${params.phone}"`,
-      "INVALID_PHONE",
-      false
-    );
+    throw new PaydunyaError(`Numéro destinataire invalide : "${params.phone}"`, "INVALID_PHONE", false);
   }
 
   if (params.amount <= 0) {
@@ -368,20 +414,13 @@ export async function disburseWallet(
 
   const res = data as Record<string, unknown>;
 
-  if (status === 401 || status === 403) {
-    throw new PaydunyaError(
-      "Authentification PayDunya échouée pour le payout.",
-      "AUTH_FAILED",
-      false
-    );
+  if (status === 401) {
+    throw new PaydunyaError("Authentification PayDunya échouée pour le payout.", "AUTH_FAILED", false);
   }
 
   const success = res.success === true || res.response_code === "00";
-  const message = String(
-    res.message ?? res.response_text ?? (success ? "Payout envoyé" : "Payout refusé")
-  );
-  const transactionId =
-    typeof res.transaction_id === "string" ? res.transaction_id : undefined;
+  const message = String(res.message ?? res.response_text ?? (success ? "Payout envoyé" : "Payout refusé"));
+  const transactionId = typeof res.transaction_id === "string" ? res.transaction_id : undefined;
 
   if (!success) {
     logger.warn({ operator: operatorKey, status, response: res }, "PayDunya payout refusé");
