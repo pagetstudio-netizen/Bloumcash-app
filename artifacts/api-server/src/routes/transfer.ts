@@ -147,21 +147,39 @@ router.post("/transfer", async (req, res) => {
     const txStatus = chargeResult.isPending ? "pending" : "success";
 
     /* ── Sauvegarder la transaction ── */
-    await db.insert(transactionsTable).values({
-      reference,
-      type: "outgoing",
-      title: `Transfert vers ${toPhone}`,
-      amount: amt,
-      operator: fromOperator,
-      fromPhone,
-      toPhone,
-      toOperator,
-      fees,
-      description: `Transfert ${fromOperator} → ${toOperator}`,
-      status: txStatus,
-      userId,
-      paydunyaToken: paymentToken,
-    });
+    try {
+      await db.insert(transactionsTable).values({
+        reference,
+        type: "outgoing",
+        title: `Transfert vers ${toPhone}`,
+        amount: amt,
+        operator: fromOperator,
+        fromPhone,
+        toPhone,
+        toOperator,
+        fees,
+        description: `Transfert ${fromOperator} → ${toOperator}`,
+        status: txStatus,
+        userId,
+        paydunyaToken: paymentToken,
+      });
+    } catch (dbErr) {
+      // CRITIQUE : PayDunya a déjà débité l'envoyeur — on logue toutes les infos
+      // pour permettre une récupération manuelle via le dashboard PayDunya.
+      req.log.error({
+        err: dbErr,
+        CRITICAL: "PAYDUNYA_CHARGE_OK_BUT_DB_INSERT_FAILED",
+        reference,
+        paydunyaToken: paymentToken,
+        fromPhone,
+        toPhone,
+        fromOperator,
+        toOperator,
+        amount: amt,
+        fees,
+      }, "⚠️ CRITIQUE — Paiement PayDunya réussi mais échec DB. Récupération manuelle requise via PayDunya dashboard.");
+      // On continue quand même pour retourner une réponse au client
+    }
 
     /* ── Étape 3 : Si Moov (instantané) → déclencher le payout vers destinataire ── */
     if (!chargeResult.isPending && toPhone && toOperator) {
