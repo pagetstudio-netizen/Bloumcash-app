@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -24,7 +24,135 @@ import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
 
 type Operator = "tmoney" | "moov";
-type Step = "step1" | "step2" | "pending" | "success";
+type Step = "step1" | "step2" | "processing" | "pending" | "success";
+
+/* ────────────────────────────────────────────────────────────────── */
+/*  Icône horloge animée (SVG)                                        */
+/* ────────────────────────────────────────────────────────────────── */
+function ClockIcon() {
+  return (
+    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="clockGrad" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#4F78FF" />
+          <stop offset="100%" stopColor="#1a3fc4" />
+        </linearGradient>
+      </defs>
+      {/* Arc extérieur (270° ~) */}
+      <path
+        d="M40 8 A32 32 0 1 0 14 54"
+        stroke="url(#clockGrad)"
+        strokeWidth="6"
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Flèche au bout de l'arc */}
+      <path
+        d="M14 54 L7 47 M14 54 L21 47"
+        stroke="url(#clockGrad)"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Cadran intérieur */}
+      <circle cx="40" cy="40" r="20" fill="white" />
+      {/* Aiguille des minutes (12h) */}
+      <line x1="40" y1="40" x2="40" y2="25" stroke="url(#clockGrad)" strokeWidth="3" strokeLinecap="round" />
+      {/* Aiguille des heures (9h) */}
+      <line x1="40" y1="40" x2="27" y2="40" stroke="url(#clockGrad)" strokeWidth="3" strokeLinecap="round" />
+      {/* Centre */}
+      <circle cx="40" cy="40" r="2.5" fill="#1a3fc4" />
+      {/* Petits points en bas de l'arc */}
+      <circle cx="23" cy="65" r="3" fill="#4F78FF" opacity="0.5" />
+      <circle cx="33" cy="71" r="3.5" fill="#4F78FF" opacity="0.7" />
+      <circle cx="44" cy="74" r="2.5" fill="#4F78FF" opacity="0.4" />
+    </svg>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────── */
+/*  Modal paiement en cours                                           */
+/* ────────────────────────────────────────────────────────────────── */
+function PaymentProcessingModal({ open }: { open: boolean }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Fond flouté */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50"
+            style={{ backgroundColor: "rgba(26,63,196,0.25)", backdropFilter: "blur(6px)" }}
+          />
+          {/* Carte modale */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.88, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 10 }}
+            transition={{ type: "spring", damping: 22, stiffness: 300 }}
+            className="fixed inset-0 z-50 flex items-center justify-center px-8"
+          >
+            <div className="bg-white rounded-3xl shadow-2xl px-8 py-10 w-full max-w-[300px] flex flex-col items-center text-center">
+              {/* Icône horloge avec pulse */}
+              <div className="relative mb-6 flex items-center justify-center">
+                {/* Anneaux de pulse */}
+                {[1, 2, 3].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute rounded-full"
+                    style={{ width: 80 + i * 22, height: 80 + i * 22, border: "2px solid #1a3fc4" }}
+                    animate={{ scale: [1, 1.12, 1], opacity: [0.18, 0.04, 0.18] }}
+                    transition={{
+                      duration: 2.2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                      delay: i * 0.5,
+                    }}
+                  />
+                ))}
+                {/* Icône horloge qui pulse doucement */}
+                <motion.div
+                  animate={{ scale: [1, 1.04, 1] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <ClockIcon />
+                </motion.div>
+              </div>
+
+              {/* 3 points animés en vague */}
+              <div className="flex items-center gap-3 mb-5">
+                {[0, 1, 2].map((i) => (
+                  <motion.div
+                    key={i}
+                    className="rounded-full"
+                    style={{ width: 13, height: 13, background: "#1a3fc4" }}
+                    animate={{ opacity: [0.25, 1, 0.25], scale: [0.8, 1.15, 0.8] }}
+                    transition={{
+                      duration: 1.2,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                      delay: i * 0.22,
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Texte */}
+              <p className="text-[14px] font-bold text-gray-800 leading-snug">
+                Transaction en cours
+              </p>
+              <p className="text-[12px] text-gray-400 mt-1 leading-relaxed">
+                Ne fermez pas cette page s'il vous plaît
+              </p>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
 const OPS: Record<Operator, { name: string; logo: string }> = {
   tmoney: { name: "TMoney",     logo: tmoneyLogo },
@@ -125,10 +253,32 @@ export default function Transfert() {
   const [step,    setStep]    = useState<Step>("step1");
   const [modalFor, setModalFor] = useState<"from" | "to" | null>(null);
   const [transferRef, setTransferRef] = useState<string>("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
+
+  /* Nettoyer le polling au démontage */
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const startPolling = useCallback((ref: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/transfer/${ref}/status`);
+        if (!res.ok) return;
+        const data = await res.json() as { status?: string };
+        if (data.status === "success" || data.status === "completed") {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setStep("success");
+        }
+      } catch {
+        /* ignore — réessaie au prochain tick */
+      }
+    }, 3000);
+  }, []);
 
   if (!isAuthenticated) return null;
 
@@ -164,6 +314,8 @@ export default function Transfert() {
   };
 
   const handleConfirm = async () => {
+    /* Afficher le modal immédiatement */
+    setStep("processing");
     try {
       const result = await createTransfer.mutateAsync({
         data: {
@@ -174,13 +326,17 @@ export default function Transfert() {
           amount: amountNum,
         },
       });
-      setTransferRef(result.reference ?? "");
+      const ref = result.reference ?? "";
+      setTransferRef(ref);
       if (result.isPending) {
-        setStep("pending");
+        /* Garder le modal visible et démarrer le polling PayDunya */
+        startPolling(ref);
       } else {
         setStep("success");
       }
     } catch (err: unknown) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      setStep("step2");
       const apiErr = err as { response?: { data?: { error?: string } } };
       const msg = apiErr?.response?.data?.error ?? "Une erreur est survenue lors du transfert. Veuillez réessayer.";
       showModal({
@@ -379,12 +535,13 @@ export default function Transfert() {
   }
 
   /* ────── Écran étape 2 — Résumé ─────────────────────────────── */
-  if (step === "step2") {
+  if (step === "step2" || step === "processing") {
     return (
       <div
         className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto overflow-hidden"
         style={{ background: "#EAECF8" }}
       >
+        <PaymentProcessingModal open={step === "processing"} />
         {/* Header */}
         <div className="flex-shrink-0 px-5 py-4 flex items-center justify-between" style={{ background: "#3B4FC5" }}>
           <button
