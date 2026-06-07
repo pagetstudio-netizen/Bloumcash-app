@@ -1,0 +1,104 @@
+import {
+  pgTable,
+  text,
+  serial,
+  integer,
+  boolean,
+  real,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+export const adminUsersTable = pgTable("admin_users", {
+  id: serial("id").primaryKey(),
+  fullName: text("full_name").notNull(),
+  email: text("email").unique().notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("admin"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminNotificationsTable = pgTable("admin_notifications", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull().default("info"),
+  imageUrl: text("image_url"),
+  buttonText: text("button_text"),
+  buttonUrl: text("button_url"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blacklistTable = pgTable("blacklist", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull().unique(),
+  reason: text("reason"),
+  blockedBy: text("blocked_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const blockedIpsTable = pgTable("blocked_ips", {
+  id: serial("id").primaryKey(),
+  ip: text("ip").notNull().unique(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const whitelistedIpsTable = pgTable("whitelisted_ips", {
+  id: serial("id").primaryKey(),
+  ip: text("ip").notNull().unique(),
+  label: text("label"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const securityEventsTable = pgTable("security_events", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  ip: text("ip"),
+  details: text("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const adminSettingsTable = pgTable("admin_settings", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const countriesConfigTable = pgTable("countries_config", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  currency: text("currency").notNull().default("XOF"),
+  isActive: boolean("is_active").notNull().default(true),
+  feeDeposit: real("fee_deposit").notNull().default(5.0),
+  feeWithdraw: real("fee_withdraw").notNull().default(5.0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const operatorsConfigTable = pgTable("operators_config", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("mobile_money"),
+  countryCode: text("country_code").notNull(),
+  gateway: text("gateway").notNull().default("PayDunya"),
+  dailyLimit: integer("daily_limit").notNull().default(1000000),
+  isActive: boolean("is_active").notNull().default(true),
+  maintenanceAll: boolean("maintenance_all").notNull().default(false),
+  maintenanceDeposit: boolean("maintenance_deposit").notNull().default(false),
+  maintenanceWithdraw: boolean("maintenance_withdraw").notNull().default(false),
+  maintenancePaymentLink: boolean("maintenance_payment_link").notNull().default(false),
+  maintenanceApiPayment: boolean("maintenance_api_payment").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AdminUser = typeof adminUsersTable.$inferSelect;
+export type AdminNotification = typeof adminNotificationsTable.$inferSelect;
+export type Blacklist = typeof blacklistTable.$inferSelect;
+export type BlockedIp = typeof blockedIpsTable.$inferSelect;
+export type WhitelistedIp = typeof whitelistedIpsTable.$inferSelect;
+export type SecurityEvent = typeof securityEventsTable.$inferSelect;
+export type AdminSetting = typeof adminSettingsTable.$inferSelect;
+export type CountryConfig = typeof countriesConfigTable.$inferSelect;
+export type OperatorConfig = typeof operatorsConfigTable.$inferSelect;

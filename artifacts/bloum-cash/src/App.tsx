@@ -37,6 +37,17 @@ import Produits from "@/pages/encaisser/produits";
 import Boutiques from "@/pages/encaisser/boutiques";
 import EncaisserWhatsApp from "@/pages/encaisser/whatsapp";
 
+import AdminLogin from "@/pages/admin/login";
+import AdminDashboard from "@/pages/admin/dashboard";
+import AdminUsers from "@/pages/admin/users";
+import AdminTransactions from "@/pages/admin/transactions";
+import AdminOperators from "@/pages/admin/operators";
+import AdminMessages from "@/pages/admin/messages";
+import AdminBroadcast from "@/pages/admin/broadcast";
+import AdminBlacklist from "@/pages/admin/blacklist";
+import AdminSecurity from "@/pages/admin/security";
+import AdminSettings from "@/pages/admin/settings";
+
 setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
 
 const queryClient = new QueryClient({
@@ -51,6 +62,19 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
+      {/* Admin routes — no AuthProvider wrapper */}
+      <Route path="/admin/login" component={AdminLogin} />
+      <Route path="/admin/users" component={AdminUsers} />
+      <Route path="/admin/transactions" component={AdminTransactions} />
+      <Route path="/admin/operators" component={AdminOperators} />
+      <Route path="/admin/messages" component={AdminMessages} />
+      <Route path="/admin/broadcast" component={AdminBroadcast} />
+      <Route path="/admin/blacklist" component={AdminBlacklist} />
+      <Route path="/admin/security" component={AdminSecurity} />
+      <Route path="/admin/settings" component={AdminSettings} />
+      <Route path="/admin" component={AdminDashboard} />
+
+      {/* User-facing routes */}
       <Route path="/" component={Landing} />
       <Route path="/app" component={AppGate} />
       <Route path="/splash" component={Splash} />

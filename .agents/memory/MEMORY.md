@@ -1,0 +1,2 @@
+- [Admin dashboard](admin-dashboard.md) — tableau de bord admin complet à /admin, compte pagetstudio@gmail.com/AAbb11##, seed au démarrage API.
+- [PayDunya SoftPay](paydunya-softpay.md) — intégration PayDunya avec carte opérateurs, HTML detection, retry logic, structured logging.

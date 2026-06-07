@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
+import GlobalNotification from "@/components/global-notification";
 import { useAuth } from "@/components/auth-provider";
 import {
   Bell, ChevronRight,
@@ -287,6 +288,7 @@ export default function Dashboard() {
           ))
         )}
       </div>
+      <GlobalNotification />
     </div>
   );
 }
