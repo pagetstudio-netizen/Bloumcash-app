@@ -75,6 +75,7 @@
     "zod": "catalog:"
   },
   "dependencies": {
+    "median-js-bridge": "^2.16.0",
     "qrcode.react": "^4.2.0"
   }
 }
