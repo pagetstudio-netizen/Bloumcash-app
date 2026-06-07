@@ -134,29 +134,11 @@ router.post("/qr/:reference/pay", async (req, res) => {
       return;
     }
 
-    let paymentToken: string;
-    try {
-      paymentToken = await paydunya.createInvoice(
-        qr.amount,
-        `Paiement QR - ${qr.businessName} | Réf. ${qr.reference}`,
-        req.log
-      );
-    } catch (err) {
-      const msg =
-        err instanceof paydunya.PaydunyaError
-          ? err.message
-          : "Impossible de créer l'invoice PayDunya.";
-      req.log.error({ err }, "QR invoice creation failed");
-      res.status(502).json({ error: msg });
-      return;
-    }
-
     let chargeResult: paydunya.ChargeResult;
     try {
       chargeResult = await paydunya.chargeTogoWallet(
         payerOperator as "tmoney" | "moov",
-        { name, email, phone: payerPhone },
-        paymentToken,
+        { name, email, phone: payerPhone, amount: qr.amount },
         req.log
       );
     } catch (err) {

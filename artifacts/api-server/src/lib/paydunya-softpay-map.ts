@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 export type OperatorKey =
   | "tmoney-togo"
   | "moov-togo"
@@ -11,7 +13,7 @@ export type OperatorKey =
   | "wave-ci";
 
 export interface ChargePayload {
-  [key: string]: string;
+  [key: string]: string | number;
 }
 
 export interface DisbursePayload {
@@ -28,17 +30,18 @@ export interface OperatorConfig {
    * False si la réponse est synchrone/instantanée (ex: Moov).
    */
   isPending: boolean;
+  /**
+   * Certains opérateurs nécessitent un payment_token dans le payload.
+   * Si true, on génère un UUID local (pas besoin de checkout-invoice).
+   */
+  needsPaymentToken: boolean;
   payloadBuilder: (params: {
     name: string;
     email: string;
     phone: string;
-    paymentToken: string;
+    amount: number;
     address?: string;
   }) => ChargePayload;
-  /**
-   * Endpoint PayDunya pour le payout (envoi d'argent vers le wallet).
-   * Format : slug sans le préfixe /softpay/ ni le suffixe /send.
-   */
   disburseEndpoint: string;
   disbursePayloadBuilder: (params: {
     name: string;
@@ -46,6 +49,10 @@ export interface OperatorConfig {
     amount: number;
     reference: string;
   }) => DisbursePayload;
+}
+
+function genToken(): string {
+  return crypto.randomBytes(16).toString("hex");
 }
 
 export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
@@ -57,12 +64,13 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "TG",
     endpoint: "t-money-togo",
     isPending: true,
-    requiredFields: ["name_t_money", "email_t_money", "phone_t_money", "payment_token"],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    needsPaymentToken: false,
+    requiredFields: ["name_t_money", "email_t_money", "phone_t_money", "amount"],
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       name_t_money: name,
       email_t_money: email,
       phone_t_money: phone,
-      payment_token: paymentToken,
+      amount,
     }),
     disburseEndpoint: "t-money-togo",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -78,19 +86,22 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "TG",
     endpoint: "moov-togo",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "moov_togo_customer_fullname",
       "moov_togo_email",
       "moov_togo_customer_address",
       "moov_togo_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken, address }) => ({
+    payloadBuilder: ({ name, email, phone, amount, address }) => ({
       moov_togo_customer_fullname: name,
       moov_togo_email: email,
       moov_togo_customer_address: address ?? "Lomé, Togo",
       moov_togo_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "moov-togo",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -108,17 +119,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "BJ",
     endpoint: "moov-benin",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "moov_benin_customer_fullname",
       "moov_benin_email",
       "moov_benin_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       moov_benin_customer_fullname: name,
       moov_benin_email: email,
       moov_benin_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "moov-benin",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -134,19 +148,22 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "BJ",
     endpoint: "mtn-benin",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "mtn_benin_customer_fullname",
       "mtn_benin_email",
       "mtn_benin_phone_number",
       "mtn_benin_wallet_provider",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       mtn_benin_customer_fullname: name,
       mtn_benin_email: email,
       mtn_benin_phone_number: phone,
       mtn_benin_wallet_provider: "MTNBENIN",
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "mtn-benin",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -165,17 +182,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "BF",
     endpoint: "moov-burkina",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "moov_burkina_faso_fullName",
       "moov_burkina_faso_email",
       "moov_burkina_faso_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       moov_burkina_faso_fullName: name,
       moov_burkina_faso_email: email,
       moov_burkina_faso_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "moov-burkina",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -191,17 +211,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "BF",
     endpoint: "orange-money-burkina",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "orange_burkina_faso_customer_fullname",
       "orange_burkina_faso_email",
       "orange_burkina_faso_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       orange_burkina_faso_customer_fullname: name,
       orange_burkina_faso_email: email,
       orange_burkina_faso_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "orange-money-burkina",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -219,17 +242,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "CI",
     endpoint: "moov-ci",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "moov_ci_customer_fullname",
       "moov_ci_email",
       "moov_ci_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       moov_ci_customer_fullname: name,
       moov_ci_email: email,
       moov_ci_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "moov-ci",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -245,17 +271,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "CI",
     endpoint: "mtn-ci",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "mtn_ci_customer_fullname",
       "mtn_ci_email",
       "mtn_ci_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       mtn_ci_customer_fullname: name,
       mtn_ci_email: email,
       mtn_ci_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "mtn-ci",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -271,17 +300,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "CI",
     endpoint: "orange-money-ci",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "orange_ci_customer_fullname",
       "orange_ci_email",
       "orange_ci_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       orange_ci_customer_fullname: name,
       orange_ci_email: email,
       orange_ci_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "orange-money-ci",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
@@ -297,17 +329,20 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     country: "CI",
     endpoint: "wave-ci",
     isPending: false,
+    needsPaymentToken: true,
     requiredFields: [
       "wave_ci_customer_fullname",
       "wave_ci_email",
       "wave_ci_phone_number",
       "payment_token",
+      "amount",
     ],
-    payloadBuilder: ({ name, email, phone, paymentToken }) => ({
+    payloadBuilder: ({ name, email, phone, amount }) => ({
       wave_ci_customer_fullname: name,
       wave_ci_email: email,
       wave_ci_phone_number: phone,
-      payment_token: paymentToken,
+      payment_token: genToken(),
+      amount,
     }),
     disburseEndpoint: "wave-ci",
     disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({

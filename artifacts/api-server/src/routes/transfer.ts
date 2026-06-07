@@ -93,31 +93,12 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    /* ── Étape 1 : Créer l'invoice PayDunya ── */
-    let paymentToken: string;
-    try {
-      paymentToken = await paydunya.createInvoice(
-        total,
-        `Transfert ${fromOperator.toUpperCase()}→${toOperator.toUpperCase()} | ${fromPhone}→${toPhone}`,
-        req.log
-      );
-    } catch (err) {
-      const msg =
-        err instanceof paydunya.PaydunyaError
-          ? err.message
-          : "Impossible de créer l'invoice PayDunya.";
-      req.log.error({ err }, "Invoice creation failed");
-      res.status(502).json({ error: msg });
-      return;
-    }
-
-    /* ── Étape 2 : Débiter le wallet de l'expéditeur (payin) ── */
+    /* ── Débiter le wallet de l'expéditeur (SoftPay direct) ── */
     let chargeResult: paydunya.ChargeResult;
     try {
       chargeResult = await paydunya.chargeTogoWallet(
         fromOperator as "tmoney" | "moov",
-        { name, email, phone: fromPhone },
-        paymentToken,
+        { name, email, phone: fromPhone, amount: total },
         req.log
       );
     } catch (err) {
@@ -141,7 +122,7 @@ router.post("/transfer", async (req, res) => {
 
     const txStatus = chargeResult.isPending ? "pending" : "success";
 
-    /* ── Sauvegarder la transaction avec le token PayDunya ── */
+    /* ── Sauvegarder la transaction ── */
     await db.insert(transactionsTable).values({
       reference,
       type: "outgoing",
@@ -154,7 +135,6 @@ router.post("/transfer", async (req, res) => {
       fees,
       description: `Transfert ${fromOperator} → ${toOperator}`,
       status: txStatus,
-      paydunyaToken: paymentToken,
       userId,
     });
 
