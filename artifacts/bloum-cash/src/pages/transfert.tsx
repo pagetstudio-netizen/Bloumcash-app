@@ -115,6 +115,7 @@ export default function Transfert() {
 
   const [fromOp, setFromOp] = useState<Operator>("tmoney");
   const [toOp,   setToOp]   = useState<Operator>("moov");
+  const [fromPhone, setFromPhone] = useState("");
   const [toPhone, setToPhone] = useState("");
   const [amount,  setAmount]  = useState("");
   const [step,    setStep]    = useState<Step>("step1");
@@ -127,13 +128,12 @@ export default function Transfert() {
   if (!isAuthenticated) return null;
 
   const amountNum  = parseFloat(amount.replace(/[\s\u00a0]/g, "").replace(",", ".")) || 0;
-  const sameNet    = fromOp === toOp;
-  const feeRate    = sameNet ? 0.01 : 0.02;
+  const feeRate    = 0.035;
   const fees       = amountNum > 0 ? Math.round(amountNum * feeRate) : 0;
   const total      = amountNum + fees;
 
   const phoneInfo  = validateTogoPhone(toPhone);
-  const canNext    = toPhone.replace(/\s/g, "").length >= 8 && amountNum >= 100;
+  const canNext    = fromPhone.replace(/\s/g, "").length >= 8 && toPhone.replace(/\s/g, "").length >= 8 && amountNum >= 100;
 
   const handleChangeFrom = (op: Operator) => setFromOp(op);
   const handleChangeTo   = (op: Operator) => setToOp(op);
@@ -141,7 +141,9 @@ export default function Transfert() {
   const handleSwap = () => {
     setFromOp(toOp);
     setToOp(fromOp);
-    setToPhone("");
+    const tmp = fromPhone;
+    setFromPhone(toPhone);
+    setToPhone(tmp);
   };
 
   const handleNext = () => {
@@ -149,7 +151,7 @@ export default function Transfert() {
       showModal({
         type: "warning",
         title: "Informations requises",
-        message: "Vérifiez le numéro destinataire (8 chiffres min.) et le montant (100 FCFA min.).",
+        message: "Vérifiez votre numéro, le numéro destinataire (8 chiffres min.) et le montant (100 FCFA min.).",
       });
       return;
     }
@@ -195,7 +197,7 @@ export default function Transfert() {
               <span className="font-semibold text-gray-800">{formatAmount(amountNum)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Frais ({sameNet ? "1" : "2"}%)</span>
+              <span className="text-gray-400">Frais (3,5%)</span>
               <span className="font-semibold text-orange-500">{formatAmount(fees)}</span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-1.5">
@@ -272,6 +274,19 @@ export default function Transfert() {
               <img src={OPS[toOp].logo} alt="" className="w-10 h-10 rounded-xl object-cover" />
             </div>
 
+            {/* Expéditeur */}
+            <div className="flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#3B4FC520" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3B4FC5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 font-medium">Numéro expéditeur</p>
+                <p className="text-sm font-bold text-gray-800">🇹🇬 +228 {fromPhone}</p>
+              </div>
+            </div>
+
             {/* Destinataire */}
             <div className="flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3">
               <Send className="w-4 h-4 flex-shrink-0" style={{ color: "#3B4FC5" }} />
@@ -291,7 +306,7 @@ export default function Transfert() {
                 </div>
                 <div className="w-px bg-gray-200" />
                 <div className="flex-1 py-3 text-center bg-gray-50">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-1">Frais {sameNet ? "1" : "2"}%</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-1">Frais 3,5%</p>
                   <p className="text-xs font-bold text-orange-500">{amountNum > 0 ? `${fmt(fees)} F` : "—"}</p>
                 </div>
                 <div className="w-px bg-gray-200" />
@@ -401,15 +416,25 @@ export default function Transfert() {
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
 
-              {/* Pill compte source */}
+              {/* Pill numéro expéditeur avec input */}
               <div
-                className="flex-1 flex items-center gap-2 rounded-full px-4 py-2.5"
+                className="flex-1 flex items-center gap-1.5 rounded-full px-4 py-2.5"
                 style={{ background: "#F0F1FA" }}
               >
-                <span className="text-[13px] font-semibold text-gray-500">Mon compte</span>
-                <span className="text-[12px] text-gray-400">
-                  {fromOp === "tmoney" ? "• TMoney" : "• Moov Money"}
-                </span>
+                <span className="text-[18px] leading-none">🇹🇬</span>
+                <span className="text-[13px] font-medium text-gray-500">+228</span>
+                <span className="text-gray-400 text-sm mx-0.5">·</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={fromPhone}
+                  onChange={(e) => setFromPhone(e.target.value)}
+                  placeholder="Votre numéro"
+                  maxLength={11}
+                  autoComplete="off"
+                  className="flex-1 bg-transparent text-[13px] font-semibold text-gray-800 placeholder:text-gray-400 placeholder:font-normal focus:outline-none min-w-0"
+                  style={{ userSelect: "text", WebkitUserSelect: "text", touchAction: "manipulation", pointerEvents: "auto" }}
+                />
               </div>
             </div>
           </div>
