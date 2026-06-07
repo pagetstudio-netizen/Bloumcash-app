@@ -210,7 +210,7 @@ export default function Transfert() {
             Traitement instantané
           </div>
           <button
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/dashboard")}
             className="w-full py-4 text-white rounded-2xl text-sm font-bold shadow-lg active:scale-[0.98] transition-transform"
             style={{ background: "linear-gradient(90deg,#3B4FC5,#2b3aa8)" }}
           >
@@ -346,7 +346,7 @@ export default function Transfert() {
         style={{ background: "#3B4FC5" }}
       >
         <button
-          onClick={() => setLocation("/")}
+          onClick={() => setLocation("/dashboard")}
           className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
         >
           <ArrowLeft className="w-5 h-5 text-white" />

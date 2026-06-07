@@ -5,6 +5,8 @@ import { AuthProvider } from "@/components/auth-provider";
 import { AppModalProvider } from "@/components/app-modal";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
+import Landing from "@/pages/landing";
+import AppGate from "@/pages/app-gate";
 import Splash from "@/pages/splash";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
@@ -49,11 +51,13 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
+      <Route path="/" component={Landing} />
+      <Route path="/app" component={AppGate} />
       <Route path="/splash" component={Splash} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/forgot-pin" component={ForgotPin} />
-      <Route path="/" component={Dashboard} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/encaisser" component={Encaisser} />
       <Route path="/promotions" component={Promotions} />
       <Route path="/paiement/:reference" component={Paiement} />

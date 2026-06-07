@@ -10,7 +10,7 @@ export default function Splash() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isAuthenticated) {
-        setLocation("/");
+        setLocation("/dashboard");
       } else {
         setLocation("/login");
       }

@@ -178,7 +178,7 @@ export default function Promotions() {
         style={{ background: "linear-gradient(90deg,#1a3fc4,#2b50e8)" }}
       >
         <button
-          onClick={() => setLocation("/")}
+          onClick={() => setLocation("/dashboard")}
           className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
         >
           <ArrowLeft className="w-5 h-5 text-white" />

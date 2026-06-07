@@ -42,7 +42,7 @@ export default function Register() {
         type: "success",
         title: "Compte créé !",
         message: "Bienvenue sur Bloum Cash.",
-        onClose: () => setLocation("/"),
+        onClose: () => setLocation("/dashboard"),
       });
     } catch {
       showModal({

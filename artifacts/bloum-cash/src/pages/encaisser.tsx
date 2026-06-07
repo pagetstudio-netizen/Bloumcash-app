@@ -115,7 +115,7 @@ export default function Encaisser() {
 
     return (
       <div className={BG}>
-        <Header onBack={() => setLocation("/")} title="Menu de Paiement" />
+        <Header onBack={() => setLocation("/dashboard")} title="Menu de Paiement" />
 
         {/* Search bar */}
         <div className="px-4 mb-2 flex-shrink-0">

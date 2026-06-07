@@ -81,7 +81,7 @@ export default function Notifications() {
       {/* Header */}
       <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white px-5 py-4 shadow-md z-50">
         <div className="flex items-center justify-between">
-          <button onClick={() => setLocation("/")} className="p-1 -ml-1">
+          <button onClick={() => setLocation("/dashboard")} className="p-1 -ml-1">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-2">

@@ -30,7 +30,7 @@ export default function Login() {
     try {
       const result = await loginMutation.mutateAsync({ data: { email: values.email, pin: values.pin } });
       login(result.user, result.token);
-      setLocation("/");
+      setLocation("/dashboard");
     } catch {
       showModal({
         type: "error",
