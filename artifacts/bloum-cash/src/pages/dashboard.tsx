@@ -17,19 +17,32 @@ import banner1 from "@assets/20260607_084736_1780823957900.jpg";
 import banner2 from "@assets/20260607_085207_1780823957921.jpg";
 import banner3 from "@assets/20260607_090625_1780823957938.jpg";
 
-const BANNERS = [banner1, banner2, banner3];
+interface DashBanner { id: number; title: string | null; imageUrl: string; actionType: string; actionUrl: string | null; }
+const LOCAL_BANNERS: DashBanner[] = [
+  { id: -1, title: "Bannière 1", imageUrl: banner1, actionType: "none", actionUrl: null },
+  { id: -2, title: "Bannière 2", imageUrl: banner2, actionType: "none", actionUrl: null },
+  { id: -3, title: "Bannière 3", imageUrl: banner3, actionType: "none", actionUrl: null },
+];
 
 export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [banners, setBanners] = useState<DashBanner[]>(LOCAL_BANNERS);
   const carouselRef = useRef<HTMLDivElement>(null);
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: recentTxs, isLoading: txLoading } = useGetRecentTransactions({
     query: { enabled: isAuthenticated },
   });
+
+  useEffect(() => {
+    fetch("/api/banners")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: DashBanner[] | null) => { if (data && data.length > 0) setBanners(data); })
+      .catch(() => {});
+  }, []);
 
   const unreadCount = React.useMemo(() => {
     if (!recentTxs) return 0;
@@ -53,13 +66,13 @@ export default function Dashboard() {
     if (autoTimer.current) clearInterval(autoTimer.current);
     autoTimer.current = setInterval(() => {
       setActiveSlide((prev) => {
-        const next = (prev + 1) % BANNERS.length;
+        const next = (prev + 1) % banners.length;
         const el = carouselRef.current;
         if (el) el.scrollTo({ left: next * el.offsetWidth, behavior: "smooth" });
         return next;
       });
     }, 3500);
-  }, []);
+  }, [banners.length]);
 
   useEffect(() => {
     resetTimer();
@@ -193,19 +206,26 @@ export default function Dashboard() {
           className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {BANNERS.map((src, i) => (
+          {banners.map((banner, i) => (
             <div
-              key={i}
+              key={banner.id}
               className="flex-shrink-0 w-full snap-center"
               onClick={() => {
-                const next = (i + 1) % BANNERS.length;
-                scrollTo(next);
-                resetTimer();
+                if (banner.actionType === "page" && banner.actionUrl) {
+                  setLocation(banner.actionUrl);
+                } else if (banner.actionType === "link" && banner.actionUrl) {
+                  window.open(banner.actionUrl, "_blank", "noopener,noreferrer");
+                } else {
+                  const next = (i + 1) % banners.length;
+                  scrollTo(next);
+                  resetTimer();
+                }
               }}
+              style={{ cursor: banner.actionType !== "none" && banner.actionUrl ? "pointer" : "default" }}
             >
               <img
-                src={src}
-                alt={`Bannière ${i + 1}`}
+                src={banner.imageUrl}
+                alt={banner.title ?? `Bannière ${i + 1}`}
                 className="w-full object-cover"
                 style={{ height: "160px" }}
                 draggable={false}
@@ -216,7 +236,7 @@ export default function Dashboard() {
 
         {/* Indicateurs dots */}
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-          {BANNERS.map((_, i) => (
+          {banners.map((_, i) => (
             <button
               key={i}
               onClick={() => { scrollTo(i); resetTimer(); }}

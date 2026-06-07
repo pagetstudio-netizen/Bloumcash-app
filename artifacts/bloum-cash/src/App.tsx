@@ -42,6 +42,7 @@ import AdminDashboard from "@/pages/admin/dashboard";
 import AdminUsers from "@/pages/admin/users";
 import AdminTransactions from "@/pages/admin/transactions";
 import AdminOperators from "@/pages/admin/operators";
+import AdminBanners from "@/pages/admin/banners";
 import AdminMessages from "@/pages/admin/messages";
 import AdminBroadcast from "@/pages/admin/broadcast";
 import AdminBlacklist from "@/pages/admin/blacklist";
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/transactions" component={AdminTransactions} />
       <Route path="/admin/operators" component={AdminOperators} />
+      <Route path="/admin/banners" component={AdminBanners} />
       <Route path="/admin/messages" component={AdminMessages} />
       <Route path="/admin/broadcast" component={AdminBroadcast} />
       <Route path="/admin/blacklist" component={AdminBlacklist} />

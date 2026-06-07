@@ -93,6 +93,18 @@ export const operatorsConfigTable = pgTable("operators_config", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const dashboardBannersTable = pgTable("dashboard_banners", {
+  id: serial("id").primaryKey(),
+  title: text("title"),
+  imageUrl: text("image_url").notNull(),
+  actionType: text("action_type").notNull().default("none"),
+  actionUrl: text("action_url"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type DashboardBanner = typeof dashboardBannersTable.$inferSelect;
 export type AdminUser = typeof adminUsersTable.$inferSelect;
 export type AdminNotification = typeof adminNotificationsTable.$inferSelect;
 export type Blacklist = typeof blacklistTable.$inferSelect;

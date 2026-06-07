@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Globe, Bell, Mail,
   Ban, Shield, Settings, LogOut, Menu, X, ChevronRight,
-  ShieldCheck,
+  ShieldCheck, Images,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { icon: Users, label: "Utilisateurs", href: "/admin/users" },
   { icon: ArrowLeftRight, label: "Transactions", href: "/admin/transactions" },
   { icon: Globe, label: "Pays & Opérateurs", href: "/admin/operators" },
+  { icon: Images, label: "Carrousel images", href: "/admin/banners" },
   { icon: Bell, label: "Message global", href: "/admin/messages" },
   { icon: Mail, label: "Email Broadcast", href: "/admin/broadcast" },
   { icon: Ban, label: "Blacklist", href: "/admin/blacklist" },

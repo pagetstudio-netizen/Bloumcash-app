@@ -5,10 +5,17 @@ import {
   adminUsersTable, adminNotificationsTable, blacklistTable,
   blockedIpsTable, whitelistedIpsTable, securityEventsTable,
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
+  dashboardBannersTable,
 } from "@workspace/db";
-import { eq, desc, sql, like, or, and, count } from "drizzle-orm";
+import { eq, desc, sql, asc, count } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { requireAdmin, signAdminToken } from "../middleware/admin-auth";
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const router: IRouter = Router();
 
@@ -389,6 +396,105 @@ router.post("/admin/broadcast/email", requireAdmin, async (req, res) => {
     });
     res.json({ success: true, sent: users.length, message: `Email broadcast enregistré pour ${users.length} utilisateurs. Configurez un service email (Resend/SendGrid) pour l'envoi réel.` });
   } catch (err) { req.log.error({ err }, "Broadcast error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+/* ─────────────────────────── DASHBOARD BANNERS ─────────────────────────── */
+
+/* Public endpoint — active banners for user dashboard */
+router.get("/banners", async (req, res) => {
+  try {
+    const rows = await db.select().from(dashboardBannersTable)
+      .where(eq(dashboardBannersTable.isActive, true))
+      .orderBy(asc(dashboardBannersTable.sortOrder), asc(dashboardBannersTable.createdAt));
+    res.json(rows);
+  } catch (err) { res.json([]); }
+});
+
+router.get("/admin/banners", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.select().from(dashboardBannersTable)
+      .orderBy(asc(dashboardBannersTable.sortOrder), asc(dashboardBannersTable.createdAt));
+    res.json(rows);
+  } catch (err) { req.log.error({ err }, "Get banners error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/banners", requireAdmin, async (req, res) => {
+  try {
+    const { title, imageData, imageUrl: externalUrl, actionType, actionUrl, sortOrder } = req.body;
+    let imageUrl: string;
+
+    if (imageData) {
+      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
+      if (!matches) { res.status(400).json({ error: "Format d'image invalide" }); return; }
+      const ext = matches[1].toLowerCase().replace("jpeg", "jpg");
+      if (matches[2].length > 8_000_000) { res.status(413).json({ error: "Image trop grande (max 6 Mo)" }); return; }
+      const filename = `banner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
+      imageUrl = `/uploads/${filename}`;
+    } else if (externalUrl) {
+      imageUrl = externalUrl;
+    } else {
+      res.status(400).json({ error: "Image ou URL requise" }); return;
+    }
+
+    const [row] = await db.insert(dashboardBannersTable).values({
+      title: title || null,
+      imageUrl,
+      actionType: actionType ?? "none",
+      actionUrl: actionUrl || null,
+      sortOrder: sortOrder != null ? parseInt(sortOrder) : 0,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { req.log.error({ err }, "Create banner error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.put("/admin/banners/:id", requireAdmin, async (req, res) => {
+  try {
+    const { title, imageData, imageUrl: externalUrl, actionType, actionUrl, isActive, sortOrder } = req.body;
+    const id = parseInt(req.params.id);
+    const updates: Record<string, unknown> = { actionType: actionType ?? "none", actionUrl: actionUrl || null, isActive, sortOrder: parseInt(sortOrder ?? 0) };
+    if (title !== undefined) updates.title = title || null;
+
+    if (imageData) {
+      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
+      if (matches) {
+        const ext = matches[1].toLowerCase().replace("jpeg", "jpg");
+        if (matches[2].length <= 8_000_000) {
+          const filename = `banner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
+          updates.imageUrl = `/uploads/${filename}`;
+        }
+      }
+    } else if (externalUrl) {
+      updates.imageUrl = externalUrl;
+    }
+
+    await db.update(dashboardBannersTable).set(updates as Parameters<typeof db.update>[0]).where(eq(dashboardBannersTable.id, id));
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Update banner error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.delete("/admin/banners/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const rows = await db.select().from(dashboardBannersTable).where(eq(dashboardBannersTable.id, id)).limit(1);
+    if (rows.length && rows[0].imageUrl.startsWith("/uploads/")) {
+      const filepath = path.join(UPLOADS_DIR, path.basename(rows[0].imageUrl));
+      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    }
+    await db.delete(dashboardBannersTable).where(eq(dashboardBannersTable.id, id));
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Delete banner error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.put("/admin/banners/reorder", requireAdmin, async (req, res) => {
+  try {
+    const { orderedIds } = req.body as { orderedIds: number[] };
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(dashboardBannersTable).set({ sortOrder: i }).where(eq(dashboardBannersTable.id, orderedIds[i]));
+    }
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Reorder banners error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 export default router;
