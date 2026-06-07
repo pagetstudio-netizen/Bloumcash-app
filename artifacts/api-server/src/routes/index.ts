@@ -8,6 +8,7 @@ import transferRouter from "./transfer";
 import paydunyaWebhookRouter from "./paydunya-webhook";
 import paydunyaDiagnoseRouter from "./paydunya-diagnose";
 import adminRouter from "./admin";
+import pushNotificationRouter from "./push-notification";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(transferRouter);
 router.use(paydunyaWebhookRouter);
 router.use(paydunyaDiagnoseRouter);
 router.use(adminRouter);
+router.use(pushNotificationRouter);
 
 export default router;
