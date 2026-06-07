@@ -13,7 +13,12 @@ export default function AppGate() {
 
     if (access === ACCESS_KEY || localStorage.getItem(STORAGE_KEY) === "true") {
       localStorage.setItem(STORAGE_KEY, "true");
-      setLocation("/dashboard");
+      const isLoggedIn = !!localStorage.getItem("bloum_token");
+      if (isLoggedIn) {
+        setLocation("/dashboard");
+      } else {
+        setLocation("/splash");
+      }
     } else {
       setLocation("/");
     }

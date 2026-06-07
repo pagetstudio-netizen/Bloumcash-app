@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, HelpCircle, MessageCircleQuestion, 
@@ -41,9 +41,9 @@ export default function Plus() {
       {/* Header — flex-shrink-0 : ne défile jamais */}
       <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 shadow-md z-50">
         <div className="flex items-center">
-          <Link href="/" className="mr-4">
+          <button onClick={() => setLocation("/dashboard")} className="mr-4">
             <ArrowLeft className="w-6 h-6" />
-          </Link>
+          </button>
           <h1 className="text-xl font-bold">Plus</h1>
         </div>
       </div>
