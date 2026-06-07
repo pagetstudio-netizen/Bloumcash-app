@@ -104,8 +104,8 @@ export default function Historique() {
             transition={{ delay: i * 0.05 }}
             className="bg-card rounded-xl p-4 border border-border shadow-sm"
           >
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex items-center gap-3">
+            <div className="flex justify-between items-start gap-3 mb-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="relative flex-shrink-0">
                   <div className="w-11 h-11 rounded-full overflow-hidden">
                     <img src={OP[tx.fromOp].logo} alt="" className="w-full h-full object-cover" />
@@ -116,13 +116,13 @@ export default function Historique() {
                       : <ArrowUpRight  className="w-2.5 h-2.5 text-white" />}
                   </div>
                 </div>
-                <div>
-                  <p className="font-bold text-foreground text-sm">{tx.title}</p>
-                  <p className="text-xs text-muted-foreground">{tx.date} · {tx.time}</p>
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground text-sm whitespace-nowrap">{tx.title}</p>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">{tx.date} · {tx.time}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`font-bold text-base ${tx.type === "incoming" ? "text-green-600" : "text-red-500"}`}>
+              <div className="text-right flex-shrink-0">
+                <p className={`font-bold text-base whitespace-nowrap ${tx.type === "incoming" ? "text-green-600" : "text-red-500"}`}>
                   {tx.type === "incoming" ? "+" : "-"}{formatAmount(tx.amount)}
                 </p>
                 <div className={`mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${

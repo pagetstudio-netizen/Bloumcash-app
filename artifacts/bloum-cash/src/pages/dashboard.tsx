@@ -230,21 +230,21 @@ export default function Dashboard() {
           </div>
           <div className="divide-y divide-border">
             {mockTransactions.map((tx) => (
-              <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-muted overflow-hidden">
+              <div key={tx.id} className="p-4 flex items-center justify-between gap-3 hover:bg-muted/50 transition-colors cursor-pointer">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-12 h-12 flex-shrink-0 rounded-full flex items-center justify-center bg-muted overflow-hidden">
                     <img
                       src={tx.operator === "tmoney" ? tmoneyLogo : moovLogo}
                       alt={tx.operator}
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{tx.title}</p>
-                    <p className="text-sm text-muted-foreground">{tx.date}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-foreground whitespace-nowrap">{tx.title}</p>
+                    <p className="text-sm text-muted-foreground whitespace-nowrap">{tx.date}</p>
                   </div>
                 </div>
-                <p className={`font-bold ${tx.type === "incoming" ? "text-green-600" : "text-red-600"}`}>
+                <p className={`font-bold flex-shrink-0 whitespace-nowrap ${tx.type === "incoming" ? "text-green-600" : "text-red-600"}`}>
                   {tx.type === "incoming" ? "+" : "-"}{formatAmount(tx.amount)}
                 </p>
               </div>
