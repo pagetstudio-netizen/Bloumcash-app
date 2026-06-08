@@ -28,8 +28,8 @@ export default function Plus() {
       title: "Préférences & Légal",
       items: [
         { icon: <KeyRound className="w-5 h-5" />, label: "Modifier mot de passe", href: "/plus/modifier-pin" },
-        { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions" },
-        { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite" },
+        { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions", external: "https://bloumcash.com/conditions-generales-dutilisation" },
+        { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite", external: "https://bloumcash.com/politique-de-confidentialite" },
         { icon: <Info className="w-5 h-5" />, label: "À propos de Bloum Cash", href: "/plus/apropos" },
       ]
     }
@@ -76,17 +76,31 @@ export default function Plus() {
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               <div className="divide-y divide-border">
                 {group.items.map((item, itemIdx) => (
-                  <Link key={itemIdx} href={item.href}>
-                    <div className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer active:bg-muted">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-xl bg-muted ${item.color || 'text-foreground'}`}>
-                          {item.icon}
+                  item.external ? (
+                    <a key={itemIdx} href={item.external} target="_blank" rel="noopener noreferrer">
+                      <div className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer active:bg-muted">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl bg-muted ${item.color || 'text-foreground'}`}>
+                            {item.icon}
+                          </div>
+                          <span className="font-medium text-foreground">{item.label}</span>
                         </div>
-                        <span className="font-medium text-foreground">{item.label}</span>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
                       </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  </Link>
+                    </a>
+                  ) : (
+                    <Link key={itemIdx} href={item.href}>
+                      <div className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer active:bg-muted">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl bg-muted ${item.color || 'text-foreground'}`}>
+                            {item.icon}
+                          </div>
+                          <span className="font-medium text-foreground">{item.label}</span>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </div>
+                    </Link>
+                  )
                 ))}
               </div>
             </div>
