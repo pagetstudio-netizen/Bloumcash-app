@@ -81,7 +81,7 @@ router.post("/auth/login", async (req, res) => {
 /* ── REGISTER ────────────────────────────────────────────────────────────── */
 router.post("/auth/register", async (req, res) => {
   try {
-    const { fullName, email, pin, phone } = req.body;
+    const { fullName, email, pin, phone, village, city, region, country } = req.body;
     if (!fullName || !email || !pin) {
       res.status(400).json({ error: "Tous les champs sont requis" });
       return;
@@ -100,7 +100,7 @@ router.post("/auth/register", async (req, res) => {
 
     const hashedPin = await bcrypt.hash(String(pin), 12);
     const [user] = await db.insert(usersTable)
-      .values({ fullName, email, pin: hashedPin, phone: phone ?? null, onesignalExternalUserId: email })
+      .values({ fullName, email, pin: hashedPin, phone: phone ?? null, onesignalExternalUserId: email, village: village ?? null, city: city ?? null, region: region ?? null, country: country ?? "Togo" })
       .returning();
 
     const token = signUserToken({ id: user.id, email: user.email });

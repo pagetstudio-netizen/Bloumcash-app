@@ -13,6 +13,10 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at"),
   onesignalExternalUserId: varchar("onesignal_external_user_id", { length: 255 }),
+  village: text("village"),
+  city: text("city"),
+  region: text("region"),
+  country: text("country").default("Togo"),
 }, (table) => [
   index("idx_onesignal_external_user_id").on(table.onesignalExternalUserId),
 ]);

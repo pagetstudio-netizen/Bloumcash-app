@@ -22,7 +22,15 @@ interface UserDetail {
   id: number;
   fullName: string;
   email: string;
+  phone: string | null;
+  operator: string | null;
+  status: string;
   createdAt: string;
+  lastLoginAt: string | null;
+  village: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
   transactions: Array<{ id: number; reference: string; type: string; amount: number; fees: number; status: string; createdAt: string }>;
 }
 
@@ -264,11 +272,12 @@ export default function AdminUsers() {
             <div className="grid grid-cols-2 gap-3 mb-4">
               {[
                 { label: "Email", value: detail.email },
-                { label: "Téléphone", value: selectedUser.phone ?? "—" },
-                { label: "Opérateur", value: selectedUser.operator ?? "—" },
-                { label: "Statut", value: STATUS_MAP[selectedUser.status]?.label ?? selectedUser.status },
+                { label: "Téléphone", value: detail.phone ?? "—" },
+                { label: "Opérateur", value: detail.operator ?? "—" },
+                { label: "Statut", value: STATUS_MAP[detail.status]?.label ?? detail.status },
                 { label: "Solde", value: formatAmount(selectedUser.balance) },
                 { label: "Inscription", value: new Date(detail.createdAt).toLocaleDateString("fr-FR") },
+                { label: "Dernière connexion", value: detail.lastLoginAt ? new Date(detail.lastLoginAt).toLocaleDateString("fr-FR") : "—" },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-gray-50 rounded-xl px-3 py-2.5">
                   <div className="text-xs text-gray-500 mb-0.5">{label}</div>
@@ -276,6 +285,38 @@ export default function AdminUsers() {
                 </div>
               ))}
             </div>
+
+            {/* ── Localisation ── */}
+            {(detail.village || detail.city || detail.region || detail.country) && (
+              <div className="mb-4">
+                <h4 className="font-semibold text-gray-700 text-sm mb-2 flex items-center gap-1.5">
+                  <span>📍</span> Localisation
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: "Village", value: detail.village },
+                    { label: "Ville", value: detail.city },
+                    { label: "Région", value: detail.region },
+                    { label: "Pays", value: detail.country },
+                  ].filter(i => i.value).map(({ label, value }) => (
+                    <div key={label} className="bg-blue-50 rounded-xl px-3 py-2.5">
+                      <div className="text-xs text-blue-500 mb-0.5">{label}</div>
+                      <div className="text-sm font-medium text-blue-900 truncate">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!(detail.village || detail.city || detail.region || detail.country) && (
+              <div className="mb-4 bg-gray-50 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                <span className="text-base">📍</span>
+                <div>
+                  <div className="text-xs text-gray-500 mb-0.5">Localisation</div>
+                  <div className="text-sm text-gray-400 italic">Non renseignée</div>
+                </div>
+              </div>
+            )}
             <h4 className="font-semibold text-gray-700 text-sm mb-2">Dernières transactions</h4>
             {detail.transactions.length === 0 ? (
               <p className="text-sm text-gray-400 py-2">Aucune transaction</p>

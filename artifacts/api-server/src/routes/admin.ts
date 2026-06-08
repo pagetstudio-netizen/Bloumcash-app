@@ -318,7 +318,7 @@ router.get("/admin/users/:id", requireAdmin, async (req, res) => {
     if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
     const u = users[0];
     const txs = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, u.id)).limit(10).orderBy(desc(transactionsTable.createdAt));
-    res.json({ id: u.id, fullName: u.fullName, email: u.email, createdAt: u.createdAt, transactions: txs });
+    res.json({ id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, operator: u.operator, status: u.status, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt, village: u.village, city: u.city, region: u.region, country: u.country, transactions: txs });
   } catch (err) { req.log.error({ err }, "Admin get user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
