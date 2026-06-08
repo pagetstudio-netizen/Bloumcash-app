@@ -577,16 +577,34 @@ router.get("/admin/notifications", requireAdmin, async (req, res) => {
 
 router.post("/admin/notifications", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl, buttonText, buttonUrl, isActive } = req.body;
-    const [row] = await db.insert(adminNotificationsTable).values({ title, message, type: type ?? "info", imageUrl: imageUrl ?? null, buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null, isActive: isActive !== false }).returning();
+    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    let imageUrl: string | null = externalImageUrl ?? null;
+    if (imageData) {
+      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
+      if (matches) {
+        const ext = matches[1]; const filename = `notif_${Date.now()}.${ext}`;
+        fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
+        imageUrl = `/uploads/${filename}`;
+      }
+    }
+    const [row] = await db.insert(adminNotificationsTable).values({ title, message, type: type ?? "info", imageUrl, buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null, isActive: isActive !== false }).returning();
     res.status(201).json(row);
   } catch (err) { req.log.error({ err }, "Create notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl, buttonText, buttonUrl, isActive } = req.body;
-    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
+    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    let imageUrl: string | undefined = externalImageUrl;
+    if (imageData) {
+      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
+      if (matches) {
+        const ext = matches[1]; const filename = `notif_${Date.now()}.${ext}`;
+        fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
+        imageUrl = `/uploads/${filename}`;
+      }
+    }
+    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl: imageUrl ?? null, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });

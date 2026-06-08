@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, Loader2, Trash2, Edit3, X, Bell, AlertCircle } from "lucide-react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { Plus, RefreshCw, Loader2, Trash2, Edit3, X, Bell, AlertCircle, Upload, Link2, ImageOff } from "lucide-react";
 import AdminLayout, { adminFetch } from "./layout";
 
 interface Notif {
@@ -30,8 +30,16 @@ function ToggleSwitch({ value, onChange }: { value: boolean; onChange: (v: boole
   );
 }
 
-const EMPTY: Omit<Notif, "id" | "createdAt"> = {
+interface ModalState extends Omit<Notif, "id" | "createdAt"> {
+  id?: number;
+  uploadMode: "file" | "url";
+  imageData: string;
+  previewSrc: string;
+}
+
+const EMPTY: ModalState = {
   title: "", message: "", type: "info", imageUrl: "", buttonText: "", buttonUrl: "", isActive: true,
+  uploadMode: "file", imageData: "", previewSrc: "",
 };
 
 export default function AdminMessages() {
@@ -39,9 +47,10 @@ export default function AdminMessages() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [modal, setModal] = useState<Partial<Notif> | null>(null);
+  const [modal, setModal] = useState<ModalState | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const isEdit = !!(modal && "id" in modal && modal.id);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const isEdit = !!(modal && modal.id);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3000); };
 
@@ -56,19 +65,44 @@ export default function AdminMessages() {
 
   useEffect(() => { load(); }, [load]);
 
+  const openCreate = () => setModal({ ...EMPTY });
+  const openEdit = (n: Notif) => setModal({
+    ...n, uploadMode: "url", imageData: "", previewSrc: n.imageUrl ?? "",
+  });
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { alert("Image trop grande (max 4 Mo)"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const data = ev.target?.result as string;
+      setModal(m => m ? { ...m, imageData: data, previewSrc: data, uploadMode: "file" } : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const save = async () => {
     if (!modal?.title || !modal?.message) { alert("Titre et message requis"); return; }
     setActionLoading(true);
     try {
-      const body = JSON.stringify({
-        title: modal.title, message: modal.message, type: modal.type, imageUrl: modal.imageUrl || null,
+      const body: Record<string, unknown> = {
+        title: modal.title, message: modal.message, type: modal.type,
         buttonText: modal.buttonText || null, buttonUrl: modal.buttonUrl || null, isActive: modal.isActive,
-      });
+      };
+      if (modal.uploadMode === "file" && modal.imageData) {
+        body.imageData = modal.imageData;
+      } else if (modal.uploadMode === "url" && modal.imageUrl) {
+        body.imageUrl = modal.imageUrl;
+      } else if (!modal.imageData && !modal.imageUrl) {
+        body.imageUrl = null;
+      }
+
       if (isEdit) {
-        await adminFetch(`/admin/notifications/${modal.id}`, { method: "PUT", body });
+        await adminFetch(`/admin/notifications/${modal.id}`, { method: "PUT", body: JSON.stringify(body) });
         showToast("Notification mise à jour");
       } else {
-        await adminFetch("/admin/notifications", { method: "POST", body });
+        await adminFetch("/admin/notifications", { method: "POST", body: JSON.stringify(body) });
         showToast("Notification créée");
       }
       setModal(null); load();
@@ -102,7 +136,7 @@ export default function AdminMessages() {
             <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={() => setModal({ ...EMPTY })} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">
+            <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700">
               <Plus className="w-3.5 h-3.5" /> Nouveau message
             </button>
           </div>
@@ -124,21 +158,30 @@ export default function AdminMessages() {
               return (
                 <div key={n.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ti.color}`}>{ti.label}</span>
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${n.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                          {n.isActive ? "Actif" : "Inactif"}
-                        </span>
-                        <span className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleDateString("fr-FR")}</span>
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {n.imageUrl ? (
+                        <img src={n.imageUrl} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-gray-100" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <ImageOff className="w-5 h-5 text-gray-300" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${ti.color}`}>{ti.label}</span>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${n.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                            {n.isActive ? "Actif" : "Inactif"}
+                          </span>
+                          <span className="text-xs text-gray-400">{new Date(n.createdAt).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                        <h3 className="font-semibold text-gray-900 mb-1">{n.title}</h3>
+                        <p className="text-sm text-gray-600 line-clamp-2">{n.message}</p>
+                        {n.buttonText && <p className="text-xs text-blue-600 mt-1">Bouton: {n.buttonText}</p>}
                       </div>
-                      <h3 className="font-semibold text-gray-900 mb-1">{n.title}</h3>
-                      <p className="text-sm text-gray-600 line-clamp-2">{n.message}</p>
-                      {n.buttonText && <p className="text-xs text-blue-600 mt-1">Bouton: {n.buttonText}</p>}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <ToggleSwitch value={n.isActive} onChange={() => toggleActive(n)} />
-                      <button onClick={() => setModal({ ...n })} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => openEdit(n)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit3 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => deleteNotif(n.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
@@ -151,23 +194,29 @@ export default function AdminMessages() {
 
       {/* Create/Edit modal */}
       {modal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-gray-900">{isEdit ? "Modifier" : "Nouveau"} message global</h3>
               <button onClick={() => setModal(null)}><X className="w-4 h-4 text-gray-400" /></button>
             </div>
             <div className="space-y-4">
+
+              {/* Titre */}
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Titre *</label>
                 <input value={modal.title ?? ""} onChange={e => setModal({ ...modal, title: e.target.value })}
                   placeholder="Titre du message" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+
+              {/* Message */}
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Message *</label>
                 <textarea value={modal.message ?? ""} onChange={e => setModal({ ...modal, message: e.target.value })}
                   rows={3} placeholder="Contenu du message" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
               </div>
+
+              {/* Type */}
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">Type</label>
                 <select value={modal.type ?? "info"} onChange={e => setModal({ ...modal, type: e.target.value })}
@@ -175,16 +224,68 @@ export default function AdminMessages() {
                   {TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
+
+              {/* Image icône */}
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">URL image (optionnel)</label>
-                <input value={modal.imageUrl ?? ""} onChange={e => setModal({ ...modal, imageUrl: e.target.value })}
-                  placeholder="https://…" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <label className="text-xs font-medium text-gray-600 mb-2 block">Icône / Image (optionnel)</label>
+                <div className="flex bg-gray-100 rounded-xl p-1 gap-1 mb-3">
+                  {(["file", "url"] as const).map(m => (
+                    <button key={m} type="button"
+                      onClick={() => setModal(prev => prev ? { ...prev, uploadMode: m } : null)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${modal.uploadMode === m ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                      {m === "file" ? <><Upload className="w-3.5 h-3.5" /> Importer</> : <><Link2 className="w-3.5 h-3.5" /> URL</>}
+                    </button>
+                  ))}
+                </div>
+
+                {modal.uploadMode === "file" ? (
+                  <div>
+                    <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+                    <div
+                      onClick={() => fileRef.current?.click()}
+                      className={`relative border-2 border-dashed rounded-2xl cursor-pointer transition-colors overflow-hidden ${modal.previewSrc ? "border-blue-300 bg-blue-50" : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"}`}
+                      style={{ minHeight: 100 }}
+                    >
+                      {modal.previewSrc ? (
+                        <div className="flex flex-col items-center py-4">
+                          <img src={modal.previewSrc} alt="Aperçu" className="w-20 h-20 object-cover rounded-2xl shadow mb-2" />
+                          <span className="text-xs text-blue-600 font-medium">Cliquer pour changer</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+                          <Upload className="w-7 h-7 text-gray-300 mb-2" />
+                          <p className="text-sm font-medium text-gray-500">Cliquez pour importer une icône</p>
+                          <p className="text-xs text-gray-400 mt-0.5">JPG, PNG, WebP — max 4 Mo</p>
+                        </div>
+                      )}
+                    </div>
+                    {modal.previewSrc && (
+                      <button type="button" onClick={() => setModal(m => m ? { ...m, imageData: "", previewSrc: "" } : null)}
+                        className="mt-1.5 text-xs text-red-500 hover:text-red-700">
+                        Supprimer l'image
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <input value={modal.imageUrl ?? ""} onChange={e => setModal({ ...modal, imageUrl: e.target.value, previewSrc: e.target.value })}
+                      placeholder="https://…" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    {modal.previewSrc && (
+                      <div className="mt-2 flex justify-center">
+                        <img src={modal.previewSrc} alt="Aperçu" className="w-20 h-20 object-cover rounded-2xl shadow border border-gray-100"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Bouton */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Texte du bouton</label>
                   <input value={modal.buttonText ?? ""} onChange={e => setModal({ ...modal, buttonText: e.target.value })}
-                    placeholder="Voir plus" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    placeholder="D'accord" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">URL du bouton</label>
@@ -192,15 +293,17 @@ export default function AdminMessages() {
                     placeholder="/dashboard" className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
+
               <div className="flex items-center gap-3">
                 <label className="text-xs font-medium text-gray-600">Activer immédiatement</label>
                 <ToggleSwitch value={modal.isActive !== false} onChange={v => setModal({ ...modal, isActive: v })} />
               </div>
             </div>
+
             <div className="flex gap-2 mt-5">
               <button onClick={() => setModal(null)} className="flex-1 py-2 bg-gray-100 rounded-xl text-sm">Annuler</button>
-              <button onClick={save} disabled={actionLoading} className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-60">
-                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (isEdit ? "Sauvegarder" : "Créer")}
+              <button onClick={save} disabled={actionLoading} className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-60 flex items-center justify-center">
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEdit ? "Sauvegarder" : "Créer")}
               </button>
             </div>
           </div>
