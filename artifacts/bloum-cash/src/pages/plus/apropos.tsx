@@ -35,8 +35,8 @@ export default function Apropos() {
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-col items-center gap-3"
         >
-          <div className="w-20 h-20 bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] rounded-3xl flex items-center justify-center shadow-lg">
-            <span className="text-white text-3xl font-black">B</span>
+          <div className="w-20 h-20 rounded-3xl overflow-hidden shadow-lg">
+            <img src="/logo-512.png" alt="Bloum Cash" className="w-full h-full object-cover" />
           </div>
           <div className="text-center">
             <h2 className="text-xl font-black text-foreground">Bloum Cash</h2>
@@ -84,35 +84,6 @@ export default function Apropos() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             Bloum Cash simplifie les paiements mobiles en Afrique de l'Ouest et Centrale en offrant une plateforme sécurisée, rapide et intuitive pour transférer de l'argent via TMoney et Moov Money.
           </p>
-        </motion.div>
-
-        {/* Avertissement */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="rounded-2xl border border-orange-200 bg-orange-50 p-4"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-4 h-4 text-orange-600" />
-            </div>
-            <h3 className="font-bold text-sm text-orange-800">⚠️ Avertissement important</h3>
-          </div>
-          <div className="space-y-3 text-[12px] text-orange-700 leading-relaxed">
-            <p>
-              <strong>Bloum Cash n'est PAS une banque</strong> ni une institution financière. Bloum Cash agit uniquement comme une société FINTECH facilitant ses services en partenariat avec des partenaires agréés et licenciés dans leurs juridictions respectives.
-            </p>
-            <p>
-              En utilisant les plateformes de Bloum Cash, vous reconnaissez que toutes les transactions financières sont fournies via des <strong>partenaires tiers autorisés</strong>.
-            </p>
-            <p>
-              <strong>ashtech Sarl</strong> est une société enregistrée légalement au Cameroun, spécialisée dans les infrastructures de paiement numérique et les solutions fintech destinées à l'Afrique de l'Ouest et Centrale.
-            </p>
-            <p>
-              Les services proposés peuvent inclure : collecte de paiements Mobile Money, envoi de paiements (Pay-out), outils marchands et solutions fintech. Toutes les opérations sont soumises aux réglementations locales applicables, aux politiques <strong>AML/CFT</strong>.
-            </p>
-          </div>
         </motion.div>
 
         {/* Support */}
