@@ -753,7 +753,23 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   instagram_url: "",
   telegram_url: "",
   tiktok_url: "",
+  whatsapp_url: "",
+  youtube_url: "",
 };
+
+/* ── Public settings (pas d'auth requise) ── */
+router.get("/public-settings", async (req, res) => {
+  try {
+    const rows = await db.select().from(adminSettingsTable).where(
+      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email')`
+    );
+    const out: Record<string, string> = {
+      facebook_url: "", whatsapp_url: "", youtube_url: "", support_phone: "", support_email: "",
+    };
+    for (const row of rows) out[row.key] = row.value;
+    res.json(out);
+  } catch { res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "" }); }
+});
 
 router.get("/admin/settings", requireAdmin, async (req, res) => {
   try {

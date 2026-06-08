@@ -22,7 +22,9 @@ const SECTIONS = [
   {
     title: "Réseaux sociaux",
     fields: [
-      { key: "facebook_url", label: "Facebook URL", type: "url" },
+      { key: "facebook_url", label: "Page Facebook URL", type: "url" },
+      { key: "whatsapp_url", label: "Chaîne WhatsApp URL", type: "url" },
+      { key: "youtube_url", label: "Chaîne YouTube URL", type: "url" },
       { key: "instagram_url", label: "Instagram URL", type: "url" },
       { key: "telegram_url", label: "Telegram URL", type: "url" },
       { key: "tiktok_url", label: "TikTok URL", type: "url" },
