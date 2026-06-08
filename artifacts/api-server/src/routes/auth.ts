@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable, blacklistTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { usersTable, blacklistTable, verificationCodesTable } from "@workspace/db";
+import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { signUserToken } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
+import { sendWelcomeEmail, sendPinResetEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -15,6 +17,12 @@ async function isBlacklisted(phone: string | null | undefined): Promise<boolean>
   return rows.length > 0;
 }
 
+/* Génère un code numérique à 6 chiffres */
+function generateCode(): string {
+  return String(Math.floor(100000 + crypto.randomInt(900000))).padStart(6, "0");
+}
+
+/* ── LOGIN ───────────────────────────────────────────────────────────────── */
 router.post("/auth/login", async (req, res) => {
   try {
     const { email, pin } = req.body;
@@ -31,28 +39,16 @@ router.post("/auth/login", async (req, res) => {
 
     const user = users[0];
 
-    /* ── Vérification statut compte ── */
     if (user.status === "banned") {
-      res.status(403).json({
-        error: "Votre compte a été désactivé pour cause d'activité suspecte. Contactez le support.",
-        code: "ACCOUNT_BANNED",
-      });
+      res.status(403).json({ error: "Votre compte a été désactivé. Contactez le support.", code: "ACCOUNT_BANNED" });
       return;
     }
     if (user.status === "suspended") {
-      res.status(403).json({
-        error: "Votre compte est temporairement suspendu. Contactez le support.",
-        code: "ACCOUNT_SUSPENDED",
-      });
+      res.status(403).json({ error: "Votre compte est temporairement suspendu. Contactez le support.", code: "ACCOUNT_SUSPENDED" });
       return;
     }
-
-    /* ── Vérification blacklist (numéro de téléphone) ── */
     if (await isBlacklisted(user.phone)) {
-      res.status(403).json({
-        error: "Escroquerie détectée. Accès refusé. Bye.",
-        code: "PHONE_BLACKLISTED",
-      });
+      res.status(403).json({ error: "Escroquerie détectée. Accès refusé.", code: "PHONE_BLACKLISTED" });
       return;
     }
 
@@ -64,35 +60,25 @@ router.post("/auth/login", async (req, res) => {
 
     const token = signUserToken({ id: user.id, email: user.email });
 
-    await db
-      .update(usersTable)
+    await db.update(usersTable)
       .set({ onesignalExternalUserId: user.email, lastLoginAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
-    sendPushNotification(
-      {
-        externalUserId: user.email,
-        title: "Bloum Cash",
-        message: `Bienvenue, ${user.fullName} ! Vous êtes maintenant connecté.`,
-        data: { type: "login" },
-      },
-      req.log
-    );
+    sendPushNotification({
+      externalUserId: user.email,
+      title: "Bloum Cash",
+      message: `Bienvenue, ${user.fullName} ! Vous êtes maintenant connecté.`,
+      data: { type: "login" },
+    }, req.log);
 
-    res.json({
-      token,
-      user: {
-        id: String(user.id),
-        fullName: user.fullName,
-        email: user.email,
-      },
-    });
+    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
   } catch (err) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
+/* ── REGISTER ────────────────────────────────────────────────────────────── */
 router.post("/auth/register", async (req, res) => {
   try {
     const { fullName, email, pin, phone } = req.body;
@@ -101,12 +87,8 @@ router.post("/auth/register", async (req, res) => {
       return;
     }
 
-    /* ── Vérification blacklist sur le numéro fourni à l'inscription ── */
     if (phone && await isBlacklisted(phone)) {
-      res.status(403).json({
-        error: "Escroquerie détectée. Inscription refusée.",
-        code: "PHONE_BLACKLISTED",
-      });
+      res.status(403).json({ error: "Escroquerie détectée. Inscription refusée.", code: "PHONE_BLACKLISTED" });
       return;
     }
 
@@ -117,38 +99,104 @@ router.post("/auth/register", async (req, res) => {
     }
 
     const hashedPin = await bcrypt.hash(String(pin), 12);
-    const [user] = await db
-      .insert(usersTable)
+    const [user] = await db.insert(usersTable)
       .values({ fullName, email, pin: hashedPin, phone: phone ?? null, onesignalExternalUserId: email })
       .returning();
+
     const token = signUserToken({ id: user.id, email: user.email });
 
-    sendPushNotification(
-      {
-        externalUserId: user.email,
-        title: "Bienvenue sur Bloum Cash 🎉",
-        message: `Bonjour ${user.fullName}, votre compte est créé. Commencez à transférer de l'argent !`,
-        data: { type: "register" },
-      },
-      req.log
-    );
+    /* Email de bienvenue (non bloquant) */
+    sendWelcomeEmail({ to: user.email, fullName: user.fullName }).catch(() => {});
 
-    res.status(201).json({
-      token,
-      user: {
-        id: String(user.id),
-        fullName: user.fullName,
-        email: user.email,
-      },
-    });
+    sendPushNotification({
+      externalUserId: user.email,
+      title: "Bienvenue sur Bloum Cash 🎉",
+      message: `Bonjour ${user.fullName}, votre compte est créé !`,
+      data: { type: "register" },
+    }, req.log);
+
+    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
   } catch (err) {
     req.log.error({ err }, "Register error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
-router.post("/auth/forgot-pin", async (_req, res) => {
-  res.json({ message: "Si cet email existe, un lien de réinitialisation a été envoyé." });
+/* ── FORGOT PIN — demande de code ────────────────────────────────────────── */
+router.post("/auth/forgot-pin", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: "Email requis" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    /* Réponse identique qu'il existe ou non (sécurité) */
+    if (!users.length) {
+      res.json({ message: "Si cet email existe, un code de réinitialisation a été envoyé." });
+      return;
+    }
+
+    const user = users[0];
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); /* 15 min */
+
+    /* Invalider les anciens codes du même type */
+    await db.delete(verificationCodesTable).where(
+      and(eq(verificationCodesTable.email, email), eq(verificationCodesTable.type, "pin_reset"))
+    );
+
+    await db.insert(verificationCodesTable).values({ email, code, type: "pin_reset", expiresAt });
+
+    sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
+      req.log.error({ e }, "Erreur envoi email reset PIN");
+    });
+
+    res.json({ message: "Si cet email existe, un code de réinitialisation a été envoyé." });
+  } catch (err) {
+    req.log.error({ err }, "Forgot PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* ── RESET PIN — vérification du code et nouveau PIN ────────────────────── */
+router.post("/auth/reset-pin", async (req, res) => {
+  try {
+    const { email, code, newPin } = req.body;
+    if (!email || !code || !newPin) {
+      res.status(400).json({ error: "Email, code et nouveau PIN requis" });
+      return;
+    }
+    if (String(newPin).length !== 6 || !/^\d{6}$/.test(String(newPin))) {
+      res.status(400).json({ error: "Le PIN doit être 6 chiffres" });
+      return;
+    }
+
+    const now = new Date();
+    const codes = await db.select().from(verificationCodesTable).where(
+      and(
+        eq(verificationCodesTable.email, email),
+        eq(verificationCodesTable.code, String(code)),
+        eq(verificationCodesTable.type, "pin_reset"),
+        gt(verificationCodesTable.expiresAt, now),
+      )
+    ).limit(1);
+
+    if (!codes.length || codes[0].usedAt) {
+      res.status(400).json({ error: "Code invalide ou expiré" });
+      return;
+    }
+
+    const hashedPin = await bcrypt.hash(String(newPin), 12);
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.email, email));
+    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
+
+    res.json({ success: true, message: "PIN réinitialisé avec succès" });
+  } catch (err) {
+    req.log.error({ err }, "Reset PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
 
 export default router;

@@ -6,8 +6,9 @@ import {
   blockedIpsTable, whitelistedIpsTable, securityEventsTable,
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
   dashboardBannersTable, promotionsTable,
+  verificationCodesTable, adminDevicesTable,
 } from "@workspace/db";
-import { eq, desc, sql, asc, count, and, gte, isNotNull } from "drizzle-orm";
+import { eq, desc, sql, asc, count, and, gte, isNotNull, gt, lt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import fs from "fs";
@@ -15,6 +16,7 @@ import path from "path";
 import { requireAdmin, signAdminToken } from "../middleware/admin-auth";
 import * as paydunya from "../lib/paydunya";
 import { sendPushNotification, isOneSignalConfigured } from "../lib/onesignal";
+import { sendAdminVerificationCode, sendMassEmail } from "../lib/email";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -22,21 +24,128 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const router: IRouter = Router();
 
 /* ─────────────────────────── AUTH ─────────────────────────── */
+
+/* Génère un device fingerprint depuis les headers */
+function deviceHash(req: import("express").Request): string {
+  const ua = req.headers["user-agent"] ?? "";
+  const lang = req.headers["accept-language"] ?? "";
+  const ip = req.ip ?? "";
+  return crypto.createHash("sha256").update(`${ua}|${lang}|${ip}`).digest("hex").slice(0, 32);
+}
+
+/* Génère un code 6 chiffres */
+function genCode(): string {
+  return String(Math.floor(100000 + crypto.randomInt(900000))).padStart(6, "0");
+}
+
+/* Étape 1 : login + vérification mot de passe → renvoie si 2FA requis */
 router.post("/admin/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      res.status(400).json({ error: "Email et mot de passe requis" });
-      return;
+      res.status(400).json({ error: "Email et mot de passe requis" }); return;
     }
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email)).limit(1);
     if (!admins.length) { res.status(401).json({ error: "Identifiants incorrects" }); return; }
     const admin = admins[0];
     const ok = await bcrypt.compare(String(password), admin.passwordHash);
     if (!ok) { res.status(401).json({ error: "Identifiants incorrects" }); return; }
+
+    const dHash = deviceHash(req);
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 3600 * 1000);
+
+    /* Vérifier si appareil connu */
+    const knownDevice = await db.select().from(adminDevicesTable).where(
+      and(eq(adminDevicesTable.adminEmail, email), eq(adminDevicesTable.deviceHash, dHash))
+    ).limit(1);
+
+    /* Vérifier dernière connexion (> 3 jours = 2FA requis) */
+    const inactiveTooLong = !admin.createdAt || admin.createdAt < threeDaysAgo;
+    /* On stocke la dernière connexion dans un setting par email */
+    const lastLoginKey = `admin_last_login_${admin.id}`;
+    const lastLoginRows = await db.select().from(adminSettingsTable)
+      .where(eq(adminSettingsTable.key, lastLoginKey)).limit(1);
+    const lastLogin = lastLoginRows[0]?.value ? new Date(lastLoginRows[0].value) : null;
+    const isInactive = !lastLogin || lastLogin < threeDaysAgo;
+
+    const isNewDevice = knownDevice.length === 0;
+    const needs2FA = isNewDevice || isInactive;
+
+    if (needs2FA) {
+      /* Générer et envoyer code */
+      const code = genCode();
+      const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); /* 10 min */
+
+      /* Supprimer anciens codes admin */
+      await db.delete(verificationCodesTable).where(
+        and(eq(verificationCodesTable.email, email), eq(verificationCodesTable.type, "admin_login"))
+      );
+      await db.insert(verificationCodesTable).values({ email, code, type: "admin_login", expiresAt });
+
+      sendAdminVerificationCode({
+        to: admin.email,
+        fullName: admin.fullName,
+        code,
+        reason: isNewDevice ? "new_device" : "inactivity",
+      }).catch((e) => req.log.error({ e }, "Erreur envoi code admin"));
+
+      res.json({ requires2FA: true, reason: isNewDevice ? "new_device" : "inactivity" });
+      return;
+    }
+
+    /* Pas de 2FA — connexion directe */
     const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    /* Mettre à jour lastLogin et device */
+    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
+      .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
+    await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
+      .onConflictDoNothing();
+
     res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
   } catch (err) { req.log.error({ err }, "Admin login error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+/* Étape 2 : vérification du code 2FA admin */
+router.post("/admin/auth/verify-2fa", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      res.status(400).json({ error: "Email et code requis" }); return;
+    }
+
+    const now = new Date();
+    const codes = await db.select().from(verificationCodesTable).where(
+      and(
+        eq(verificationCodesTable.email, email),
+        eq(verificationCodesTable.code, String(code)),
+        eq(verificationCodesTable.type, "admin_login"),
+        gt(verificationCodesTable.expiresAt, now),
+      )
+    ).limit(1);
+
+    if (!codes.length || codes[0].usedAt) {
+      res.status(400).json({ error: "Code invalide ou expiré" }); return;
+    }
+
+    const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email)).limit(1);
+    if (!admins.length) { res.status(401).json({ error: "Admin introuvable" }); return; }
+    const admin = admins[0];
+
+    /* Marquer code comme utilisé */
+    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
+
+    /* Enregistrer appareil et mise à jour lastLogin */
+    const dHash = deviceHash(req);
+    const lastLoginKey = `admin_last_login_${admin.id}`;
+    await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
+      .onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
+    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
+      .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
+
+    const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+  } catch (err) { req.log.error({ err }, "Admin 2FA verify error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 /* ─────────────────────────── STATS ─────────────────────────── */
@@ -1030,6 +1139,58 @@ router.post("/admin/notifications/push/broadcast", requireAdmin, async (req, res
     res.json({ success: true, sent, message: `Notification envoyée à ${sent} utilisateur(s).` });
   } catch (err) {
     req.log.error({ err }, "Admin push broadcast error");
+    res.status(500).json({ error: "Erreur serveur interne." });
+  }
+});
+
+/* ─────────────────────────── MASS EMAIL ─────────────────────────── */
+router.post("/admin/email/broadcast", requireAdmin, async (req, res) => {
+  try {
+    const { subject, title, body, buttonText, buttonUrl } = req.body as {
+      subject?: string; title?: string; body?: string;
+      buttonText?: string; buttonUrl?: string;
+    };
+    if (!subject?.trim() || !title?.trim() || !body?.trim()) {
+      res.status(400).json({ error: "Sujet, titre et corps de l'email sont requis." }); return;
+    }
+    if (!process.env.RESEND_API_KEY) {
+      res.status(503).json({ error: "Resend non configuré (RESEND_API_KEY manquant)." }); return;
+    }
+
+    const users = await db.select({ email: usersTable.email, fullName: usersTable.fullName })
+      .from(usersTable).where(eq(usersTable.status, "active"));
+
+    if (!users.length) {
+      res.json({ success: true, sent: 0, message: "Aucun utilisateur actif." }); return;
+    }
+
+    let sent = 0;
+    let failed = 0;
+    const CHUNK = 10; /* Resend rate limit */
+    for (let i = 0; i < users.length; i += CHUNK) {
+      const chunk = users.slice(i, i + CHUNK);
+      await Promise.all(chunk.map(async (u) => {
+        try {
+          await sendMassEmail({
+            to: u.email,
+            fullName: u.fullName,
+            subject: subject.trim(),
+            title: title.trim(),
+            body: body.trim(),
+            buttonText: buttonText?.trim(),
+            buttonUrl: buttonUrl?.trim(),
+          });
+          sent++;
+        } catch { failed++; }
+      }));
+      /* Petite pause entre les chunks pour respecter les limites Resend */
+      if (i + CHUNK < users.length) await new Promise(r => setTimeout(r, 200));
+    }
+
+    req.log.info({ sent, failed, subject }, "Admin — mass email envoyé");
+    res.json({ success: true, sent, failed, message: `Email envoyé à ${sent} utilisateur(s)${failed ? `, ${failed} échec(s)` : ""}.` });
+  } catch (err) {
+    req.log.error({ err }, "Admin mass email error");
     res.status(500).json({ error: "Erreur serveur interne." });
   }
 });

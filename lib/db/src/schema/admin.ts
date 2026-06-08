@@ -6,6 +6,7 @@ import {
   boolean,
   real,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 
 export const adminUsersTable = pgTable("admin_users", {
@@ -107,6 +108,28 @@ export const promotionsTable = pgTable("promotions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/* Codes de vérification : reset PIN utilisateur + vérif admin */
+export const verificationCodesTable = pgTable("verification_codes", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull(),
+  code: text("code").notNull(),
+  type: text("type").notNull(), /* "pin_reset" | "admin_login" */
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/* Empreintes d'appareils admin pour détection nouveau device */
+export const adminDevicesTable = pgTable("admin_devices", {
+  id: serial("id").primaryKey(),
+  adminEmail: text("admin_email").notNull(),
+  deviceHash: text("device_hash").notNull(),
+  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("admin_devices_email_hash_unique").on(table.adminEmail, table.deviceHash),
+]);
+
 export const dashboardBannersTable = pgTable("dashboard_banners", {
   id: serial("id").primaryKey(),
   title: text("title"),
@@ -120,6 +143,8 @@ export const dashboardBannersTable = pgTable("dashboard_banners", {
 
 export type DashboardBanner = typeof dashboardBannersTable.$inferSelect;
 export type AdminUser = typeof adminUsersTable.$inferSelect;
+export type VerificationCode = typeof verificationCodesTable.$inferSelect;
+export type AdminDevice = typeof adminDevicesTable.$inferSelect;
 export type AdminNotification = typeof adminNotificationsTable.$inferSelect;
 export type Blacklist = typeof blacklistTable.$inferSelect;
 export type BlockedIp = typeof blockedIpsTable.$inferSelect;
