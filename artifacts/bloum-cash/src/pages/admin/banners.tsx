@@ -147,6 +147,8 @@ export default function AdminBanners() {
       showToast(isEdit ? "Bannière modifiée !" : "Bannière ajoutée !");
       setModal(null);
       load();
+    } catch (err) {
+      alert("Erreur lors de l'envoi. L'image est peut-être trop grande.");
     } finally { setActionLoading(false); }
   };
 
