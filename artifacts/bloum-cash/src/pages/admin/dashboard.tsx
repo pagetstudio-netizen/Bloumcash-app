@@ -5,7 +5,7 @@ import {
   Clock, Ban, RefreshCw, Loader2, AlertCircle, BarChart2,
 } from "lucide-react";
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import AdminLayout, { adminFetch } from "./layout";
@@ -19,6 +19,7 @@ interface Stats {
   commissions: { today: number; total: number; rate: number };
   pending: { count: number };
   blacklist: { count: number };
+  since: string | null;
 }
 
 interface ChartPoint {
@@ -31,8 +32,15 @@ interface ChartPoint {
   newUsers: number;
 }
 
-function StatCard({ icon: Icon, label, value, sub, color, delay = 0 }: {
-  icon: React.ElementType; label: string; value: string; sub?: string; color: string; delay?: number;
+/* ── Carte de statistique ────────────────────────────────────────────────── */
+function StatCard({ icon: Icon, label, value, sub, bg, ic, delay = 0 }: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  sub?: string;
+  bg: string;
+  ic: string;
+  delay?: number;
 }) {
   return (
     <motion.div
@@ -40,8 +48,8 @@ function StatCard({ icon: Icon, label, value, sub, color, delay = 0 }: {
       transition={{ delay }}
       className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm"
     >
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color} mb-3`}>
-        <Icon className="w-5 h-5" />
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bg} mb-3`}>
+        <Icon className={`w-5 h-5 ${ic}`} />
       </div>
       <div className="text-2xl font-bold text-gray-900 mb-0.5">{value}</div>
       <div className="text-sm text-gray-500">{label}</div>
@@ -56,6 +64,11 @@ const CHART_PERIODS = [
   { label: "7 jours", value: 7 },
   { label: "30 jours", value: 30 },
 ];
+
+function fmtSince(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -88,18 +101,27 @@ export default function AdminDashboard() {
   useEffect(() => { loadChart(period); }, [loadChart, period]);
 
   const handleReset = async () => {
-    if (!confirm("Réinitialiser les compteurs ? Cette action est enregistrée.")) return;
+    const ok = confirm(
+      "Réinitialiser les statistiques ?\n\n" +
+      "Les compteurs seront remis à zéro à partir d'aujourd'hui.\n" +
+      "⚠️ Aucune donnée utilisateur ni transaction n'est supprimée.\n" +
+      "Les noms, comptes et historiques restent intacts."
+    );
+    if (!ok) return;
     setResetting(true);
     try {
-      await adminFetch("/admin/reset", { method: "POST" });
-      alert("Réinitialisation effectuée.");
+      const r = await adminFetch("/admin/reset", { method: "POST" });
+      if (r.ok) {
+        await load();
+        await loadChart(period);
+      }
     } finally { setResetting(false); }
   };
 
-  const totalDeposits = chart.reduce((s, d) => s + d.deposits, 0);
+  const totalDeposits    = chart.reduce((s, d) => s + d.deposits, 0);
   const totalWithdrawals = chart.reduce((s, d) => s + d.withdrawals, 0);
   const totalCommissions = chart.reduce((s, d) => s + d.commissions, 0);
-  const totalTx = chart.reduce((s, d) => s + d.transactions, 0);
+  const totalTx          = chart.reduce((s, d) => s + d.transactions, 0);
 
   return (
     <AdminLayout title="Tableau de bord">
@@ -107,15 +129,31 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Vue d'ensemble</h2>
-            <p className="text-sm text-gray-400">Activité de la plateforme Bloum Cash</p>
+            {stats?.since ? (
+              <p className="text-xs text-blue-600 font-medium mt-0.5">
+                Depuis la réinitialisation du {fmtSince(stats.since)}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400">Activité totale de la plateforme</p>
+            )}
           </div>
           <div className="flex gap-2">
-            <button onClick={load} disabled={loading} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50">
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Actualiser
+            <button
+              onClick={load}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+              Actualiser
             </button>
-            <button onClick={handleReset} disabled={resetting} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-50">
+            <button
+              onClick={handleReset}
+              disabled={resetting}
+              title="Remet les compteurs à zéro depuis aujourd'hui — aucune donnée supprimée"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-red-50 text-red-600 border border-red-200 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-50"
+            >
               {resetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Reset
+              Réinitialiser stats
             </button>
           </div>
         </div>
@@ -133,16 +171,16 @@ export default function AdminDashboard() {
         ) : stats ? (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard icon={Users} label="Utilisateurs" value={String(stats.users.total)} sub="inscrits" color="bg-blue-50 text-blue-600" delay={0} />
-              <StatCard icon={ArrowLeftRight} label="Transactions" value={String(stats.transactions.count)} sub="au total" color="bg-purple-50 text-purple-600" delay={0.05} />
-              <StatCard icon={TrendingUp} label="Total dépôts" value={formatAmount(stats.deposits.total)} color="bg-green-50 text-green-600" delay={0.1} />
-              <StatCard icon={TrendingDown} label="Total retraits" value={formatAmount(stats.withdrawals.total)} color="bg-orange-50 text-orange-600" delay={0.15} />
+              <StatCard icon={Users}         label="Utilisateurs"    value={String(stats.users.total)}                    sub="inscrits"   bg="bg-blue-50"   ic="text-blue-600"   delay={0}    />
+              <StatCard icon={ArrowLeftRight} label="Transactions"    value={String(stats.transactions.count)}             sub="au total"   bg="bg-purple-50" ic="text-purple-600" delay={0.05} />
+              <StatCard icon={TrendingUp}     label="Volume entrant"  value={formatAmount(stats.deposits.total)}                            bg="bg-green-50"  ic="text-green-600"  delay={0.1}  />
+              <StatCard icon={TrendingDown}   label="Volume sortant"  value={formatAmount(stats.withdrawals.total)}                         bg="bg-orange-50" ic="text-orange-600" delay={0.15} />
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <StatCard icon={DollarSign} label="Commissions aujourd'hui" value={formatAmount(stats.commissions.today)} sub={`Taux : ${stats.commissions.rate}%`} color="bg-yellow-50 text-yellow-600" delay={0.2} />
-              <StatCard icon={DollarSign} label="Commissions totales" value={formatAmount(stats.commissions.total)} color="bg-yellow-50 text-yellow-600" delay={0.25} />
-              <StatCard icon={Clock} label="En attente" value={String(stats.pending.count)} sub="transactions" color="bg-gray-50 text-gray-600" delay={0.3} />
+              <StatCard icon={DollarSign} label="Commissions aujourd'hui" value={formatAmount(stats.commissions.today)} sub={`Taux : ${stats.commissions.rate}%`} bg="bg-yellow-50" ic="text-yellow-600" delay={0.2} />
+              <StatCard icon={DollarSign} label="Commissions totales"     value={formatAmount(stats.commissions.total)}                                            bg="bg-yellow-50" ic="text-yellow-600" delay={0.25} />
+              <StatCard icon={Clock}      label="En attente"               value={String(stats.pending.count)}             sub="transactions"                       bg="bg-gray-50"   ic="text-gray-600"   delay={0.3} />
             </div>
           </>
         ) : null}
@@ -154,7 +192,7 @@ export default function AdminDashboard() {
               <BarChart2 className="w-5 h-5 text-blue-600" />
               <h3 className="font-semibold text-gray-800">Activité de la plateforme</h3>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
                 {(["volume", "txCount", "users"] as const).map(c => (
                   <button key={c} onClick={() => setActiveChart(c)}
@@ -174,13 +212,13 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Summary mini-stats */}
+          {/* Mini-stats période */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             {[
-              { label: "Transactions", value: String(totalTx), color: "text-purple-600" },
-              { label: "Dépôts", value: fmtK(totalDeposits) + " FCFA", color: "text-green-600" },
-              { label: "Retraits", value: fmtK(totalWithdrawals) + " FCFA", color: "text-orange-600" },
-              { label: "Commissions", value: fmtK(totalCommissions) + " FCFA", color: "text-yellow-600" },
+              { label: "Transactions",  value: String(totalTx),                        color: "text-purple-600" },
+              { label: "Vol. entrant",  value: fmtK(totalDeposits) + " FCFA",          color: "text-green-600" },
+              { label: "Vol. sortant",  value: fmtK(totalWithdrawals) + " FCFA",       color: "text-orange-600" },
+              { label: "Commissions",   value: fmtK(totalCommissions) + " FCFA",       color: "text-yellow-600" },
             ].map(s => (
               <div key={s.label} className="bg-gray-50 rounded-xl px-4 py-3">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
@@ -209,8 +247,8 @@ export default function AdminDashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={false} tickFormatter={fmtK} width={56} />
-                <Tooltip formatter={(v: number, name: string) => [formatAmount(v), name === "deposits" ? "Dépôts" : "Retraits"]} labelStyle={{ color: "#1e293b", fontWeight: 600 }} contentStyle={{ borderRadius: 12, border: "1px solid #f1f5f9", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
-                <Legend formatter={v => v === "deposits" ? "Dépôts" : "Retraits"} wrapperStyle={{ fontSize: 12 }} />
+                <Tooltip formatter={(v: number, name: string) => [formatAmount(v), name === "deposits" ? "Vol. entrant" : "Vol. sortant"]} labelStyle={{ color: "#1e293b", fontWeight: 600 }} contentStyle={{ borderRadius: 12, border: "1px solid #f1f5f9", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
+                <Legend formatter={v => v === "deposits" ? "Vol. entrant" : "Vol. sortant"} wrapperStyle={{ fontSize: 12 }} />
                 <Area type="monotone" dataKey="deposits" stroke="#22c55e" strokeWidth={2} fill="url(#gDeposit)" dot={false} />
                 <Area type="monotone" dataKey="withdrawals" stroke="#f97316" strokeWidth={2} fill="url(#gWithdraw)" dot={false} />
               </AreaChart>
@@ -238,17 +276,17 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* Financial summary */}
+        {/* ── Résumé financier & Sécurité ── */}
         {stats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
               <h3 className="font-semibold text-gray-800 mb-4">Résumé financier</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Volume total traité", value: formatAmount(stats.transactions.totalAmount), color: "text-gray-900" },
-                  { label: "Total dépôts", value: formatAmount(stats.deposits.total), color: "text-green-600" },
-                  { label: "Total retraits", value: formatAmount(stats.withdrawals.total), color: "text-orange-600" },
-                  { label: "Total commissions", value: formatAmount(stats.commissions.total), color: "text-blue-600" },
+                  { label: "Volume total traité",  value: formatAmount(stats.transactions.totalAmount), color: "text-gray-900" },
+                  { label: "Volume entrant (reçu)", value: formatAmount(stats.deposits.total),          color: "text-green-600" },
+                  { label: "Volume sortant (envoyé)", value: formatAmount(stats.withdrawals.total),     color: "text-orange-600" },
+                  { label: "Total commissions",    value: formatAmount(stats.commissions.total),        color: "text-blue-600" },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <span className="text-sm text-gray-600">{label}</span>
@@ -261,10 +299,10 @@ export default function AdminDashboard() {
               <h3 className="font-semibold text-gray-800 mb-4">Sécurité & Statut</h3>
               <div className="space-y-3">
                 {[
-                  { label: "Statut plateforme", value: "Opérationnelle", dot: "bg-green-400" },
-                  { label: "Numéros blacklistés", value: String(stats.blacklist.count), dot: "bg-red-400" },
-                  { label: "Transactions en attente", value: String(stats.pending.count), dot: "bg-yellow-400" },
-                  { label: "Taux de commission", value: `${stats.commissions.rate}%`, dot: "bg-blue-400" },
+                  { label: "Statut plateforme",          value: "Opérationnelle",              dot: "bg-green-400" },
+                  { label: "Numéros blacklistés",        value: String(stats.blacklist.count), dot: "bg-red-400" },
+                  { label: "Transactions en attente",    value: String(stats.pending.count),   dot: "bg-yellow-400" },
+                  { label: "Taux de commission",         value: `${stats.commissions.rate}%`,  dot: "bg-blue-400" },
                 ].map(({ label, value, dot }) => (
                   <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="flex items-center gap-2">

@@ -42,23 +42,39 @@ router.post("/admin/auth/login", async (req, res) => {
 /* ─────────────────────────── STATS ─────────────────────────── */
 router.get("/admin/stats", requireAdmin, async (req, res) => {
   try {
+    // Charger last_reset et taux de commission depuis les paramètres
+    const settingRows = await db.select().from(adminSettingsTable).where(
+      sql`key IN ('last_reset', 'fee_deposit_percent')`
+    );
+    const resetSetting = settingRows.find(s => s.key === "last_reset");
+    const rateSetting  = settingRows.find(s => s.key === "fee_deposit_percent");
+    const lastReset    = resetSetting?.value ? new Date(resetSetting.value) : null;
+    const commRate     = rateSetting?.value  ? parseFloat(rateSetting.value) : 3.5;
+
+    // Filtre depuis last_reset (ou depuis toujours si pas encore réinitialisé)
+    const sinceFilter = lastReset ? gte(transactionsTable.createdAt, lastReset) : undefined;
+    const withSince = (...extras: (ReturnType<typeof eq> | undefined)[]) => {
+      const all = [sinceFilter, ...extras].filter(Boolean) as ReturnType<typeof eq>[];
+      return all.length === 0 ? undefined : all.length === 1 ? all[0] : and(...all as [ReturnType<typeof eq>, ReturnType<typeof eq>]);
+    };
+
     const [userStats] = await db.select({ total: count() }).from(usersTable);
     const [txStats] = await db.select({
       total: count(),
       totalAmount: sql<number>`COALESCE(SUM(amount),0)`,
       totalFees: sql<number>`COALESCE(SUM(fees),0)`,
-    }).from(transactionsTable);
+    }).from(transactionsTable).where(withSince());
     const [deposits] = await db.select({
       total: sql<number>`COALESCE(SUM(amount),0)`,
-    }).from(transactionsTable).where(eq(transactionsTable.type, "incoming"));
+    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "incoming")));
     const [withdraws] = await db.select({
       total: sql<number>`COALESCE(SUM(amount),0)`,
-    }).from(transactionsTable).where(eq(transactionsTable.type, "outgoing"));
+    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "outgoing")));
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const [todayFees] = await db.select({
       total: sql<number>`COALESCE(SUM(fees),0)`,
     }).from(transactionsTable).where(
-      and(eq(transactionsTable.status, "success"), sql`created_at >= ${today.toISOString()}`)
+      and(eq(transactionsTable.status, "success"), gte(transactionsTable.createdAt, today))
     );
     const [pendingCount] = await db.select({ total: count() }).from(transactionsTable).where(eq(transactionsTable.status, "pending"));
     const [blacklistCount] = await db.select({ total: count() }).from(blacklistTable);
@@ -67,9 +83,10 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
       transactions: { count: txStats.total, totalAmount: Number(txStats.totalAmount) },
       deposits: { total: Number(deposits.total) },
       withdrawals: { total: Number(withdraws.total) },
-      commissions: { today: Number(todayFees.total), total: Number(txStats.totalFees), rate: 3.5 },
+      commissions: { today: Number(todayFees.total), total: Number(txStats.totalFees), rate: commRate },
       pending: { count: pendingCount.total },
       blacklist: { count: blacklistCount.total },
+      since: lastReset ? lastReset.toISOString() : null,
     });
   } catch (err) { req.log.error({ err }, "Admin stats error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
