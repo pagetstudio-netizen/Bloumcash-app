@@ -199,4 +199,54 @@ router.post("/auth/reset-pin", async (req, res) => {
   }
 });
 
+/* ── CHANGE PIN — authentifié, ancien PIN requis ─────────────────────────── */
+router.post("/auth/change-pin", async (req, res) => {
+  try {
+    const { token, currentPin, newPin } = req.body;
+    if (!token || !currentPin || !newPin) {
+      res.status(400).json({ error: "Token, PIN actuel et nouveau PIN requis" });
+      return;
+    }
+    if (String(newPin).length !== 6 || !/^\d{6}$/.test(String(newPin))) {
+      res.status(400).json({ error: "Le nouveau PIN doit être 6 chiffres" });
+      return;
+    }
+
+    const { verifyUserToken } = await import("../middleware/user-auth");
+    let payload: { id: number; email: string };
+    try {
+      payload = verifyUserToken(String(token));
+    } catch {
+      res.status(401).json({ error: "Token invalide ou expiré" });
+      return;
+    }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, payload.id)).limit(1);
+    if (!users.length) {
+      res.status(404).json({ error: "Utilisateur introuvable" });
+      return;
+    }
+
+    const user = users[0];
+    const pinMatches = await bcrypt.compare(String(currentPin), user.pin);
+    if (!pinMatches) {
+      res.status(401).json({ error: "PIN actuel incorrect" });
+      return;
+    }
+
+    if (String(currentPin) === String(newPin)) {
+      res.status(400).json({ error: "Le nouveau PIN doit être différent de l'ancien" });
+      return;
+    }
+
+    const hashedPin = await bcrypt.hash(String(newPin), 12);
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
+
+    res.json({ success: true, message: "PIN modifié avec succès" });
+  } catch (err) {
+    req.log.error({ err }, "Change PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 export default router;

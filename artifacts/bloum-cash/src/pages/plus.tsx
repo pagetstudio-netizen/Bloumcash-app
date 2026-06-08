@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, MessageCircleQuestion, 
-  Phone, Settings, FileText, Shield, Info, LogOut, ChevronRight 
+  Phone, KeyRound, FileText, Shield, Info, LogOut, ChevronRight 
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -27,7 +27,7 @@ export default function Plus() {
     {
       title: "Préférences & Légal",
       items: [
-        { icon: <Settings className="w-5 h-5" />, label: "Paramètres", href: "/plus/parametres" },
+        { icon: <KeyRound className="w-5 h-5" />, label: "Modifier mot de passe", href: "/plus/modifier-pin" },
         { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions" },
         { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite" },
         { icon: <Info className="w-5 h-5" />, label: "À propos de Bloum Cash", href: "/plus/apropos" },

@@ -29,6 +29,7 @@ import Aide from "@/pages/plus/aide";
 import Faq from "@/pages/plus/faq";
 import SupportWhatsApp from "@/pages/plus/whatsapp";
 import Parametres from "@/pages/plus/parametres";
+import ModifierPin from "@/pages/plus/modifier-pin";
 import Conditions from "@/pages/plus/conditions";
 import Confidentialite from "@/pages/plus/confidentialite";
 import Apropos from "@/pages/plus/apropos";
@@ -138,6 +139,7 @@ function Router() {
         <Route path="/plus/faq" component={Faq} />
         <Route path="/plus/whatsapp" component={SupportWhatsApp} />
         <Route path="/plus/parametres" component={Parametres} />
+        <Route path="/plus/modifier-pin" component={ModifierPin} />
         <Route path="/plus/conditions" component={Conditions} />
         <Route path="/plus/confidentialite" component={Confidentialite} />
         <Route path="/plus/apropos" component={Apropos} />
