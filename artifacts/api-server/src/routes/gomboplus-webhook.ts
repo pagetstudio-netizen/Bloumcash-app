@@ -28,10 +28,11 @@ import { eq, and } from "drizzle-orm";
 import * as gomboplus from "../lib/gomboplus";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
+import { requireWebhookSecret } from "../middleware/webhook-auth";
 
 const router: IRouter = Router();
 
-router.post("/gomboplus/webhook", async (req, res) => {
+router.post("/gomboplus/webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "GomboPlus webhook reçu");

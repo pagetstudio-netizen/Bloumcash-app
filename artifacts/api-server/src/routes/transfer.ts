@@ -5,7 +5,7 @@ import { eq, and, ilike } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import * as gomboplus from "../lib/gomboplus";
-import { extractUser } from "../middleware/user-auth";
+import { extractUser, requireUser } from "../middleware/user-auth";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
@@ -59,7 +59,7 @@ async function calculateFees(_fromOperator: string, _toOperator: string, amount:
   return Math.ceil(amount * rate);
 }
 
-router.post("/transfer/fees", async (req, res) => {
+router.post("/transfer/fees", requireUser, async (req, res) => {
   try {
     const { fromOperator, toOperator, amount } = req.body;
     if (!fromOperator || !toOperator || !amount) {
@@ -76,7 +76,7 @@ router.post("/transfer/fees", async (req, res) => {
   }
 });
 
-router.post("/transfer", async (req, res) => {
+router.post("/transfer", requireUser, async (req, res) => {
   try {
     const {
       fromOperator,
@@ -319,7 +319,7 @@ router.post("/transfer", async (req, res) => {
  * Polling endpoint — vérifie le statut d'une transaction via la gateway correspondante.
  * Détecte automatiquement PayDunya vs GomboPlus à partir du préfixe du token stocké.
  */
-router.get("/transfer/:reference/status", async (req, res) => {
+router.get("/transfer/:reference/status", requireUser, async (req, res) => {
   try {
     const rows = await db
       .select()

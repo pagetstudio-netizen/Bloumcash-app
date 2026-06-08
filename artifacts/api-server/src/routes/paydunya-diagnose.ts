@@ -10,10 +10,11 @@
 
 import { Router, type IRouter } from "express";
 import * as paydunya from "../lib/paydunya";
+import { requireAdmin } from "../middleware/admin-auth";
 
 const router: IRouter = Router();
 
-router.get("/paydunya/diagnose", async (req, res) => {
+router.get("/paydunya/diagnose", requireAdmin, async (req, res) => {
   const report: {
     timestamp: string;
     steps: Array<{

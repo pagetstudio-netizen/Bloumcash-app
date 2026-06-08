@@ -6,6 +6,7 @@ import * as paydunya from "../lib/paydunya";
 import type { DisburseStatus } from "../lib/paydunya";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
+import { requireWebhookSecret } from "../middleware/webhook-auth";
 
 const router: IRouter = Router();
 
@@ -18,7 +19,7 @@ const router: IRouter = Router();
  *  - "completed" → déclencher le payout UNIQUEMENT si payoutSent=false (atomique)
  *  - "cancelled"/"failed" → marquer la transaction échouée, JAMAIS de payout
  */
-router.post("/paydunya/webhook", async (req, res) => {
+router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya webhook reçu");
@@ -236,7 +237,7 @@ router.post("/paydunya/webhook", async (req, res) => {
  * POST /api/paydunya/disburse-webhook
  * Appelé par PayDunya quand le statut d'un déboursement change.
  */
-router.post("/paydunya/disburse-webhook", async (req, res) => {
+router.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya disburse webhook reçu");

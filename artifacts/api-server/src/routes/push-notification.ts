@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { requireAdmin } from "../middleware/admin-auth";
 
 const router: IRouter = Router();
 
@@ -6,7 +7,7 @@ const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID ?? "";
 const ONESIGNAL_API_KEY = process.env.ONESIGNAL_API_KEY ?? "";
 const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
-router.post("/send-push-notification", async (req, res) => {
+router.post("/send-push-notification", requireAdmin, async (req, res) => {
   try {
     const { userEmail, title, message } = req.body as {
       userEmail?: string;

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
+import { requireUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -12,7 +13,7 @@ function generateRef(): string {
   return "QR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 }
 
-router.post("/qr/generate", async (req, res) => {
+router.post("/qr/generate", requireUser, async (req, res) => {
   try {
     const { businessName, phone, operator, amount, description } = req.body;
     if (!businessName || !phone || !operator || !amount) {
@@ -83,7 +84,7 @@ router.get("/qr/:reference", async (req, res) => {
   }
 });
 
-router.post("/qr/:reference/pay", async (req, res) => {
+router.post("/qr/:reference/pay", requireUser, async (req, res) => {
   try {
     const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
 
