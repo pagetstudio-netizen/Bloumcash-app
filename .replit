@@ -99,3 +99,4 @@ ADMIN_JWT_SECRET = "03172ad1a0243e5645f469dcb6cc212f92ad6a1f74f2312365a23a77c60d
 USER_JWT_SECRET = "5773e5791f4447fad51d212aaecea702d127ac19a227bd2c4e99a71e8ac7ad0e"
 ONESIGNAL_API_KEY = "os_v2_app_vyxndonvire6tkbfhdkbeawvrxsjemvl2pwe3ovi2w2oappzt2xdhvuzbeeqd7ekpdhwn55xcao6pkyi2zrmwrmuhfv26ethpgtvjdq"
 ONESIGNAL_APP_ID = "ae2ed1b9-b544-49e9-a825-38d41202d58d"
+PORT = "3001"
