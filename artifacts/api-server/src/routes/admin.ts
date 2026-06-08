@@ -5,7 +5,7 @@ import {
   adminUsersTable, adminNotificationsTable, blacklistTable,
   blockedIpsTable, whitelistedIpsTable, securityEventsTable,
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
-  dashboardBannersTable,
+  dashboardBannersTable, promotionsTable,
 } from "@workspace/db";
 import { eq, desc, sql, asc, count, and, gte, isNotNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -648,6 +648,18 @@ router.post("/admin/broadcast/email", requireAdmin, async (req, res) => {
 
 /* ─────────────────────────── DASHBOARD BANNERS ─────────────────────────── */
 
+/* ── Public: promotions actives pour les utilisateurs ── */
+router.get("/promotions", async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(promotionsTable)
+      .where(eq(promotionsTable.isActive, true))
+      .orderBy(asc(promotionsTable.sortOrder), asc(promotionsTable.createdAt));
+    res.json(rows);
+  } catch (err) { res.json([]); }
+});
+
 /* Public endpoint — active banners for user dashboard */
 router.get("/banners", async (req, res) => {
   try {
@@ -832,6 +844,65 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
       code:  isPdu ? (err as paydunya.PaydunyaError).code : "SERVER_ERROR",
     });
   }
+});
+
+/* ─────────────────────────── PROMOTIONS ─────────────────────────── */
+
+router.get("/admin/promotions", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db.select().from(promotionsTable).orderBy(asc(promotionsTable.sortOrder), asc(promotionsTable.createdAt));
+    res.json(rows);
+  } catch (err) { req.log.error({ err }, "List promotions error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/promotions", requireAdmin, async (req, res) => {
+  try {
+    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
+    if (!title?.trim() || !description?.trim()) { res.status(400).json({ error: "Titre et description requis" }); return; }
+    const [row] = await db.insert(promotionsTable).values({
+      icon: icon?.trim() || "🎁",
+      title: title.trim(),
+      description: description.trim(),
+      badge: badge || "active",
+      color: color || "#1a3fc4",
+      bgColor: bgColor || "#eff2ff",
+      isActive: isActive !== false,
+      sortOrder: parseInt(String(sortOrder)) || 0,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (err) { req.log.error({ err }, "Create promotion error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.put("/admin/promotions/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const existing = await db.select().from(promotionsTable).where(eq(promotionsTable.id, id)).limit(1);
+    if (!existing.length) { res.status(404).json({ error: "Promotion introuvable" }); return; }
+    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
+    const updates: Partial<typeof promotionsTable.$inferInsert> = {};
+    if (icon !== undefined) updates.icon = icon;
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (badge !== undefined) updates.badge = badge;
+    if (color !== undefined) updates.color = color;
+    if (bgColor !== undefined) updates.bgColor = bgColor;
+    if (isActive !== undefined) updates.isActive = isActive;
+    if (sortOrder !== undefined) updates.sortOrder = parseInt(String(sortOrder)) || 0;
+    if (expiresAt !== undefined) updates.expiresAt = expiresAt ? new Date(expiresAt) : null;
+    const [updated] = await db.update(promotionsTable).set(updates).where(eq(promotionsTable.id, id)).returning();
+    res.json(updated);
+  } catch (err) { req.log.error({ err }, "Update promotion error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.delete("/admin/promotions/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const existing = await db.select().from(promotionsTable).where(eq(promotionsTable.id, id)).limit(1);
+    if (!existing.length) { res.status(404).json({ error: "Promotion introuvable" }); return; }
+    await db.delete(promotionsTable).where(eq(promotionsTable.id, id));
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Delete promotion error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 /* ─────────────────────────── ADMIN USERS (CRUD) ─────────────────────────── */

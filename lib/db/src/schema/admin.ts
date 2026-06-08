@@ -93,6 +93,20 @@ export const operatorsConfigTable = pgTable("operators_config", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const promotionsTable = pgTable("promotions", {
+  id: serial("id").primaryKey(),
+  icon: text("icon").notNull().default("🎁"),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  badge: text("badge").notNull().default("active"),
+  color: text("color").notNull().default("#1a3fc4"),
+  bgColor: text("bg_color").notNull().default("#eff2ff"),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const dashboardBannersTable = pgTable("dashboard_banners", {
   id: serial("id").primaryKey(),
   title: text("title"),

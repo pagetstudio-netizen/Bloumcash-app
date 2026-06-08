@@ -53,6 +53,7 @@ import AdminBlacklist from "@/pages/admin/blacklist";
 import AdminSecurity from "@/pages/admin/security";
 import AdminSettings from "@/pages/admin/settings";
 import AdminAdmins from "@/pages/admin/admins";
+import AdminPromotions from "@/pages/admin/promotions";
 
 setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
 
@@ -110,6 +111,7 @@ function Router() {
         <Route path="/admin/blacklist" component={AdminBlacklist} />
         <Route path="/admin/security" component={AdminSecurity} />
         <Route path="/admin/admins" component={AdminAdmins} />
+        <Route path="/admin/promotions" component={AdminPromotions} />
         <Route path="/admin/settings" component={AdminSettings} />
         <Route path="/admin" component={AdminDashboard} />
 
