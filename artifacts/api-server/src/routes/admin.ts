@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
 import {
   usersTable, transactionsTable,
@@ -23,6 +24,48 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const router: IRouter = Router();
 
+/* ── Rate limiters admin ── */
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives. Réessayez dans 15 minutes." },
+  skipSuccessfulRequests: true,
+});
+
+const admin2FALimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives de vérification. Réessayez dans 10 minutes." },
+});
+
+/* ── Extensions d'image autorisées pour les uploads ── */
+const ALLOWED_IMG_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp"]);
+
+function saveUploadedImage(imageData: string, prefix: string): string | null {
+  const matches = imageData.match(/^data:image\/(\w+);base64,(.+)$/s);
+  if (!matches) return null;
+  const ext = matches[1].toLowerCase();
+  if (!ALLOWED_IMG_EXTS.has(ext)) return null;
+  const base64 = matches[2];
+  if (base64.length > 8_000_000) return null; // ~6 Mo max
+  const safeExt = ext === "jpeg" ? "jpg" : ext;
+  const filename = `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${safeExt}`;
+  fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(base64, "base64"));
+  return `/uploads/${filename}`;
+}
+
+/* ── Clés de settings autorisées (whitelist) ── */
+const ALLOWED_SETTING_KEYS = new Set([
+  "platform_name", "support_email", "support_phone",
+  "fee_deposit_percent", "fee_withdraw_percent", "fee_exchange_percent",
+  "maintenance_mode", "withdrawals_enabled",
+  "facebook_url", "instagram_url", "telegram_url", "tiktok_url", "whatsapp_url", "youtube_url",
+]);
+
 /* ─────────────────────────── AUTH ─────────────────────────── */
 
 /* Génère un device fingerprint depuis les headers */
@@ -39,7 +82,7 @@ function genCode(): string {
 }
 
 /* Étape 1 : login + vérification mot de passe → renvoie si 2FA requis */
-router.post("/admin/auth/login", async (req, res) => {
+router.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -127,7 +170,7 @@ router.post("/admin/auth/login", async (req, res) => {
 });
 
 /* Étape 2 : vérification du code 2FA admin */
-router.post("/admin/auth/verify-2fa", async (req, res) => {
+router.post("/admin/auth/verify-2fa", admin2FALimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
@@ -580,12 +623,9 @@ router.post("/admin/notifications", requireAdmin, async (req, res) => {
     const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl: string | null = externalImageUrl ?? null;
     if (imageData) {
-      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
-      if (matches) {
-        const ext = matches[1]; const filename = `notif_${Date.now()}.${ext}`;
-        fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
-        imageUrl = `/uploads/${filename}`;
-      }
+      const saved = saveUploadedImage(String(imageData), "notif");
+      if (!saved) { res.status(400).json({ error: "Format d'image invalide ou non autorisé (jpg, png, webp, gif uniquement)" }); return; }
+      imageUrl = saved;
     }
     const [row] = await db.insert(adminNotificationsTable).values({ title, message, type: type ?? "info", imageUrl, buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null, isActive: isActive !== false }).returning();
     res.status(201).json(row);
@@ -597,12 +637,9 @@ router.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
     const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl: string | undefined = externalImageUrl;
     if (imageData) {
-      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
-      if (matches) {
-        const ext = matches[1]; const filename = `notif_${Date.now()}.${ext}`;
-        fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
-        imageUrl = `/uploads/${filename}`;
-      }
+      const saved = saveUploadedImage(String(imageData), "notif");
+      if (!saved) { res.status(400).json({ error: "Format d'image invalide ou non autorisé (jpg, png, webp, gif uniquement)" }); return; }
+      imageUrl = saved;
     }
     await db.update(adminNotificationsTable).set({ title, message, type, imageUrl: imageUrl ?? null, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
@@ -783,14 +820,18 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
 router.put("/admin/settings", requireAdmin, async (req, res) => {
   try {
     const updates = req.body as Record<string, string>;
+    const rejected: string[] = [];
     for (const [key, value] of Object.entries(updates)) {
+      if (!ALLOWED_SETTING_KEYS.has(key)) { rejected.push(key); continue; }
+      const safeValue = String(value).trim().slice(0, 2048);
       const existing = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, key)).limit(1);
       if (existing.length) {
-        await db.update(adminSettingsTable).set({ value: String(value), updatedAt: new Date() }).where(eq(adminSettingsTable.key, key));
+        await db.update(adminSettingsTable).set({ value: safeValue, updatedAt: new Date() }).where(eq(adminSettingsTable.key, key));
       } else {
-        await db.insert(adminSettingsTable).values({ key, value: String(value) });
+        await db.insert(adminSettingsTable).values({ key, value: safeValue });
       }
     }
+    if (rejected.length) req.log.warn({ rejected }, "Settings PUT — clés inconnues rejetées");
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Settings update error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -847,13 +888,9 @@ router.post("/admin/banners", requireAdmin, async (req, res) => {
     let imageUrl: string;
 
     if (imageData) {
-      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
-      if (!matches) { res.status(400).json({ error: "Format d'image invalide" }); return; }
-      const ext = matches[1].toLowerCase().replace("jpeg", "jpg");
-      if (matches[2].length > 8_000_000) { res.status(413).json({ error: "Image trop grande (max 6 Mo)" }); return; }
-      const filename = `banner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
-      imageUrl = `/uploads/${filename}`;
+      const saved = saveUploadedImage(String(imageData), "banner");
+      if (!saved) { res.status(400).json({ error: "Format d'image invalide ou non autorisé (jpg, png, webp, gif — max 6 Mo)" }); return; }
+      imageUrl = saved;
     } else if (externalUrl) {
       imageUrl = externalUrl;
     } else {
@@ -879,15 +916,8 @@ router.put("/admin/banners/:id", requireAdmin, async (req, res) => {
     if (title !== undefined) updates.title = title || null;
 
     if (imageData) {
-      const matches = (imageData as string).match(/^data:image\/(\w+);base64,(.+)$/s);
-      if (matches) {
-        const ext = matches[1].toLowerCase().replace("jpeg", "jpg");
-        if (matches[2].length <= 8_000_000) {
-          const filename = `banner_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`;
-          fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(matches[2], "base64"));
-          updates.imageUrl = `/uploads/${filename}`;
-        }
-      }
+      const saved = saveUploadedImage(String(imageData), "banner");
+      if (saved) updates.imageUrl = saved;
     } else if (externalUrl) {
       updates.imageUrl = externalUrl;
     }

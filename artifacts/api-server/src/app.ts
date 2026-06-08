@@ -6,7 +6,6 @@ import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-// Chemin stable quelle que soit le cwd — on se base sur __dirname injecté par esbuild
 const _appDir = typeof __dirname !== "undefined"
   ? __dirname
   : path.dirname(new URL(import.meta.url).pathname);
@@ -15,35 +14,65 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app: Express = express();
 
+/* ── Sécurité : headers HTTP ── */
+app.disable("x-powered-by");
+
+/* ── Logging ── */
 app.use(
   pinoHttp({
     logger,
     serializers: {
       req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
       },
       res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
+        return { statusCode: res.statusCode };
       },
     },
   }),
 );
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.use("/uploads", express.static(UPLOADS_DIR));
+/* ── CORS : restreint aux origines connues ── */
+const ALLOWED_ORIGINS = [
+  "http://localhost:5000",
+  "http://localhost:3001",
+  ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
+  // Domaine de prod
+  "https://bloumcash.com",
+  "https://www.bloumcash.com",
+];
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Requêtes sans origine (mobile webview, Postman, même serveur)
+      if (!origin) return callback(null, true);
+      // Sous-domaines Replit (développement)
+      if (origin.endsWith(".replit.dev") || origin.endsWith(".repl.co") || origin.endsWith(".replit.app")) {
+        return callback(null, true);
+      }
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error("CORS : origine non autorisée"));
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }),
+);
+
+/* ── Body parsing : limite réduite (2 Mo suffisent pour images base64 ≤ 1,5 Mo) ── */
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+
+/* ── Uploads statiques (images uniquement) ── */
+app.use("/uploads", express.static(UPLOADS_DIR, {
+  index: false,
+  dotfiles: "deny",
+}));
+
 app.use("/api", router);
 
-/* ── SPA fallback — serve built React frontend for all non-API routes ── */
-// __dirname est injecté par le banner esbuild → pointe vers artifacts/api-server/dist/
-// Quelque soit le cwd au démarrage (racine du dépôt ou sous-dossier), ce chemin est stable.
+/* ── SPA fallback ── */
 const _serverDir = typeof __dirname !== "undefined"
   ? __dirname
   : path.dirname(new URL(import.meta.url).pathname);

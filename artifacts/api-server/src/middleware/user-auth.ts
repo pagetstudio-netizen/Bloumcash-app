@@ -1,8 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const USER_SECRET =
-  process.env.USER_JWT_SECRET ?? "bloum-cash-user-secret-2026-yR7nQ";
+const _userSecretFallback = "bloum-cash-user-secret-2026-yR7nQ";
+if (!process.env.USER_JWT_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("USER_JWT_SECRET env var must be set in production");
+}
+const USER_SECRET = process.env.USER_JWT_SECRET ?? _userSecretFallback;
 
 export interface UserTokenPayload {
   id: number;

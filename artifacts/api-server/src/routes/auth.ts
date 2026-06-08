@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
 import { usersTable, blacklistTable, verificationCodesTable } from "@workspace/db";
 import { eq, and, gt } from "drizzle-orm";
@@ -10,22 +11,53 @@ import { sendWelcomeEmail, sendPinResetEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
-/* Vérifie si un numéro est blacklisté */
+/* ── Rate limiters ── */
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives de connexion. Réessayez dans 15 minutes." },
+  skipSuccessfulRequests: true,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de créations de compte depuis cette adresse IP. Réessayez dans 1 heure." },
+});
+
+const forgotPinLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de demandes de réinitialisation. Réessayez dans 1 heure." },
+  skipSuccessfulRequests: false,
+});
+
+/* ── Helpers ── */
 async function isBlacklisted(phone: string | null | undefined): Promise<boolean> {
   if (!phone) return false;
   const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
   return rows.length > 0;
 }
 
-/* Génère un code numérique à 6 chiffres */
 function generateCode(): string {
   return String(Math.floor(100000 + crypto.randomInt(900000))).padStart(6, "0");
 }
 
-/* ── LOGIN ───────────────────────────────────────────────────────────────── */
-router.post("/auth/login", async (req, res) => {
+function sanitizeStr(v: unknown, maxLen = 255): string {
+  return String(v ?? "").trim().slice(0, maxLen);
+}
+
+/* ── LOGIN ── */
+router.post("/auth/login", loginLimiter, async (req, res) => {
   try {
-    const { email, pin } = req.body;
+    const email = sanitizeStr(req.body.email, 255);
+    const pin = sanitizeStr(req.body.pin, 20);
     if (!email || !pin) {
       res.status(400).json({ error: "Email et PIN requis" });
       return;
@@ -52,7 +84,7 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    const pinMatches = await bcrypt.compare(String(pin), user.pin);
+    const pinMatches = await bcrypt.compare(pin, user.pin);
     if (!pinMatches) {
       res.status(401).json({ error: "Email ou PIN incorrect" });
       return;
@@ -78,12 +110,30 @@ router.post("/auth/login", async (req, res) => {
   }
 });
 
-/* ── REGISTER ────────────────────────────────────────────────────────────── */
-router.post("/auth/register", async (req, res) => {
+/* ── REGISTER ── */
+router.post("/auth/register", registerLimiter, async (req, res) => {
   try {
-    const { fullName, email, pin, phone, village, city, region, country } = req.body;
+    const fullName = sanitizeStr(req.body.fullName, 100);
+    const email    = sanitizeStr(req.body.email, 255);
+    const pin      = sanitizeStr(req.body.pin, 20);
+    const phone    = req.body.phone ? sanitizeStr(req.body.phone, 20) : null;
+    const village  = req.body.village  ? sanitizeStr(req.body.village, 100) : null;
+    const city     = req.body.city     ? sanitizeStr(req.body.city, 100) : null;
+    const region   = req.body.region   ? sanitizeStr(req.body.region, 100) : null;
+    const country  = req.body.country  ? sanitizeStr(req.body.country, 100) : "Togo";
+
     if (!fullName || !email || !pin) {
       res.status(400).json({ error: "Tous les champs sont requis" });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ error: "Format d'email invalide" });
+      return;
+    }
+
+    if (!/^\d{4,6}$/.test(pin)) {
+      res.status(400).json({ error: "Le PIN doit être 4 à 6 chiffres" });
       return;
     }
 
@@ -98,16 +148,14 @@ router.post("/auth/register", async (req, res) => {
       return;
     }
 
-    const hashedPin = await bcrypt.hash(String(pin), 12);
+    const hashedPin = await bcrypt.hash(pin, 12);
     const [user] = await db.insert(usersTable)
-      .values({ fullName, email, pin: hashedPin, phone: phone ?? null, onesignalExternalUserId: email, village: village ?? null, city: city ?? null, region: region ?? null, country: country ?? "Togo" })
+      .values({ fullName, email, pin: hashedPin, phone, onesignalExternalUserId: email, village, city, region, country })
       .returning();
 
     const token = signUserToken({ id: user.id, email: user.email });
 
-    /* Email de bienvenue (non bloquant) */
     sendWelcomeEmail({ to: user.email, fullName: user.fullName }).catch(() => {});
-
     sendPushNotification({
       externalUserId: user.email,
       title: "Bienvenue sur Bloum Cash 🎉",
@@ -122,17 +170,16 @@ router.post("/auth/register", async (req, res) => {
   }
 });
 
-/* ── FORGOT PIN — demande de code ────────────────────────────────────────── */
-router.post("/auth/forgot-pin", async (req, res) => {
+/* ── FORGOT PIN ── */
+router.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = sanitizeStr(req.body.email, 255);
     if (!email) {
       res.status(400).json({ error: "Email requis" });
       return;
     }
 
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-    /* Réponse identique qu'il existe ou non (sécurité) */
     if (!users.length) {
       res.json({ message: "Si cet email existe, un code de réinitialisation a été envoyé." });
       return;
@@ -140,13 +187,11 @@ router.post("/auth/forgot-pin", async (req, res) => {
 
     const user = users[0];
     const code = generateCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); /* 15 min */
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
-    /* Invalider les anciens codes du même type */
     await db.delete(verificationCodesTable).where(
       and(eq(verificationCodesTable.email, email), eq(verificationCodesTable.type, "pin_reset"))
     );
-
     await db.insert(verificationCodesTable).values({ email, code, type: "pin_reset", expiresAt });
 
     sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
@@ -160,16 +205,19 @@ router.post("/auth/forgot-pin", async (req, res) => {
   }
 });
 
-/* ── RESET PIN — vérification du code et nouveau PIN ────────────────────── */
+/* ── RESET PIN ── */
 router.post("/auth/reset-pin", async (req, res) => {
   try {
-    const { email, code, newPin } = req.body;
+    const email  = sanitizeStr(req.body.email, 255);
+    const code   = sanitizeStr(req.body.code, 10);
+    const newPin = sanitizeStr(req.body.newPin, 20);
+
     if (!email || !code || !newPin) {
       res.status(400).json({ error: "Email, code et nouveau PIN requis" });
       return;
     }
-    if (String(newPin).length !== 6 || !/^\d{6}$/.test(String(newPin))) {
-      res.status(400).json({ error: "Le PIN doit être 6 chiffres" });
+    if (!/^\d{4,6}$/.test(newPin)) {
+      res.status(400).json({ error: "Le PIN doit être 4 à 6 chiffres" });
       return;
     }
 
@@ -177,7 +225,7 @@ router.post("/auth/reset-pin", async (req, res) => {
     const codes = await db.select().from(verificationCodesTable).where(
       and(
         eq(verificationCodesTable.email, email),
-        eq(verificationCodesTable.code, String(code)),
+        eq(verificationCodesTable.code, code),
         eq(verificationCodesTable.type, "pin_reset"),
         gt(verificationCodesTable.expiresAt, now),
       )
@@ -188,7 +236,7 @@ router.post("/auth/reset-pin", async (req, res) => {
       return;
     }
 
-    const hashedPin = await bcrypt.hash(String(newPin), 12);
+    const hashedPin = await bcrypt.hash(newPin, 12);
     await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.email, email));
     await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
 
@@ -199,23 +247,26 @@ router.post("/auth/reset-pin", async (req, res) => {
   }
 });
 
-/* ── CHANGE PIN — authentifié, ancien PIN requis ─────────────────────────── */
+/* ── CHANGE PIN ── */
 router.post("/auth/change-pin", async (req, res) => {
   try {
-    const { token, currentPin, newPin } = req.body;
+    const token      = sanitizeStr(req.body.token, 500);
+    const currentPin = sanitizeStr(req.body.currentPin, 20);
+    const newPin     = sanitizeStr(req.body.newPin, 20);
+
     if (!token || !currentPin || !newPin) {
       res.status(400).json({ error: "Token, PIN actuel et nouveau PIN requis" });
       return;
     }
-    if (String(newPin).length !== 6 || !/^\d{6}$/.test(String(newPin))) {
-      res.status(400).json({ error: "Le nouveau PIN doit être 6 chiffres" });
+    if (!/^\d{4,6}$/.test(newPin)) {
+      res.status(400).json({ error: "Le nouveau PIN doit être 4 à 6 chiffres" });
       return;
     }
 
     const { verifyUserToken } = await import("../middleware/user-auth");
     let payload: { id: number; email: string };
     try {
-      payload = verifyUserToken(String(token));
+      payload = verifyUserToken(token);
     } catch {
       res.status(401).json({ error: "Token invalide ou expiré" });
       return;
@@ -228,18 +279,17 @@ router.post("/auth/change-pin", async (req, res) => {
     }
 
     const user = users[0];
-    const pinMatches = await bcrypt.compare(String(currentPin), user.pin);
+    const pinMatches = await bcrypt.compare(currentPin, user.pin);
     if (!pinMatches) {
       res.status(401).json({ error: "PIN actuel incorrect" });
       return;
     }
-
-    if (String(currentPin) === String(newPin)) {
+    if (currentPin === newPin) {
       res.status(400).json({ error: "Le nouveau PIN doit être différent de l'ancien" });
       return;
     }
 
-    const hashedPin = await bcrypt.hash(String(newPin), 12);
+    const hashedPin = await bcrypt.hash(newPin, 12);
     await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
 
     res.json({ success: true, message: "PIN modifié avec succès" });

@@ -1,8 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const ADMIN_SECRET =
-  process.env.ADMIN_JWT_SECRET ?? "bloum-cash-admin-secret-2026-xK9mP";
+const _adminSecretFallback = "bloum-cash-admin-secret-2026-xK9mP";
+if (!process.env.ADMIN_JWT_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("ADMIN_JWT_SECRET env var must be set in production");
+}
+const ADMIN_SECRET = process.env.ADMIN_JWT_SECRET ?? _adminSecretFallback;
 
 export interface AdminTokenPayload {
   id: number;
