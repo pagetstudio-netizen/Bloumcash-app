@@ -1,17 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Shield, Zap, Globe, Smartphone, Star, MessageCircle, AlertTriangle, Building2 } from "lucide-react";
+import { ArrowLeft, Star, MessageCircle, AlertTriangle, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
-
-const features = [
-  { icon: <Zap className="w-5 h-5 text-yellow-500" />, bg: "bg-yellow-50", label: "Paiements instantanés" },
-  { icon: <Shield className="w-5 h-5 text-blue-600" />, bg: "bg-blue-50", label: "Sécurité renforcée" },
-  { icon: <Globe className="w-5 h-5 text-teal-600" />, bg: "bg-teal-50", label: "TMoney & Moov Money" },
-  { icon: <Smartphone className="w-5 h-5 text-purple-500" />, bg: "bg-purple-50", label: "Solutions Fintech" },
-];
 
 export default function Apropos() {
   const { isAuthenticated } = useAuth();
@@ -55,6 +48,29 @@ export default function Apropos() {
           </div>
         </motion.div>
 
+        {/* Site officiel */}
+        <motion.a
+          href="https://bloumcash.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+          whileTap={{ scale: 0.97 }}
+          className="flex items-center gap-3 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white rounded-2xl px-4 py-3.5 shadow-md"
+        >
+          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Globe className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-sm">Site officiel</p>
+            <p className="text-xs text-white/80">bloumcash.com</p>
+          </div>
+          <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </motion.a>
+
         {/* Mission */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -68,56 +84,11 @@ export default function Apropos() {
           </p>
         </motion.div>
 
-        {/* Features */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 ml-1">Nos atouts</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {features.map((f, i) => (
-              <div key={i} className="bg-card rounded-2xl border border-border shadow-sm p-4 flex flex-col gap-2">
-                <div className={`${f.bg} w-10 h-10 rounded-xl flex items-center justify-center`}>
-                  {f.icon}
-                </div>
-                <p className="text-sm font-semibold text-foreground leading-tight">{f.label}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Infos entreprise */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden"
-        >
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/40">
-            <Building2 className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Informations légales</span>
-          </div>
-          {[
-            { label: "Société",     value: "ashtech Sarl" },
-            { label: "Pays",        value: "Cameroun 🇨🇲" },
-            { label: "Secteur",     value: "Fintech / Paiement numérique" },
-            { label: "Marchés",     value: "Afrique de l'Ouest & Centrale" },
-            { label: "Monnaie",     value: "FCFA (XOF / XAF)" },
-            { label: "Contact",     value: "contact@bloumcash.com" },
-          ].map((item, i, arr) => (
-            <div key={i} className={`flex justify-between items-center px-4 py-3 ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
-              <span className="text-sm text-muted-foreground">{item.label}</span>
-              <span className="text-sm font-semibold text-foreground text-right max-w-[55%]">{item.value}</span>
-            </div>
-          ))}
-        </motion.div>
-
         {/* Avertissement */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
+          transition={{ delay: 0.15 }}
           className="rounded-2xl border border-orange-200 bg-orange-50 p-4"
         >
           <div className="flex items-center gap-2 mb-3">
@@ -139,9 +110,6 @@ export default function Apropos() {
             <p>
               Les services proposés peuvent inclure : collecte de paiements Mobile Money, envoi de paiements (Pay-out), outils marchands et solutions fintech. Toutes les opérations sont soumises aux réglementations locales applicables, aux politiques <strong>AML/CFT</strong>.
             </p>
-            <p>
-              En utilisant Bloum Cash, vous acceptez les Conditions Générales d'Utilisation, la Politique de Confidentialité et les règles de conformité de la plateforme. Bloum Cash se réserve le droit de <strong>suspendre, limiter ou refuser</strong> tout compte ou transaction suspecte.
-            </p>
           </div>
         </motion.div>
 
@@ -152,7 +120,7 @@ export default function Apropos() {
           rel="noopener noreferrer"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.2 }}
           whileTap={{ scale: 0.97 }}
           className="w-full h-12 bg-[#25D366] text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow"
         >

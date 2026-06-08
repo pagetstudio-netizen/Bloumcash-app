@@ -2,7 +2,7 @@ import React from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
-  ArrowLeft, HelpCircle, MessageCircleQuestion, 
+  ArrowLeft, MessageCircleQuestion, 
   Phone, Settings, FileText, Shield, Info, LogOut, ChevronRight 
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -20,8 +20,7 @@ export default function Plus() {
     {
       title: "Assistance",
       items: [
-        { icon: <HelpCircle className="w-5 h-5" />, label: "Centre d'aide", href: "/plus/aide" },
-        { icon: <MessageCircleQuestion className="w-5 h-5" />, label: "FAQ", href: "/plus/faq" },
+        { icon: <MessageCircleQuestion className="w-5 h-5" />, label: "Centre d'aide", href: "/plus/faq" },
         { icon: <Phone className="w-5 h-5" />, label: "Support WhatsApp", href: "/plus/whatsapp", color: "text-green-500" },
       ]
     },
@@ -38,7 +37,6 @@ export default function Plus() {
 
   return (
     <div className="h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden">
-      {/* Header — flex-shrink-0 : ne défile jamais */}
       <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white p-4 shadow-md z-50">
         <div className="flex items-center">
           <button onClick={() => setLocation("/dashboard")} className="mr-4">
@@ -48,7 +46,6 @@ export default function Plus() {
         </div>
       </div>
 
-      {/* Contenu scrollable */}
       <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-6">
         {/* Profile summary */}
         <motion.div 
@@ -68,7 +65,6 @@ export default function Plus() {
           </div>
         </motion.div>
 
-        {/* Menu Groups */}
         {menuGroups.map((group, groupIdx) => (
           <motion.div 
             key={group.title}

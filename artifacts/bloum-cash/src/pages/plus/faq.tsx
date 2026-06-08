@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: "Comment créer mon compte ?",
-    a: "Téléchargez l'application, appuyez sur « S'inscrire » et renseignez votre nom complet, adresse e-mail et créez un code PIN à 8 chiffres. C'est gratuit et instantané.",
+    a: "Téléchargez l'application, appuyez sur « S'inscrire » et renseignez votre nom complet, votre adresse e-mail, puis créez un mot de passe sécurisé. C'est gratuit et instantané.",
   },
   {
     q: "Quels opérateurs sont acceptés ?",
@@ -21,23 +21,23 @@ const faqs = [
   },
   {
     q: "Les transactions sont-elles sécurisées ?",
-    a: "Oui. Toutes les transactions sont chiffrées et protégées par votre code PIN personnel. Bloum Cash ne stocke jamais vos données bancaires directement.",
+    a: "Oui. Toutes les transactions sont chiffrées et protégées par votre mot de passe personnel. Bloum Cash ne stocke jamais vos données bancaires directement.",
   },
   {
     q: "Quels sont les frais de transfert ?",
     a: "Les frais varient selon l'opérateur et le montant. Ils sont affichés clairement avant chaque confirmation de transaction.",
   },
   {
-    q: "J'ai oublié mon code PIN, que faire ?",
-    a: "Depuis l'écran de connexion, appuyez sur « Code PIN oublié ». Vous recevrez un lien de réinitialisation par e-mail.",
+    q: "J'ai oublié mon mot de passe, que faire ?",
+    a: "Depuis l'écran de connexion, appuyez sur « Mot de passe oublié ». Vous recevrez un lien de réinitialisation par e-mail.",
   },
   {
-    q: "Comment générer un QR Code de paiement ?",
-    a: "Allez dans Encaisser → Créer une Nouvelle Configuration. Entrez votre numéro mobile money, choisissez l'opérateur et donnez un nom à votre boutique. Votre QR Code est généré instantanément.",
+    q: "Comment effectuer un transfert d'argent ?",
+    a: "Depuis le tableau de bord, appuyez sur « Transférer ». Renseignez le numéro du destinataire, choisissez l'opérateur, saisissez le montant et confirmez. La transaction est traitée instantanément.",
   },
   {
-    q: "Puis-je avoir plusieurs configurations de paiement ?",
-    a: "Oui, vous pouvez créer plusieurs configurations QR correspondant à différents produits ou boutiques. Chaque configuration a une référence unique.",
+    q: "Comment encaisser un paiement ?",
+    a: "Allez dans « Encaisser », configurez votre numéro mobile money et partagez votre lien de paiement avec vos clients. Les paiements sont crédités directement sur votre compte mobile money.",
   },
   {
     q: "Comment contacter le support ?",
@@ -62,7 +62,7 @@ export default function Faq() {
         <button onClick={() => setLocation("/plus")} className="p-1 -ml-1">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-lg font-bold flex-1">FAQ</h1>
+        <h1 className="text-lg font-bold flex-1">Centre d'aide</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">

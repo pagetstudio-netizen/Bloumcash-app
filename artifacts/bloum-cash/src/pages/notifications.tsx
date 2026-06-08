@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Bell, CheckCheck, Trash2, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowLeft, Bell, CheckCheck, ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { useListTransactions } from "@workspace/api-client-react";
@@ -22,7 +22,6 @@ export default function Notifications() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
-  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
 
   const { data: transactions, isLoading } = useListTransactions(
     {},
@@ -37,23 +36,21 @@ export default function Notifications() {
 
   const notifs = useMemo(() => {
     if (!transactions) return [];
-    return transactions
-      .filter((tx) => !deletedIds.has(tx.id))
-      .map((tx) => ({
-        id: tx.id,
-        icon: tx.type === "incoming"
-          ? <ArrowDownLeft className="w-5 h-5 text-green-600" />
-          : <ArrowUpRight  className="w-5 h-5 text-blue-600"  />,
-        iconBg: tx.type === "incoming" ? "bg-green-50" : "bg-blue-50",
-        title: tx.title,
-        body: tx.type === "incoming"
-          ? `Vous avez reçu ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.fromPhone ? ` de +228 ${tx.fromPhone}` : ""}.`
-          : `Vous avez transféré ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.toPhone ? ` vers +228 ${tx.toPhone}` : ""}.`,
-        time: tx.time ? `${tx.date}, ${tx.time}` : tx.date,
-        read: readIds.has(tx.id),
-        status: tx.status,
-      }));
-  }, [transactions, readIds, deletedIds]);
+    return transactions.map((tx) => ({
+      id: tx.id,
+      icon: tx.type === "incoming"
+        ? <ArrowDownLeft className="w-5 h-5 text-green-600" />
+        : <ArrowUpRight  className="w-5 h-5 text-blue-600"  />,
+      iconBg: tx.type === "incoming" ? "bg-green-50" : "bg-blue-50",
+      title: tx.title,
+      body: tx.type === "incoming"
+        ? `Vous avez reçu ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.fromPhone ? ` de +228 ${tx.fromPhone}` : ""}.`
+        : `Vous avez transféré ${formatAmount(tx.amount)} via ${tx.operator === "tmoney" ? "TMoney" : "Moov Money"}${tx.toPhone ? ` vers +228 ${tx.toPhone}` : ""}.`,
+      time: tx.time ? `${tx.date}, ${tx.time}` : tx.date,
+      read: readIds.has(tx.id),
+      status: tx.status,
+    }));
+  }, [transactions, readIds]);
 
   const unreadCount = notifs.filter((n) => !n.read).length;
 
@@ -66,13 +63,6 @@ export default function Notifications() {
   const markAllRead = () => {
     const next = new Set(notifs.map((n) => n.id));
     setReadIds(next);
-    saveReadIds(next);
-  };
-
-  const deleteNotif = (id: string) => {
-    setDeletedIds((prev) => new Set(prev).add(id));
-    const next = new Set(readIds);
-    next.delete(id);
     saveReadIds(next);
   };
 
@@ -147,13 +137,6 @@ export default function Notifications() {
                   </p>
                   <p className="text-[10px] text-muted-foreground/70 mt-1">{notif.time}</p>
                 </div>
-
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteNotif(notif.id); }}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0 mt-0.5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </motion.div>
             ))}
           </div>
