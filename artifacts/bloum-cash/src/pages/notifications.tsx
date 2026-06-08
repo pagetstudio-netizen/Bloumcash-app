@@ -25,7 +25,8 @@ export default function Notifications() {
 
   const { data: transactions, isLoading } = useListTransactions(
     {},
-    { query: { enabled: isAuthenticated } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { query: { enabled: isAuthenticated } as any }
   );
 
   React.useEffect(() => {

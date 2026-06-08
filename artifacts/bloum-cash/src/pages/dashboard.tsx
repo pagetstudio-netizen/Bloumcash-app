@@ -31,7 +31,8 @@ export default function Dashboard() {
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: recentTxs, isLoading: txLoading } = useGetRecentTransactions({
-    query: { enabled: isAuthenticated },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    query: { enabled: isAuthenticated } as any,
   });
 
   useEffect(() => {

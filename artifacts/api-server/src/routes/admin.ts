@@ -8,7 +8,7 @@ import {
   dashboardBannersTable, promotionsTable,
   verificationCodesTable, adminDevicesTable,
 } from "@workspace/db";
-import { eq, desc, sql, asc, count, and, gte, isNotNull, gt, lt } from "drizzle-orm";
+import { eq, desc, sql, asc, count, and, gte, isNotNull, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import fs from "fs";
@@ -60,8 +60,6 @@ router.post("/admin/auth/login", async (req, res) => {
       and(eq(adminDevicesTable.adminEmail, email), eq(adminDevicesTable.deviceHash, dHash))
     ).limit(1);
 
-    /* Vérifier dernière connexion (> 3 jours = 2FA requis) */
-    const inactiveTooLong = !admin.createdAt || admin.createdAt < threeDaysAgo;
     /* On stocke la dernière connexion dans un setting par email */
     const lastLoginKey = `admin_last_login_${admin.id}`;
     const lastLoginRows = await db.select().from(adminSettingsTable)
@@ -316,7 +314,7 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
 
 router.get("/admin/users/:id", requireAdmin, async (req, res) => {
   try {
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, parseInt(req.params.id))).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, parseInt(req.params.id as string))).limit(1);
     if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
     const u = users[0];
     const txs = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, u.id)).limit(10).orderBy(desc(transactionsTable.createdAt));
@@ -327,16 +325,16 @@ router.get("/admin/users/:id", requireAdmin, async (req, res) => {
 router.put("/admin/users/:id", requireAdmin, async (req, res) => {
   try {
     const { fullName, email } = req.body;
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     await db.update(usersTable).set({ fullName, email }).where(eq(usersTable.id, userId));
-    await db.insert(securityEventsTable).values({ type: "user_edited", details: `User #${userId} modifié par ${req.admin?.email ?? "admin"} — nom: ${fullName ?? ""}, email: ${email ?? ""}` });
+    await db.insert(securityEventsTable).values({ type: "user_edited", details: `User #${userId} modifié par ${(req as any).admin?.email ?? "admin"} — nom: ${fullName ?? ""}, email: ${email ?? ""}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Admin update user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.delete("/admin/users/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(usersTable).where(eq(usersTable.id, parseInt(req.params.id)));
+    await db.delete(usersTable).where(eq(usersTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Admin delete user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -346,7 +344,7 @@ router.post("/admin/users/:id/reset-pin", requireAdmin, async (req, res) => {
     const { newPin } = req.body;
     if (!newPin || String(newPin).length !== 6) { res.status(400).json({ error: "PIN 6 chiffres requis" }); return; }
     const hashed = await bcrypt.hash(String(newPin), 10);
-    await db.update(usersTable).set({ pin: hashed }).where(eq(usersTable.id, parseInt(req.params.id)));
+    await db.update(usersTable).set({ pin: hashed }).where(eq(usersTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Reset PIN error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -356,7 +354,7 @@ router.post("/admin/users/:id/credit", requireAdmin, async (req, res) => {
     const { amount, reason } = req.body;
     const amt = parseInt(amount);
     if (!amt || amt <= 0) { res.status(400).json({ error: "Montant invalide" }); return; }
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
     if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
     const ref = `ADMIN-CR-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -375,7 +373,7 @@ router.post("/admin/users/:id/debit", requireAdmin, async (req, res) => {
     const { amount, reason } = req.body;
     const amt = parseInt(amount);
     if (!amt || amt <= 0) { res.status(400).json({ error: "Montant invalide" }); return; }
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
     if (!users.length) { res.status(404).json({ error: "Utilisateur introuvable" }); return; }
     const ref = `ADMIN-DB-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -391,27 +389,27 @@ router.post("/admin/users/:id/debit", requireAdmin, async (req, res) => {
 
 router.post("/admin/users/:id/suspend", requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     await db.update(usersTable).set({ status: "suspended" }).where(eq(usersTable.id, userId));
-    await db.insert(securityEventsTable).values({ type: "user_suspended", details: `User #${userId} suspendu par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "user_suspended", details: `User #${userId} suspendu par ${(req as any).admin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Suspend user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.post("/admin/users/:id/ban", requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     await db.update(usersTable).set({ status: "banned" }).where(eq(usersTable.id, userId));
-    await db.insert(securityEventsTable).values({ type: "user_banned", details: `User #${userId} banni par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "user_banned", details: `User #${userId} banni par ${(req as any).admin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Ban user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.post("/admin/users/:id/reactivate", requireAdmin, async (req, res) => {
   try {
-    const userId = parseInt(req.params.id);
+    const userId = parseInt(req.params.id as string);
     await db.update(usersTable).set({ status: "active" }).where(eq(usersTable.id, userId));
-    await db.insert(securityEventsTable).values({ type: "user_reactivated", details: `User #${userId} réactivé par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "user_reactivated", details: `User #${userId} réactivé par ${(req as any).admin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Reactivate user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -445,7 +443,7 @@ router.get("/admin/transactions", requireAdmin, async (req, res) => {
 
 router.get("/admin/transactions/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const txRows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
     if (!txRows.length) { res.status(404).json({ error: "Transaction introuvable" }); return; }
     const tx = txRows[0];
@@ -462,17 +460,17 @@ router.put("/admin/transactions/:id/force-status", requireAdmin, async (req, res
   try {
     const { status } = req.body;
     if (!["success", "failed", "pending"].includes(status)) { res.status(400).json({ error: "Statut invalide" }); return; }
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.update(transactionsTable).set({ status }).where(eq(transactionsTable.id, id));
     const [tx] = await db.select({ reference: transactionsTable.reference }).from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
-    await db.insert(securityEventsTable).values({ type: "tx_status_forced", details: `TX #${id} (réf ${tx?.reference ?? ""}) → statut forcé: ${status} par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "tx_status_forced", details: `TX #${id} (réf ${tx?.reference ?? ""}) → statut forcé: ${status} par ${(req as any).admin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Force status error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.post("/admin/transactions/:id/retry-payout", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const txRows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
     if (!txRows.length) { res.status(404).json({ error: "Transaction introuvable" }); return; }
     const tx = txRows[0];
@@ -482,10 +480,10 @@ router.post("/admin/transactions/:id/retry-payout", requireAdmin, async (req, re
     if (!tx.toPhone || !tx.toOperator) {
       res.status(400).json({ error: "Numéro ou opérateur destinataire manquant" }); return;
     }
-    const result = await paydunya.disburseTogoWallet(tx.toOperator as "tmoney" | "moov", tx.toPhone, tx.amount, `Relance retrait — ${tx.reference}`, req.log);
+    const result = await paydunya.disburseTogoWallet(tx.toOperator as "tmoney" | "moov", { name: "Bénéficiaire Bloum Cash", phone: tx.toPhone, amount: tx.amount, reference: tx.reference }, req.log);
     if (result.success) {
       await db.update(transactionsTable).set({ status: "success", payoutSent: true }).where(eq(transactionsTable.id, id));
-      await db.insert(securityEventsTable).values({ type: "tx_retry_payout", details: `TX #${id} (${tx.reference}) retrait relancé par ${req.admin?.email ?? "admin"} — PayDunya ref: ${result.transactionId ?? ""}` });
+      await db.insert(securityEventsTable).values({ type: "tx_retry_payout", details: `TX #${id} (${tx.reference}) retrait relancé par ${(req as any).admin?.email ?? "admin"} — PayDunya ref: ${result.transactionId ?? ""}` });
       res.json({ success: true, message: "Retrait relancé avec succès", reference: result.transactionId });
     } else {
       res.status(502).json({ success: false, error: result.message ?? "Échec PayDunya" });
@@ -512,7 +510,7 @@ router.post("/admin/countries", requireAdmin, async (req, res) => {
 router.put("/admin/countries/:id", requireAdmin, async (req, res) => {
   try {
     const { name, currency, isActive, feeDeposit, feeWithdraw } = req.body;
-    await db.update(countriesConfigTable).set({ name, currency, isActive, feeDeposit: parseFloat(feeDeposit), feeWithdraw: parseFloat(feeWithdraw) }).where(eq(countriesConfigTable.id, parseInt(req.params.id)));
+    await db.update(countriesConfigTable).set({ name, currency, isActive, feeDeposit: parseFloat(feeDeposit), feeWithdraw: parseFloat(feeWithdraw) }).where(eq(countriesConfigTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update country error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -535,14 +533,14 @@ router.post("/admin/operators", requireAdmin, async (req, res) => {
 router.put("/admin/operators/:id", requireAdmin, async (req, res) => {
   try {
     const { name, type, countryCode, gateway, dailyLimit, isActive, maintenanceAll, maintenanceDeposit, maintenanceWithdraw, maintenancePaymentLink, maintenanceApiPayment } = req.body;
-    await db.update(operatorsConfigTable).set({ name, type, countryCode, gateway, dailyLimit: parseInt(dailyLimit), isActive, maintenanceAll, maintenanceDeposit, maintenanceWithdraw, maintenancePaymentLink, maintenanceApiPayment }).where(eq(operatorsConfigTable.id, parseInt(req.params.id)));
+    await db.update(operatorsConfigTable).set({ name, type, countryCode, gateway, dailyLimit: parseInt(dailyLimit), isActive, maintenanceAll, maintenanceDeposit, maintenanceWithdraw, maintenancePaymentLink, maintenanceApiPayment }).where(eq(operatorsConfigTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update operator error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.delete("/admin/operators/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(operatorsConfigTable).where(eq(operatorsConfigTable.id, parseInt(req.params.id)));
+    await db.delete(operatorsConfigTable).where(eq(operatorsConfigTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Delete operator error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -566,14 +564,14 @@ router.post("/admin/notifications", requireAdmin, async (req, res) => {
 router.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
   try {
     const { title, message, type, imageUrl, buttonText, buttonUrl, isActive } = req.body;
-    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id)));
+    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.delete("/admin/notifications/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(adminNotificationsTable).where(eq(adminNotificationsTable.id, parseInt(req.params.id)));
+    await db.delete(adminNotificationsTable).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Delete notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -627,7 +625,7 @@ router.post("/admin/blacklist", requireAdmin, async (req, res) => {
   try {
     const { phone, reason } = req.body;
     if (!phone) { res.status(400).json({ error: "Numéro requis" }); return; }
-    const [row] = await db.insert(blacklistTable).values({ phone, reason: reason ?? null, blockedBy: req.admin?.email ?? "admin" }).returning();
+    const [row] = await db.insert(blacklistTable).values({ phone, reason: reason ?? null, blockedBy: (req as any).admin?.email ?? "admin" }).returning();
     await db.insert(securityEventsTable).values({ type: "phone_blacklisted", details: `${phone} — ${reason ?? "Sans raison"}` });
     res.status(201).json(row);
   } catch (err: unknown) {
@@ -639,7 +637,7 @@ router.post("/admin/blacklist", requireAdmin, async (req, res) => {
 
 router.delete("/admin/blacklist/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(blacklistTable).where(eq(blacklistTable.id, parseInt(req.params.id)));
+    await db.delete(blacklistTable).where(eq(blacklistTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Delete blacklist error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -676,7 +674,7 @@ router.post("/admin/security/block-ip", requireAdmin, async (req, res) => {
 
 router.delete("/admin/security/block-ip/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(blockedIpsTable).where(eq(blockedIpsTable.id, parseInt(req.params.id)));
+    await db.delete(blockedIpsTable).where(eq(blockedIpsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Unblock IP error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -696,7 +694,7 @@ router.post("/admin/security/whitelist-ip", requireAdmin, async (req, res) => {
 
 router.delete("/admin/security/whitelist-ip/:id", requireAdmin, async (req, res) => {
   try {
-    await db.delete(whitelistedIpsTable).where(eq(whitelistedIpsTable.id, parseInt(req.params.id)));
+    await db.delete(whitelistedIpsTable).where(eq(whitelistedIpsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Remove whitelist error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -820,7 +818,7 @@ router.post("/admin/banners", requireAdmin, async (req, res) => {
 router.put("/admin/banners/:id", requireAdmin, async (req, res) => {
   try {
     const { title, imageData, imageUrl: externalUrl, actionType, actionUrl, isActive, sortOrder } = req.body;
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const updates: Record<string, unknown> = { actionType: actionType ?? "none", actionUrl: actionUrl || null, isActive, sortOrder: parseInt(sortOrder ?? 0) };
     if (title !== undefined) updates.title = title || null;
 
@@ -838,14 +836,14 @@ router.put("/admin/banners/:id", requireAdmin, async (req, res) => {
       updates.imageUrl = externalUrl;
     }
 
-    await db.update(dashboardBannersTable).set(updates as Parameters<typeof db.update>[0]).where(eq(dashboardBannersTable.id, id));
+    await db.update(dashboardBannersTable).set(updates as Partial<typeof dashboardBannersTable.$inferInsert>).where(eq(dashboardBannersTable.id, id));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update banner error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.delete("/admin/banners/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const rows = await db.select().from(dashboardBannersTable).where(eq(dashboardBannersTable.id, id)).limit(1);
     if (rows.length && rows[0].imageUrl.startsWith("/uploads/")) {
       const filepath = path.join(UPLOADS_DIR, path.basename(rows[0].imageUrl));
@@ -985,7 +983,7 @@ router.post("/admin/promotions", requireAdmin, async (req, res) => {
 
 router.put("/admin/promotions/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const existing = await db.select().from(promotionsTable).where(eq(promotionsTable.id, id)).limit(1);
     if (!existing.length) { res.status(404).json({ error: "Promotion introuvable" }); return; }
     const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
@@ -1006,7 +1004,7 @@ router.put("/admin/promotions/:id", requireAdmin, async (req, res) => {
 
 router.delete("/admin/promotions/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const existing = await db.select().from(promotionsTable).where(eq(promotionsTable.id, id)).limit(1);
     if (!existing.length) { res.status(404).json({ error: "Promotion introuvable" }); return; }
     await db.delete(promotionsTable).where(eq(promotionsTable.id, id));
@@ -1046,14 +1044,14 @@ router.post("/admin/admins", requireAdmin, async (req, res) => {
       role: finalRole,
     }).returning({ id: adminUsersTable.id, fullName: adminUsersTable.fullName, email: adminUsersTable.email, role: adminUsersTable.role, createdAt: adminUsersTable.createdAt });
 
-    await db.insert(securityEventsTable).values({ type: "admin_created", details: `Nouvel admin créé: ${email.trim()} (${finalRole}) par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "admin_created", details: `Nouvel admin créé: ${email.trim()} (${finalRole}) par ${(req as any).admin?.email ?? "admin"}` });
     res.status(201).json(created);
   } catch (err) { req.log.error({ err }, "Create admin error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.put("/admin/admins/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { fullName, email, password, role } = req.body as { fullName?: string; email?: string; password?: string; role?: string };
 
     const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
@@ -1073,21 +1071,22 @@ router.put("/admin/admins/:id", requireAdmin, async (req, res) => {
     const [updated] = await db.update(adminUsersTable).set(updates).where(eq(adminUsersTable.id, id))
       .returning({ id: adminUsersTable.id, fullName: adminUsersTable.fullName, email: adminUsersTable.email, role: adminUsersTable.role, createdAt: adminUsersTable.createdAt });
 
-    await db.insert(securityEventsTable).values({ type: "admin_updated", details: `Admin #${id} modifié par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "admin_updated", details: `Admin #${id} modifié par ${(req as any).admin?.email ?? "admin"}` });
     res.json(updated);
   } catch (err) { req.log.error({ err }, "Update admin error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.delete("/admin/admins/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    if (req.admin?.id === id) { res.status(400).json({ error: "Impossible de supprimer votre propre compte" }); return; }
+    const id = parseInt(req.params.id as string);
+    const reqAdmin = (req as import("express").Request & { admin?: import("../middleware/admin-auth").AdminTokenPayload }).admin;
+    if (reqAdmin?.id === id) { res.status(400).json({ error: "Impossible de supprimer votre propre compte" }); return; }
 
     const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
     if (!existing.length) { res.status(404).json({ error: "Administrateur introuvable" }); return; }
 
     await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
-    await db.insert(securityEventsTable).values({ type: "admin_deleted", details: `Admin #${id} (${existing[0].email}) supprimé par ${req.admin?.email ?? "admin"}` });
+    await db.insert(securityEventsTable).values({ type: "admin_deleted", details: `Admin #${id} (${existing[0].email}) supprimé par ${reqAdmin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Delete admin error"); res.status(500).json({ error: "Erreur serveur" }); }
 });

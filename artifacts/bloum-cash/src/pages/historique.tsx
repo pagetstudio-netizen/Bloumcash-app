@@ -37,7 +37,8 @@ export default function Historique() {
 
   const { data: transactions, isLoading } = useListTransactions(
     search ? { search } : {},
-    { query: { enabled: isAuthenticated } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { query: { enabled: isAuthenticated } as any }
   );
 
   React.useEffect(() => {

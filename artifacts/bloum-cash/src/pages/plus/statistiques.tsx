@@ -30,11 +30,13 @@ export default function Statistiques() {
 
   const { data: summary, isLoading: sumLoading } = useGetStatsSummary(
     { period: apiPeriod },
-    { query: { enabled: isAuthenticated } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { query: { enabled: isAuthenticated } as any }
   );
   const { data: chartRaw, isLoading: chartLoading } = useGetStatsChart(
     { period: apiPeriod },
-    { query: { enabled: isAuthenticated } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { query: { enabled: isAuthenticated } as any }
   );
 
   React.useEffect(() => {

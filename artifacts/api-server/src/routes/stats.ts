@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { transactionsTable } from "@workspace/db";
 import { and, gte, eq } from "drizzle-orm";
-import { requireUser } from "../middleware/user-auth";
+import { requireUser, extractUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -35,7 +35,7 @@ function getPeriodStart(period?: string): Date {
 
 router.get("/stats/summary", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
+    const userId = extractUser(req)!.id;
     const period = (req.query.period as string) || "month";
     const since = getPeriodStart(period);
 
@@ -67,7 +67,7 @@ router.get("/stats/summary", requireUser, async (req, res) => {
 
 router.get("/stats/chart", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
+    const userId = extractUser(req)!.id;
     const period = (req.query.period as string) || "month";
     const rows = await db
       .select()

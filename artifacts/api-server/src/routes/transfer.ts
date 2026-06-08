@@ -99,7 +99,7 @@ router.post("/transfer", async (req, res) => {
       return;
     }
 
-    const fees = calculateFees(fromOperator, toOperator, amt);
+    const fees = await calculateFees(fromOperator, toOperator, amt);
     const total = amt + fees;
     const reference =
       "TR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();

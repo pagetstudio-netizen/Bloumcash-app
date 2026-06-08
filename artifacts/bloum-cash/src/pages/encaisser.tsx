@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/components/auth-provider";
 import { useModal } from "@/components/app-modal";
+import { useToast } from "@/hooks/use-toast";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
@@ -33,6 +34,7 @@ export default function Encaisser() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const { showModal } = useModal();
+  const { toast } = useToast();
 
   const [view, setView] = useState<View>("menu");
   const [operator, setOperator] = useState<Operator>("tmoney");

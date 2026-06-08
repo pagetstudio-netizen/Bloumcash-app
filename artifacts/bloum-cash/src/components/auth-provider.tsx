@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { User } from "@workspace/api-client-react/src/generated/api.schemas";
+import { User } from "@workspace/api-client-react";
 import OneSignal from "react-onesignal";
 import { isMedianApp } from "@/lib/utils";
 
@@ -25,7 +25,8 @@ async function initOneSignalWeb(): Promise<void> {
     const appId = cfg.onesignalAppId;
     if (!appId) return;
 
-    await OneSignal.init({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (OneSignal as any).init({
       appId,
       serviceWorkerPath: "/OneSignalSDKWorker.js",
       notifyButton: { enable: false },

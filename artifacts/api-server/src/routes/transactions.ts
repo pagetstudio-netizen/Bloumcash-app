@@ -43,7 +43,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect) {
 
 router.get("/transactions", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
+    const userId = extractUser(req)!.id;
     const { search, filter, period } = req.query as Record<string, string>;
 
     let conditions = eq(transactionsTable.userId, userId);
@@ -87,7 +87,7 @@ router.get("/transactions", requireUser, async (req, res) => {
 
 router.get("/transactions/recent", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
+    const userId = extractUser(req)!.id;
     const rows = await db
       .select()
       .from(transactionsTable)
@@ -103,8 +103,8 @@ router.get("/transactions/recent", requireUser, async (req, res) => {
 
 router.get("/transactions/:id", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
-    const id = parseInt(req.params.id);
+    const userId = extractUser(req)!.id;
+    const id = parseInt(req.params.id as string);
     const rows = await db
       .select()
       .from(transactionsTable)
@@ -123,7 +123,7 @@ router.get("/transactions/:id", requireUser, async (req, res) => {
 
 router.post("/transactions", requireUser, async (req, res) => {
   try {
-    const userId = req.currentUser!.id;
+    const userId = extractUser(req)!.id;
     const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;
     const reference = "BC" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 
