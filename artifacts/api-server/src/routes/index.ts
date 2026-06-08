@@ -7,6 +7,7 @@ import qrCodesRouter from "./qrcodes";
 import transferRouter from "./transfer";
 import paydunyaWebhookRouter from "./paydunya-webhook";
 import paydunyaDiagnoseRouter from "./paydunya-diagnose";
+import gomboplusWebhookRouter from "./gomboplus-webhook";
 import adminRouter from "./admin";
 import pushNotificationRouter from "./push-notification";
 import configRouter from "./config";
@@ -22,6 +23,7 @@ router.use(qrCodesRouter);
 router.use(transferRouter);
 router.use(paydunyaWebhookRouter);
 router.use(paydunyaDiagnoseRouter);
+router.use(gomboplusWebhookRouter);
 router.use(adminRouter);
 router.use(pushNotificationRouter);
 
