@@ -55,6 +55,28 @@ router.post("/admin/auth/login", async (req, res) => {
     const now = new Date();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 3600 * 1000);
 
+    /* ── Bypass OTP unique pour aujourd'hui ── */
+    const bypassKey = `admin_otp_bypass_${admin.id}`;
+    const todayStr = now.toISOString().slice(0, 10); /* YYYY-MM-DD */
+    const bypassRows = await db.select().from(adminSettingsTable)
+      .where(eq(adminSettingsTable.key, bypassKey)).limit(1);
+    const bypassValid = bypassRows[0]?.value === todayStr;
+
+    if (bypassValid) {
+      /* Consommer le bypass (usage unique) */
+      await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, bypassKey));
+      /* Enregistrer l'appareil et la dernière connexion */
+      const lastLoginKey = `admin_last_login_${admin.id}`;
+      await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
+        .onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
+      await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
+        .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
+      const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+      req.log.info({ adminId: admin.id }, "Admin bypass OTP utilisé — appareil enregistré");
+      res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+      return;
+    }
+
     /* Vérifier si appareil connu */
     const knownDevice = await db.select().from(adminDevicesTable).where(
       and(eq(adminDevicesTable.adminEmail, email), eq(adminDevicesTable.deviceHash, dHash))
