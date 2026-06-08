@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable } from "@workspace/db";
+import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable, adminSettingsTable } from "@workspace/db";
 import { eq, and, ilike } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
@@ -40,8 +40,23 @@ async function getOperatorGateway(operator: string): Promise<"PayDunya" | "Gombo
   }
 }
 
-function calculateFees(_fromOperator: string, _toOperator: string, amount: number): number {
-  return Math.ceil(amount * 0.035);
+async function getFeePercent(): Promise<number> {
+  try {
+    const rows = await db.select({ value: adminSettingsTable.value })
+      .from(adminSettingsTable)
+      .where(eq(adminSettingsTable.key, "fee_deposit_percent"))
+      .limit(1);
+    if (rows.length && rows[0].value) {
+      const v = parseFloat(rows[0].value);
+      if (!isNaN(v) && v >= 0) return v / 100;
+    }
+  } catch { /* fallback */ }
+  return 0.035;
+}
+
+async function calculateFees(_fromOperator: string, _toOperator: string, amount: number): Promise<number> {
+  const rate = await getFeePercent();
+  return Math.ceil(amount * rate);
 }
 
 router.post("/transfer/fees", async (req, res) => {
@@ -52,8 +67,9 @@ router.post("/transfer/fees", async (req, res) => {
       return;
     }
     const amt = parseInt(String(amount));
-    const fees = calculateFees(fromOperator, toOperator, amt);
-    res.json({ amount: amt, fees, total: amt + fees, estimatedTime: "Instantané" });
+    const rate = await getFeePercent();
+    const fees = Math.ceil(amt * rate);
+    res.json({ amount: amt, fees, total: amt + fees, feePercent: +(rate * 100).toFixed(2), estimatedTime: "Instantané" });
   } catch (err) {
     req.log.error({ err }, "Calculate fees error");
     res.status(500).json({ error: "Erreur serveur" });

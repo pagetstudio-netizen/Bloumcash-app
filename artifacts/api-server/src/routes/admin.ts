@@ -834,6 +834,84 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
   }
 });
 
+/* ─────────────────────────── ADMIN USERS (CRUD) ─────────────────────────── */
+
+router.get("/admin/admins", requireAdmin, async (req, res) => {
+  try {
+    const rows = await db
+      .select({ id: adminUsersTable.id, fullName: adminUsersTable.fullName, email: adminUsersTable.email, role: adminUsersTable.role, createdAt: adminUsersTable.createdAt })
+      .from(adminUsersTable)
+      .orderBy(asc(adminUsersTable.createdAt));
+    res.json(rows);
+  } catch (err) { req.log.error({ err }, "List admins error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/admins", requireAdmin, async (req, res) => {
+  try {
+    const { fullName, email, password, role } = req.body as { fullName?: string; email?: string; password?: string; role?: string };
+    if (!fullName?.trim() || !email?.trim() || !password?.trim()) {
+      res.status(400).json({ error: "Nom, email et mot de passe requis" }); return;
+    }
+    const validRoles = ["admin", "superadmin"];
+    const finalRole = validRoles.includes(role ?? "") ? role! : "admin";
+
+    const existing = await db.select({ id: adminUsersTable.id }).from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim())).limit(1);
+    if (existing.length) { res.status(409).json({ error: "Cet email est déjà utilisé" }); return; }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const [created] = await db.insert(adminUsersTable).values({
+      fullName: fullName.trim(),
+      email: email.toLowerCase().trim(),
+      passwordHash,
+      role: finalRole,
+    }).returning({ id: adminUsersTable.id, fullName: adminUsersTable.fullName, email: adminUsersTable.email, role: adminUsersTable.role, createdAt: adminUsersTable.createdAt });
+
+    await db.insert(securityEventsTable).values({ type: "admin_created", details: `Nouvel admin créé: ${email.trim()} (${finalRole}) par ${req.admin?.email ?? "admin"}` });
+    res.status(201).json(created);
+  } catch (err) { req.log.error({ err }, "Create admin error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.put("/admin/admins/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { fullName, email, password, role } = req.body as { fullName?: string; email?: string; password?: string; role?: string };
+
+    const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
+    if (!existing.length) { res.status(404).json({ error: "Administrateur introuvable" }); return; }
+
+    const updates: Partial<typeof adminUsersTable.$inferInsert> = {};
+    if (fullName?.trim()) updates.fullName = fullName.trim();
+    if (email?.trim()) {
+      const dup = await db.select({ id: adminUsersTable.id }).from(adminUsersTable).where(eq(adminUsersTable.email, email.toLowerCase().trim())).limit(1);
+      if (dup.length && dup[0].id !== id) { res.status(409).json({ error: "Cet email est déjà utilisé" }); return; }
+      updates.email = email.toLowerCase().trim();
+    }
+    if (password?.trim()) updates.passwordHash = await bcrypt.hash(password, 12);
+    const validRoles = ["admin", "superadmin"];
+    if (role && validRoles.includes(role)) updates.role = role;
+
+    const [updated] = await db.update(adminUsersTable).set(updates).where(eq(adminUsersTable.id, id))
+      .returning({ id: adminUsersTable.id, fullName: adminUsersTable.fullName, email: adminUsersTable.email, role: adminUsersTable.role, createdAt: adminUsersTable.createdAt });
+
+    await db.insert(securityEventsTable).values({ type: "admin_updated", details: `Admin #${id} modifié par ${req.admin?.email ?? "admin"}` });
+    res.json(updated);
+  } catch (err) { req.log.error({ err }, "Update admin error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.delete("/admin/admins/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (req.admin?.id === id) { res.status(400).json({ error: "Impossible de supprimer votre propre compte" }); return; }
+
+    const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.id, id)).limit(1);
+    if (!existing.length) { res.status(404).json({ error: "Administrateur introuvable" }); return; }
+
+    await db.delete(adminUsersTable).where(eq(adminUsersTable.id, id));
+    await db.insert(securityEventsTable).values({ type: "admin_deleted", details: `Admin #${id} (${existing[0].email}) supprimé par ${req.admin?.email ?? "admin"}` });
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Delete admin error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
 /* ─────────────────── PUSH NOTIFICATION CAMPAIGNS ─────────────────── */
 
 /** Broadcast push à tous les utilisateurs ayant un onesignal_external_user_id */
