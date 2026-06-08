@@ -581,9 +581,10 @@ export default function Transfert() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <h1 className="text-[17px] font-bold text-white">Transférer</h1>
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+          <a href="https://bloumcash.com/support" target="_blank" rel="noopener noreferrer"
+            className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
             <HelpCircle className="w-5 h-5 text-white" />
-          </div>
+          </a>
         </div>
 
         {/* Step indicator */}
