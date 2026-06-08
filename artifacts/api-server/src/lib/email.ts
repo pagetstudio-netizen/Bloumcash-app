@@ -1,6 +1,12 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
+
 const FROM = process.env.RESEND_FROM_EMAIL
   ? `Bloum Cash Togo <${process.env.RESEND_FROM_EMAIL}>`
   : "Bloum Cash Togo <noreply@bloumcash.tg>";
@@ -76,6 +82,8 @@ export async function sendWelcomeEmail(opts: { to: string; fullName: string }) {
       </a>
     </div>
   `);
+  const resend = getResend();
+  if (!resend) { console.warn("RESEND_API_KEY not set — welcome email skipped"); return; }
   return resend.emails.send({
     from: FROM,
     to: opts.to,
@@ -110,6 +118,8 @@ export async function sendPinResetEmail(opts: { to: string; fullName: string; co
       </p>
     </div>
   `);
+  const resend = getResend();
+  if (!resend) { console.warn("RESEND_API_KEY not set — pin reset email skipped"); return; }
   return resend.emails.send({
     from: FROM,
     to: opts.to,
@@ -159,6 +169,8 @@ export async function sendAdminVerificationCode(opts: {
       </p>
     </div>
   `);
+  const resend = getResend();
+  if (!resend) { console.warn("RESEND_API_KEY not set — admin verification email skipped"); return; }
   return resend.emails.send({
     from: FROM,
     to: opts.to,
@@ -195,6 +207,8 @@ export async function sendMassEmail(opts: {
       Vous recevez cet email car vous êtes inscrit sur Bloum Cash Togo.
     </p>
   `);
+  const resend = getResend();
+  if (!resend) { console.warn("RESEND_API_KEY not set — mass email skipped"); return; }
   return resend.emails.send({
     from: FROM,
     to: opts.to,
@@ -202,5 +216,3 @@ export async function sendMassEmail(opts: {
     html,
   });
 }
-
-export { resend };
