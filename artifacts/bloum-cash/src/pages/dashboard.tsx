@@ -13,15 +13,12 @@ import { useGetRecentTransactions } from "@workspace/api-client-react";
 
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
-import banner1 from "@assets/20260607_084736_1780823957900.jpg";
-import banner2 from "@assets/20260607_085207_1780823957921.jpg";
-import banner3 from "@assets/20260607_090625_1780823957938.jpg";
 
 interface DashBanner { id: number; title: string | null; imageUrl: string; actionType: string; actionUrl: string | null; }
 const LOCAL_BANNERS: DashBanner[] = [
-  { id: -1, title: "Bannière 1", imageUrl: banner1, actionType: "none", actionUrl: null },
-  { id: -2, title: "Bannière 2", imageUrl: banner2, actionType: "none", actionUrl: null },
-  { id: -3, title: "Bannière 3", imageUrl: banner3, actionType: "none", actionUrl: null },
+  { id: -1, title: "Bannière 1", imageUrl: "/banners/banner1.jpg", actionType: "none", actionUrl: null },
+  { id: -2, title: "Bannière 2", imageUrl: "/banners/banner2.jpg", actionType: "none", actionUrl: null },
+  { id: -3, title: "Bannière 3", imageUrl: "/banners/banner3.jpg", actionType: "none", actionUrl: null },
 ];
 
 export default function Dashboard() {
@@ -209,7 +206,11 @@ export default function Dashboard() {
           {banners.map((banner, i) => (
             <div
               key={banner.id}
-              className="flex-shrink-0 w-full snap-center"
+              className="flex-shrink-0 w-full snap-center bg-[#1a3fc4] overflow-hidden"
+              style={{
+                height: "190px",
+                cursor: banner.actionType !== "none" && banner.actionUrl ? "pointer" : "default",
+              }}
               onClick={() => {
                 if (banner.actionType === "page" && banner.actionUrl) {
                   setLocation(banner.actionUrl);
@@ -221,14 +222,16 @@ export default function Dashboard() {
                   resetTimer();
                 }
               }}
-              style={{ cursor: banner.actionType !== "none" && banner.actionUrl ? "pointer" : "default" }}
             >
               <img
                 src={banner.imageUrl}
                 alt={banner.title ?? `Bannière ${i + 1}`}
-                className="w-full object-cover"
-                style={{ height: "160px" }}
+                className="w-full h-full"
+                style={{ objectFit: "cover", objectPosition: "center center" }}
                 draggable={false}
+                loading={i === 0 ? "eager" : "lazy"}
+                decoding="async"
+                fetchPriority={i === 0 ? "high" : "low"}
               />
             </div>
           ))}

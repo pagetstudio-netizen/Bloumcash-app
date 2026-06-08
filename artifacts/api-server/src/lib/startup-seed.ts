@@ -1,7 +1,7 @@
 import { db } from "@workspace/db";
 import {
   adminUsersTable, countriesConfigTable, operatorsConfigTable,
-  adminSettingsTable, adminNotificationsTable,
+  adminSettingsTable, adminNotificationsTable, dashboardBannersTable,
 } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -60,6 +60,17 @@ export async function runStartupSeed() {
     for (const s of defaults) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
       if (!ex.length) { await db.insert(adminSettingsTable).values(s); }
+    }
+
+    // Banners — pré-seeder avec les 3 images de la PWA
+    const banners = await db.select().from(dashboardBannersTable).limit(1);
+    if (!banners.length) {
+      await db.insert(dashboardBannersTable).values([
+        { title: "Transfert sans déplacement", imageUrl: "/banners/banner1.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 0 },
+        { title: "TMoney & Moov Money", imageUrl: "/banners/banner2.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 1 },
+        { title: "Paiement QR Code", imageUrl: "/banners/banner3.jpg", actionType: "page", actionUrl: "/encaisser", isActive: true, sortOrder: 2 },
+      ]);
+      logger.info("✅ Bannières pré-seededées");
     }
 
     // Welcome notification
