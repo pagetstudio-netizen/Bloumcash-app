@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Star, MessageCircle, AlertTriangle, Globe } from "lucide-react";
+import { ArrowLeft, Star, MessageCircle, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 import { useWhatsAppSupportNumber } from "@/lib/utils";
