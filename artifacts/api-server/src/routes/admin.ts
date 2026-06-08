@@ -218,7 +218,9 @@ router.get("/admin/users/:id", requireAdmin, async (req, res) => {
 router.put("/admin/users/:id", requireAdmin, async (req, res) => {
   try {
     const { fullName, email } = req.body;
-    await db.update(usersTable).set({ fullName, email }).where(eq(usersTable.id, parseInt(req.params.id)));
+    const userId = parseInt(req.params.id);
+    await db.update(usersTable).set({ fullName, email }).where(eq(usersTable.id, userId));
+    await db.insert(securityEventsTable).values({ type: "user_edited", details: `User #${userId} modifié par ${req.admin?.email ?? "admin"} — nom: ${fullName ?? ""}, email: ${email ?? ""}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Admin update user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
@@ -332,13 +334,54 @@ router.get("/admin/transactions", requireAdmin, async (req, res) => {
   } catch (err) { req.log.error({ err }, "Admin list tx error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
+router.get("/admin/transactions/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const txRows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
+    if (!txRows.length) { res.status(404).json({ error: "Transaction introuvable" }); return; }
+    const tx = txRows[0];
+    let user: { fullName: string; email: string; phone: string | null; operator: string | null } | null = null;
+    if (tx.userId) {
+      const uRows = await db.select({ fullName: usersTable.fullName, email: usersTable.email, phone: usersTable.phone, operator: usersTable.operator }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+      if (uRows.length) user = uRows[0];
+    }
+    res.json({ ...tx, user });
+  } catch (err) { req.log.error({ err }, "Admin tx detail error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
 router.put("/admin/transactions/:id/force-status", requireAdmin, async (req, res) => {
   try {
     const { status } = req.body;
     if (!["success", "failed", "pending"].includes(status)) { res.status(400).json({ error: "Statut invalide" }); return; }
-    await db.update(transactionsTable).set({ status }).where(eq(transactionsTable.id, parseInt(req.params.id)));
+    const id = parseInt(req.params.id);
+    await db.update(transactionsTable).set({ status }).where(eq(transactionsTable.id, id));
+    const [tx] = await db.select({ reference: transactionsTable.reference }).from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
+    await db.insert(securityEventsTable).values({ type: "tx_status_forced", details: `TX #${id} (réf ${tx?.reference ?? ""}) → statut forcé: ${status} par ${req.admin?.email ?? "admin"}` });
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Force status error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+router.post("/admin/transactions/:id/retry-payout", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const txRows = await db.select().from(transactionsTable).where(eq(transactionsTable.id, id)).limit(1);
+    if (!txRows.length) { res.status(404).json({ error: "Transaction introuvable" }); return; }
+    const tx = txRows[0];
+    if (!paydunya.isConfigured()) {
+      res.status(503).json({ error: "PayDunya non configuré", code: "NOT_CONFIGURED" }); return;
+    }
+    if (!tx.toPhone || !tx.toOperator) {
+      res.status(400).json({ error: "Numéro ou opérateur destinataire manquant" }); return;
+    }
+    const result = await paydunya.disburseTogoWallet(tx.toOperator as "tmoney" | "moov", tx.toPhone, tx.amount, `Relance retrait — ${tx.reference}`, req.log);
+    if (result.success) {
+      await db.update(transactionsTable).set({ status: "success", payoutSent: true }).where(eq(transactionsTable.id, id));
+      await db.insert(securityEventsTable).values({ type: "tx_retry_payout", details: `TX #${id} (${tx.reference}) retrait relancé par ${req.admin?.email ?? "admin"} — PayDunya ref: ${result.transactionId ?? ""}` });
+      res.json({ success: true, message: "Retrait relancé avec succès", reference: result.transactionId });
+    } else {
+      res.status(502).json({ success: false, error: result.message ?? "Échec PayDunya" });
+    }
+  } catch (err) { req.log.error({ err }, "Retry payout error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 /* ─────────────────────────── OPERATORS ─────────────────────────── */
@@ -424,6 +467,34 @@ router.delete("/admin/notifications/:id", requireAdmin, async (req, res) => {
     await db.delete(adminNotificationsTable).where(eq(adminNotificationsTable.id, parseInt(req.params.id)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Delete notification error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+/* ─────────────────────────── PUBLIC — Operators status ─────────────────────────── */
+router.get("/operators", async (_req, res) => {
+  try {
+    const rows = await db.select().from(operatorsConfigTable).orderBy(operatorsConfigTable.name);
+    const MAP: Record<string, string> = { tmoney: "tmoney", moov: "moov" };
+    const toKey = (name: string): string => {
+      const n = name.toLowerCase();
+      if (n.includes("tmoney") || n.includes("t-money")) return "tmoney";
+      if (n.includes("moov") || n.includes("flooz")) return "moov";
+      return n.replace(/\s+/g, "_");
+    };
+    const result = rows.map(op => ({
+      key: toKey(op.name),
+      name: op.name,
+      isActive: op.isActive,
+      inMaintenance: op.maintenanceAll || op.maintenanceWithdraw,
+      maintenanceDeposit: op.maintenanceDeposit,
+      maintenanceWithdraw: op.maintenanceWithdraw,
+      maintenanceAll: op.maintenanceAll,
+    }));
+    // Assurer tmoney + moov sont toujours présents (fallback si table vide)
+    const keys = result.map(r => r.key);
+    if (!keys.includes("tmoney")) result.push({ key: "tmoney", name: "TMoney", isActive: true, inMaintenance: false, maintenanceDeposit: false, maintenanceWithdraw: false, maintenanceAll: false });
+    if (!keys.includes("moov")) result.push({ key: "moov", name: "Moov Money", isActive: true, inMaintenance: false, maintenanceDeposit: false, maintenanceWithdraw: false, maintenanceAll: false });
+    res.json(result);
+  } catch { res.json([]); }
 });
 
 /* Public endpoint — active notification for user dashboard popup */

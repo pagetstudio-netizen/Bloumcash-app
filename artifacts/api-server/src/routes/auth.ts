@@ -1,12 +1,19 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { usersTable, blacklistTable } from "@workspace/db";
+import { eq, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { signUserToken } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
 
 const router: IRouter = Router();
+
+/* Vérifie si un numéro est blacklisté */
+async function isBlacklisted(phone: string | null | undefined): Promise<boolean> {
+  if (!phone) return false;
+  const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
+  return rows.length > 0;
+}
 
 router.post("/auth/login", async (req, res) => {
   try {
@@ -23,6 +30,32 @@ router.post("/auth/login", async (req, res) => {
     }
 
     const user = users[0];
+
+    /* ── Vérification statut compte ── */
+    if (user.status === "banned") {
+      res.status(403).json({
+        error: "Votre compte a été désactivé pour cause d'activité suspecte. Contactez le support.",
+        code: "ACCOUNT_BANNED",
+      });
+      return;
+    }
+    if (user.status === "suspended") {
+      res.status(403).json({
+        error: "Votre compte est temporairement suspendu. Contactez le support.",
+        code: "ACCOUNT_SUSPENDED",
+      });
+      return;
+    }
+
+    /* ── Vérification blacklist (numéro de téléphone) ── */
+    if (await isBlacklisted(user.phone)) {
+      res.status(403).json({
+        error: "Escroquerie détectée. Accès refusé. Bye.",
+        code: "PHONE_BLACKLISTED",
+      });
+      return;
+    }
+
     const pinMatches = await bcrypt.compare(String(pin), user.pin);
     if (!pinMatches) {
       res.status(401).json({ error: "Email ou PIN incorrect" });
@@ -31,10 +64,9 @@ router.post("/auth/login", async (req, res) => {
 
     const token = signUserToken({ id: user.id, email: user.email });
 
-    // Enregistrer l'email comme external_id OneSignal et envoyer notification de bienvenue
     await db
       .update(usersTable)
-      .set({ onesignalExternalUserId: user.email })
+      .set({ onesignalExternalUserId: user.email, lastLoginAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
     sendPushNotification(
@@ -63,9 +95,18 @@ router.post("/auth/login", async (req, res) => {
 
 router.post("/auth/register", async (req, res) => {
   try {
-    const { fullName, email, pin } = req.body;
+    const { fullName, email, pin, phone } = req.body;
     if (!fullName || !email || !pin) {
       res.status(400).json({ error: "Tous les champs sont requis" });
+      return;
+    }
+
+    /* ── Vérification blacklist sur le numéro fourni à l'inscription ── */
+    if (phone && await isBlacklisted(phone)) {
+      res.status(403).json({
+        error: "Escroquerie détectée. Inscription refusée.",
+        code: "PHONE_BLACKLISTED",
+      });
       return;
     }
 
@@ -78,7 +119,7 @@ router.post("/auth/register", async (req, res) => {
     const hashedPin = await bcrypt.hash(String(pin), 12);
     const [user] = await db
       .insert(usersTable)
-      .values({ fullName, email, pin: hashedPin, onesignalExternalUserId: email })
+      .values({ fullName, email, pin: hashedPin, phone: phone ?? null, onesignalExternalUserId: email })
       .returning();
     const token = signUserToken({ id: user.id, email: user.email });
 

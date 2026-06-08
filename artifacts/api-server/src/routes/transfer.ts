@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { transactionsTable, usersTable } from "@workspace/db";
+import { transactionsTable, usersTable, blacklistTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
@@ -64,6 +64,24 @@ router.post("/transfer", async (req, res) => {
 
     const currentUser = extractUser(req);
     const userId = currentUser?.id ?? null;
+
+    /* ── Vérification statut utilisateur + blacklist ── */
+    if (userId) {
+      const [userRow] = await db.select({ status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      if (userRow?.status === "banned") {
+        res.status(403).json({ error: "Votre compte est banni. Contactez le support.", code: "ACCOUNT_BANNED" });
+        return;
+      }
+      if (userRow?.status === "suspended") {
+        res.status(403).json({ error: "Votre compte est temporairement suspendu.", code: "ACCOUNT_SUSPENDED" });
+        return;
+      }
+    }
+    const blRows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, fromPhone)).limit(1);
+    if (blRows.length) {
+      res.status(403).json({ error: "Escroquerie détectée. Accès refusé. Bye.", code: "PHONE_BLACKLISTED" });
+      return;
+    }
 
     /* ── Mode démo — PayDunya non configuré ── */
     if (!paydunya.isConfigured()) {

@@ -159,6 +159,12 @@ const OPS: Record<Operator, { name: string; logo: string }> = {
   moov:   { name: "Moov Money", logo: moovLogo   },
 };
 
+interface OpStatus { key: string; isActive: boolean; inMaintenance: boolean; maintenanceWithdraw: boolean; }
+const DEFAULT_OP_STATUSES: OpStatus[] = [
+  { key: "tmoney", isActive: true, inMaintenance: false, maintenanceWithdraw: false },
+  { key: "moov",   isActive: true, inMaintenance: false, maintenanceWithdraw: false },
+];
+
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000, 200000];
 
 function fmt(n: number) {
@@ -172,26 +178,25 @@ function OpModal({
   open,
   onSelect,
   onClose,
+  opStatuses,
 }: {
   open: boolean;
   onSelect: (op: Operator) => void;
   onClose: () => void;
+  opStatuses: OpStatus[];
 }) {
+  const getStatus = (key: Operator) => opStatuses.find(o => o.key === key) ?? { isActive: true, inMaintenance: false, maintenanceWithdraw: false };
+
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Fond flouté */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-40"
             style={{ backgroundColor: "rgba(40,50,140,0.35)", backdropFilter: "blur(4px)" }}
             onClick={onClose}
           />
-
-          {/* Carte modale centrée */}
           <motion.div
             initial={{ opacity: 0, scale: 0.85, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -199,35 +204,39 @@ function OpModal({
             transition={{ type: "spring", damping: 26, stiffness: 340 }}
             className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[82%] max-w-[300px] bg-white rounded-3xl shadow-2xl p-6"
           >
-            {/* Titre + croix */}
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-[15px] font-bold text-gray-900">Choisir l'opérateur</h3>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:scale-90 transition-transform"
-              >
+              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:scale-90 transition-transform">
                 <X className="w-4 h-4 text-gray-600" />
               </button>
             </div>
-
-            {/* Deux cartes opérateurs */}
             <div className="grid grid-cols-2 gap-3">
-              {(["tmoney", "moov"] as Operator[]).map((op) => (
-                <button
-                  key={op}
-                  onClick={() => { onSelect(op); onClose(); }}
-                  className="flex flex-col items-center gap-3 p-5 rounded-2xl border border-gray-200 bg-white active:scale-[0.96] hover:border-blue-300 hover:bg-blue-50/30 transition-all"
-                >
-                  <img
-                    src={OPS[op].logo}
-                    alt={OPS[op].name}
-                    className="w-14 h-14 rounded-2xl object-cover"
-                  />
-                  <span className="text-[13px] font-bold text-gray-800 text-center leading-tight">
-                    {OPS[op].name}
-                  </span>
-                </button>
-              ))}
+              {(["tmoney", "moov"] as Operator[]).map((op) => {
+                const st = getStatus(op);
+                const disabled = !st.isActive;
+                const maintenance = st.inMaintenance || st.maintenanceWithdraw;
+                return (
+                  <button
+                    key={op}
+                    onClick={() => { if (!disabled && !maintenance) { onSelect(op); onClose(); } }}
+                    disabled={disabled}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all relative ${
+                      disabled ? "border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed" :
+                      maintenance ? "border-orange-200 bg-orange-50/30 cursor-not-allowed" :
+                      "border-gray-200 bg-white active:scale-[0.96] hover:border-blue-300 hover:bg-blue-50/30"
+                    }`}
+                  >
+                    <img src={OPS[op].logo} alt={OPS[op].name} className="w-12 h-12 rounded-2xl object-cover" />
+                    <span className="text-[12px] font-bold text-gray-800 text-center leading-tight">{OPS[op].name}</span>
+                    {maintenance && !disabled && (
+                      <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Maintenance</span>
+                    )}
+                    {disabled && (
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Indisponible</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </motion.div>
         </>
@@ -255,12 +264,21 @@ export default function Transfert() {
   const [transferRef, setTransferRef] = useState<string>("");
   const [txFees, setTxFees] = useState(0);
   const [txTotal, setTxTotal] = useState(0);
+  const [opStatuses, setOpStatuses] = useState<OpStatus[]>(DEFAULT_OP_STATUSES);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
+
+  /* Charger le statut des opérateurs depuis l'API */
+  useEffect(() => {
+    fetch("/api/operators")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (Array.isArray(data) && data.length > 0) setOpStatuses(data); })
+      .catch(() => {});
+  }, []);
 
   /* Nettoyer le polling au démontage */
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -735,13 +753,14 @@ export default function Transfert() {
               {/* Logo opérateur + chevron */}
               <button
                 onClick={() => setModalFor("from")}
-                className="flex items-center gap-1.5 flex-shrink-0 active:scale-95 transition-transform"
+                className="flex items-center gap-1.5 flex-shrink-0 active:scale-95 transition-transform relative"
               >
-                <img
-                  src={OPS[fromOp].logo}
-                  alt={OPS[fromOp].name}
-                  className="w-12 h-12 rounded-full object-cover shadow"
-                />
+                <div className="relative">
+                  <img src={OPS[fromOp].logo} alt={OPS[fromOp].name} className="w-12 h-12 rounded-full object-cover shadow" />
+                  {opStatuses.find(o => o.key === fromOp)?.inMaintenance && (
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white bg-orange-500 px-1 rounded-full whitespace-nowrap">MAINT.</span>
+                  )}
+                </div>
                 <ChevronDown className="w-4 h-4 text-gray-500" />
               </button>
 
@@ -870,11 +889,13 @@ export default function Transfert() {
         open={modalFor === "from"}
         onSelect={handleChangeFrom}
         onClose={() => setModalFor(null)}
+        opStatuses={opStatuses}
       />
       <OpModal
         open={modalFor === "to"}
         onSelect={handleChangeTo}
         onClose={() => setModalFor(null)}
+        opStatuses={opStatuses}
       />
     </div>
   );
