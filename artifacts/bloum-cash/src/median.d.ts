@@ -3,20 +3,34 @@
  * Disponible uniquement dans les wrappers iOS/Android générés par Median.
  */
 declare const median: {
+  /** Push natif Median (sans popup de permission — inscription silencieuse) */
+  push: {
+    /**
+     * Enregistre silencieusement l'appareil pour le push natif Median.
+     * Sur iOS utilise la provisional authorization (iOS 12+) → zéro dialog.
+     * À appeler dès que l'app est prête.
+     */
+    register: () => void;
+  };
+
+  /** OneSignal — uniquement pour l'identification et les campagnes avancées */
   onesignal: {
-    /** Enregistre un utilisateur identifié dans OneSignal après connexion. */
+    /** Associe un utilisateur identifié (email) à un device OneSignal. */
     login: (options: { externalId: string }) => void;
     /** Désenregistre l'utilisateur de OneSignal à la déconnexion. */
     logout: () => void;
-    /** Affiche la boîte de dialogue de demande de permission pour les notifications. */
-    promptForPermission: () => void;
-    /** Retourne le statut des permissions et le playerId OneSignal. */
+    /**
+     * Retourne le statut des permissions et le playerId OneSignal.
+     * Ne pas utiliser pour déclencher promptForPermission — on n'interrompt
+     * pas l'utilisateur ; la permission vient du push natif Median.
+     */
     getPermissionStatus: (callback: (result: {
       hasPrompted: boolean;
       status: "authorized" | "denied" | "notDetermined";
       playerId: string | null;
     }) => void) => void;
   };
+
   share: {
     sharePage: (options?: { text?: string; url?: string }) => void;
   };
