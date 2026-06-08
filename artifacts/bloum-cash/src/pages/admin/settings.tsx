@@ -8,7 +8,7 @@ const SECTIONS = [
     fields: [
       { key: "platform_name", label: "Nom de la plateforme", type: "text" },
       { key: "support_email", label: "Email de support", type: "email" },
-      { key: "support_phone", label: "Téléphone de support", type: "tel" },
+      { key: "support_phone", label: "Numéro WhatsApp du service client (ex: +228 92299772)", type: "tel" },
     ],
   },
   {

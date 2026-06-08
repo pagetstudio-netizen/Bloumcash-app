@@ -15,7 +15,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatAmount, validateTogoPhone } from "@/lib/utils";
+import { formatAmount, validateTogoPhone, useWhatsAppSupportNumber } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
 import { useModal } from "@/components/app-modal";
 import { useCreateTransfer } from "@workspace/api-client-react";
@@ -253,6 +253,7 @@ export default function Transfert() {
   const [, setLocation] = useLocation();
   const { showModal } = useModal();
   const createTransfer = useCreateTransfer();
+  const waNumber = useWhatsAppSupportNumber();
 
   const [fromOp, setFromOp] = useState<Operator>("tmoney");
   const [toOp,   setToOp]   = useState<Operator>("moov");
@@ -388,7 +389,7 @@ export default function Transfert() {
       `📱 De : +228 ${fromPhone} (${OPS[fromOp].name})`,
       `📱 Vers : +228 ${toPhone} (${OPS[toOp].name})`,
     ].join("\n");
-    window.open(`https://wa.me/22892299772?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
   /* ────── Écran succès ────────────────────────────────────────── */

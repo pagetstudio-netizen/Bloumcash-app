@@ -3,20 +3,25 @@ import { useLocation } from "wouter";
 import { ArrowLeft, MessageCircle, Clock, CheckCircle2, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
+import { useWhatsAppSupportNumber } from "@/lib/utils";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
-const WA_NUMBER = "22891000000";
 const WA_MESSAGE = encodeURIComponent("Bonjour, j'ai besoin d'aide avec Bloum Cash.");
 
 export default function SupportWhatsApp() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const waNumber = useWhatsAppSupportNumber();
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
 
   if (!isAuthenticated) return null;
+
+  const displayNumber = waNumber.length === 11
+    ? `+${waNumber.slice(0, 3)} ${waNumber.slice(3, 5)} ${waNumber.slice(5, 7)} ${waNumber.slice(7, 9)} ${waNumber.slice(9)}`
+    : `+${waNumber}`;
 
   return (
     <div className={BG}>
@@ -59,7 +64,7 @@ export default function SupportWhatsApp() {
           {[
             { icon: <Clock className="w-4 h-4 text-blue-500" />, label: "Disponibilité", value: "Lun–Sam, 8h–20h (GMT+0)" },
             { icon: <CheckCircle2 className="w-4 h-4 text-green-500" />, label: "Temps de réponse", value: "< 30 minutes en général" },
-            { icon: <Phone className="w-4 h-4 text-purple-500" />, label: "Numéro", value: `+${WA_NUMBER}` },
+            { icon: <Phone className="w-4 h-4 text-purple-500" />, label: "Numéro", value: displayNumber },
           ].map((item, i) => (
             <div key={i} className="flex items-center gap-3">
               <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center flex-shrink-0">
@@ -75,7 +80,7 @@ export default function SupportWhatsApp() {
 
         {/* CTA button */}
         <motion.a
-          href={`https://wa.me/${WA_NUMBER}?text=${WA_MESSAGE}`}
+          href={`https://wa.me/${waNumber}?text=${WA_MESSAGE}`}
           target="_blank"
           rel="noopener noreferrer"
           initial={{ opacity: 0, y: 10 }}

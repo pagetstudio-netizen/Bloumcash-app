@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, MessageCircle, Phone, Clock, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
+import { useWhatsAppSupportNumber } from "@/lib/utils";
 
 const BG = "h-[100dvh] w-full bg-gradient-to-b from-[#1a3fc4] via-[#1558b0] to-[#0d9488] flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
@@ -15,6 +16,7 @@ const faqs = [
 export default function WhatsAppSupport() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const waNumber = useWhatsAppSupportNumber();
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -22,8 +24,13 @@ export default function WhatsAppSupport() {
 
   if (!isAuthenticated) return null;
 
+  const displayNumber = waNumber.length === 11
+    ? `+${waNumber.slice(0, 3)} ${waNumber.slice(3, 5)} ${waNumber.slice(5, 7)} ${waNumber.slice(7, 9)} ${waNumber.slice(9)}`
+    : `+${waNumber}`;
+
   const openWhatsApp = () => {
-    window.open("https://wa.me/22890000000?text=Bonjour%2C%20j'ai%20besoin%20d'aide%20avec%20mes%20paiements%20Bloum%20Cash.", "_blank");
+    const msg = encodeURIComponent("Bonjour, j'ai besoin d'aide avec mes paiements Bloum Cash.");
+    window.open(`https://wa.me/${waNumber}?text=${msg}`, "_blank");
   };
 
   return (
@@ -56,7 +63,7 @@ export default function WhatsAppSupport() {
           <div className="w-full bg-gray-50 rounded-xl px-4 py-3 flex flex-col gap-2">
             <div className="flex items-center gap-2 text-sm text-gray-700">
               <Phone className="w-4 h-4 text-[#25D366] flex-shrink-0" />
-              <span className="font-semibold">+228 90 00 00 00</span>
+              <span className="font-semibold">{displayNumber}</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-500">
               <Clock className="w-4 h-4 flex-shrink-0" />

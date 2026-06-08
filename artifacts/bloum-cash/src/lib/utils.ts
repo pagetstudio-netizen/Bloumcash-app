@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import React from "react"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -17,6 +18,28 @@ export function formatAmount(amount: number): string {
 }
 
 export type TogoOperator = "tmoney" | "moov" | null;
+
+/** Convertit un support_phone (ex "+228 92 29 97 72") en numéro wa.me (ex "22892299772") */
+export function phoneToWaNumber(phone: string): string {
+  return phone.replace(/[^0-9]/g, "");
+}
+
+/** Hook qui lit le numéro WhatsApp de support depuis /api/public-settings */
+export function useWhatsAppSupportNumber(): string {
+  const [waNumber, setWaNumber] = React.useState("22892299772");
+  React.useEffect(() => {
+    fetch("/api/public-settings")
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { support_phone?: string } | null) => {
+        if (d?.support_phone) {
+          const n = phoneToWaNumber(d.support_phone);
+          if (n.length >= 8) setWaNumber(n);
+        }
+      })
+      .catch(() => {});
+  }, []);
+  return waNumber;
+}
 
 export function validateTogoPhone(phone: string): { normalized: string; operator: TogoOperator; valid: boolean } {
   const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");

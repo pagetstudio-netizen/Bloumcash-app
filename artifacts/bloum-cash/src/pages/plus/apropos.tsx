@@ -3,12 +3,14 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Star, MessageCircle, AlertTriangle, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
+import { useWhatsAppSupportNumber } from "@/lib/utils";
 
 const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
 export default function Apropos() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const waNumber = useWhatsAppSupportNumber();
 
   React.useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
@@ -115,7 +117,7 @@ export default function Apropos() {
 
         {/* Support */}
         <motion.a
-          href="https://wa.me/22891000000"
+          href={`https://wa.me/${waNumber}`}
           target="_blank"
           rel="noopener noreferrer"
           initial={{ opacity: 0, y: 10 }}
