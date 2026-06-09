@@ -271,18 +271,7 @@ export default function Dashboard() {
               className="flex-shrink-0 w-full snap-center bg-[#1a3fc4] overflow-hidden"
               style={{
                 height: "190px",
-                cursor: banner.actionType !== "none" && banner.actionUrl ? "pointer" : "default",
-              }}
-              onClick={() => {
-                if (banner.actionType === "page" && banner.actionUrl) {
-                  setLocation(banner.actionUrl);
-                } else if (banner.actionType === "link" && banner.actionUrl) {
-                  window.open(banner.actionUrl, "_blank", "noopener,noreferrer");
-                } else {
-                  const next = (i + 1) % banners.length;
-                  scrollTo(next);
-                  resetTimer();
-                }
+                cursor: "default",
               }}
             >
               <img
