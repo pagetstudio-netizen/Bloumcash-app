@@ -582,10 +582,10 @@ export default function Transfert() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <h1 className="text-[17px] font-bold text-white">Transférer</h1>
-          <a href="https://bloumcash.com/support" target="_blank" rel="noopener noreferrer"
-            className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+          <button onClick={() => setLocation("/plus/whatsapp")}
+            className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform">
             <HelpCircle className="w-5 h-5 text-white" />
-          </a>
+          </button>
         </div>
 
         {/* Step indicator */}
@@ -709,7 +709,7 @@ export default function Transfert() {
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
         <h1 className="text-[17px] font-bold text-white">Transférer</h1>
-        <button className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+        <button onClick={() => setLocation("/plus/whatsapp")} className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform">
           <HelpCircle className="w-5 h-5 text-white" />
         </button>
       </div>
