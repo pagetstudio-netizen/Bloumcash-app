@@ -664,10 +664,10 @@ export default function Transfert() {
             </div>
 
             {/* Avertissement bénéficiaire */}
-            <div className="rounded-2xl px-4 py-3.5 flex items-start gap-3" style={{ background: "#3B4FC5" }}>
-              <span className="text-base leading-none mt-0.5 flex-shrink-0">⚠️</span>
-              <p className="text-[12px] font-semibold text-white leading-relaxed">
-                Vérifiez attentivement le numéro du bénéficiaire avant de confirmer votre transfert. Une fois la transaction validée et exécutée, les fonds envoyés vers un numéro erroné ne pourront pas être récupérés ou remboursés par Bloum Cash.
+            <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "#3B4FC5" }}>
+              <span className="text-sm leading-none flex-shrink-0">⚠️</span>
+              <p className="text-[11px] font-medium text-white leading-snug">
+                Vérifiez le numéro du bénéficiaire. Les fonds envoyés par erreur ne peuvent pas être remboursés.
               </p>
             </div>
 
