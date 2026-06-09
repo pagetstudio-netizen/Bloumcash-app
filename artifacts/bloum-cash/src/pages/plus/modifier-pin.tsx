@@ -29,19 +29,19 @@ export default function ModifierPin() {
     setError("");
 
     if (currentPin.length !== 6) {
-      setError("Le PIN actuel doit comporter 6 chiffres");
+      setError("Le mot de passe actuel doit comporter 6 chiffres");
       return;
     }
     if (newPin.length !== 6) {
-      setError("Le nouveau PIN doit comporter 6 chiffres");
+      setError("Le nouveau mot de passe doit comporter 6 chiffres");
       return;
     }
     if (newPin !== confirmPin) {
-      setError("Les deux nouveaux PINs ne correspondent pas");
+      setError("Les deux nouveaux mots de passe ne correspondent pas");
       return;
     }
     if (currentPin === newPin) {
-      setError("Le nouveau PIN doit être différent de l'ancien");
+      setError("Le nouveau mot de passe doit être différent de l'ancien");
       return;
     }
 
@@ -55,7 +55,7 @@ export default function ModifierPin() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Erreur lors du changement de PIN");
+        setError(data.error ?? "Erreur lors du changement de mot de passe");
       } else {
         setSuccess(true);
         setTimeout(() => setLocation("/plus"), 2500);
@@ -67,7 +67,7 @@ export default function ModifierPin() {
     }
   };
 
-  const PinField = ({
+  const PasswordField = ({
     label,
     value,
     onChange,
@@ -111,7 +111,7 @@ export default function ModifierPin() {
         <button onClick={() => setLocation("/plus")} className="p-1 -ml-1">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-lg font-bold flex-1">Modifier mot de passe</h1>
+        <h1 className="text-lg font-bold flex-1">Modifier le mot de passe</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -126,7 +126,7 @@ export default function ModifierPin() {
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-10 h-10 text-green-600" />
               </div>
-              <h2 className="text-xl font-bold text-foreground">PIN modifié !</h2>
+              <h2 className="text-xl font-bold text-foreground">Mot de passe modifié !</h2>
               <p className="text-muted-foreground text-sm">Votre mot de passe a été mis à jour avec succès.</p>
               <p className="text-xs text-muted-foreground">Redirection en cours…</p>
             </motion.div>
@@ -142,36 +142,36 @@ export default function ModifierPin() {
                   <Lock className="w-5 h-5 text-primary" />
                 </div>
                 <p className="text-sm text-foreground/80 leading-relaxed">
-                  Votre PIN est un code à <strong>6 chiffres</strong> utilisé pour vous connecter à Bloum Cash.
+                  Votre mot de passe est un code à <strong>6 chiffres</strong> utilisé pour vous connecter à Bloum Cash.
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4">
-                  <PinField
-                    label="PIN actuel"
+                  <PasswordField
+                    label="Mot de passe actuel"
                     value={currentPin}
                     onChange={setCurrentPin}
                     show={showCurrent}
                     onToggle={() => setShowCurrent(!showCurrent)}
-                    placeholder="Entrez votre PIN actuel"
+                    placeholder="Entrez votre mot de passe actuel"
                   />
                   <div className="border-t border-border" />
-                  <PinField
-                    label="Nouveau PIN"
+                  <PasswordField
+                    label="Nouveau mot de passe"
                     value={newPin}
                     onChange={setNewPin}
                     show={showNew}
                     onToggle={() => setShowNew(!showNew)}
-                    placeholder="Choisissez un nouveau PIN"
+                    placeholder="Choisissez un nouveau mot de passe"
                   />
-                  <PinField
-                    label="Confirmer le nouveau PIN"
+                  <PasswordField
+                    label="Confirmer le nouveau mot de passe"
                     value={confirmPin}
                     onChange={setConfirmPin}
                     show={showConfirm}
                     onToggle={() => setShowConfirm(!showConfirm)}
-                    placeholder="Répétez le nouveau PIN"
+                    placeholder="Répétez le nouveau mot de passe"
                   />
                 </div>
 
@@ -201,7 +201,7 @@ export default function ModifierPin() {
                   ) : (
                     <Lock className="w-5 h-5" />
                   )}
-                  {loading ? "Modification en cours…" : "Modifier le PIN"}
+                  {loading ? "Modification en cours…" : "Modifier le mot de passe"}
                 </button>
 
                 <button
@@ -209,7 +209,7 @@ export default function ModifierPin() {
                   onClick={() => setLocation("/forgot-pin")}
                   className="w-full text-center text-sm text-primary font-medium py-2 hover:underline"
                 >
-                  PIN oublié ? Réinitialiser par email
+                  Mot de passe oublié ? Réinitialiser par email
                 </button>
               </form>
             </motion.div>
