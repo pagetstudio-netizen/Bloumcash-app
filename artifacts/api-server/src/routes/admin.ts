@@ -479,6 +479,20 @@ router.post("/admin/users/:id/reactivate", requireAdmin, async (req, res) => {
   } catch (err) { req.log.error({ err }, "Reactivate user error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
+/* ── Localisation utilisateur ── */
+router.patch("/admin/users/:id/location", requireAdmin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id as string);
+    const { village, city, region } = req.body as { village?: string; city?: string; region?: string };
+    await db.update(usersTable).set({
+      village: village ?? null,
+      city: city ?? null,
+      region: region ?? null,
+    }).where(eq(usersTable.id, userId));
+    res.json({ success: true });
+  } catch (err) { req.log.error({ err }, "Update location error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
 /* ─────────────────────────── TRANSACTIONS ─────────────────────────── */
 router.get("/admin/transactions", requireAdmin, async (req, res) => {
   try {

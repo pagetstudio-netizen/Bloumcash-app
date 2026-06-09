@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Search, RefreshCw, Trash2, KeyRound, Loader2, ChevronLeft, ChevronRight,
-  UserX, AlertCircle, Eye, PauseCircle, Ban, CheckCircle2, PlusCircle, MinusCircle, X, Phone,
+  UserX, AlertCircle, Eye, PauseCircle, Ban, CheckCircle2, PlusCircle, MinusCircle, X, Phone, MapPin, Pencil, Save,
 } from "lucide-react";
 import AdminLayout, { adminFetch } from "./layout";
 import { formatAmount } from "@/lib/utils";
@@ -60,6 +60,12 @@ export default function AdminUsers() {
   const [blacklistPhone, setBlacklistPhone] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [locVillage, setLocVillage] = useState("");
+  const [locCity, setLocCity] = useState("");
+  const [locRegion, setLocRegion] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
