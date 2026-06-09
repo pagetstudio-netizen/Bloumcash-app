@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Gift, Tag, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Gift, Tag, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 
@@ -135,10 +135,7 @@ export default function Promotions() {
         >
           <ArrowLeft className="w-5 h-5 text-white" />
         </button>
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-yellow-300" />
-          <h1 className="text-[17px] font-bold text-white">Promotions</h1>
-        </div>
+        <h1 className="text-[17px] font-bold text-white">Promotions</h1>
         <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
           <Tag className="w-5 h-5 text-white" />
         </div>
