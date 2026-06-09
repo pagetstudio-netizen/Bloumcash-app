@@ -1,15 +1,45 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, MessageCircleQuestion, 
-  Phone, KeyRound, FileText, Shield, Info, LogOut, ChevronRight 
+  Phone, KeyRound, FileText, Shield, Info, LogOut, ChevronRight, Bell, Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+
+const TEST_EMAIL = "blousprono@gmail.com";
 
 export default function Plus() {
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const [testingPush, setTestingPush] = useState(false);
+
+  const handleTestPush = async () => {
+    setTestingPush(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/test-push-self", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token ?? ""}`,
+        },
+      });
+      const data = await res.json() as { success: boolean; notSubscribed?: boolean; error?: string; notificationId?: string };
+      if (data.success) {
+        toast.success("Notification envoyée ! Vérifiez votre téléphone.");
+      } else if (data.notSubscribed) {
+        toast.warning("Appareil non abonné. Ouvrez l'app mobile et acceptez les notifications.");
+      } else {
+        toast.error(data.error ?? "Échec de l'envoi.");
+      }
+    } catch {
+      toast.error("Erreur réseau. Réessayez.");
+    } finally {
+      setTestingPush(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -115,8 +145,23 @@ export default function Plus() {
            initial={{ opacity: 0, y: 10 }}
            animate={{ opacity: 1, y: 0 }}
            transition={{ delay: 0.3 }}
-           className="pt-4"
+           className="pt-4 space-y-3"
         >
+          {user?.email === TEST_EMAIL && (
+            <button
+              onClick={handleTestPush}
+              disabled={testingPush}
+              className="w-full bg-blue-50 text-blue-700 font-bold p-4 rounded-2xl border border-blue-100 flex items-center justify-center gap-2 hover:bg-blue-100 active:bg-blue-200 transition-colors disabled:opacity-60"
+            >
+              {testingPush ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Bell className="w-5 h-5" />
+              )}
+              Tester les notifications push
+            </button>
+          )}
+
           <button 
             onClick={handleLogout}
             className="w-full bg-red-50 text-red-600 font-bold p-4 rounded-2xl border border-red-100 flex items-center justify-center gap-2 hover:bg-red-100 active:bg-red-200 transition-colors"

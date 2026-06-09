@@ -10,6 +10,7 @@ import paydunyaDiagnoseRouter from "./paydunya-diagnose";
 import gomboplusWebhookRouter from "./gomboplus-webhook";
 import adminRouter from "./admin";
 import pushNotificationRouter from "./push-notification";
+import testPushRouter from "./test-push";
 import configRouter from "./config";
 
 const router: IRouter = Router();
@@ -26,5 +27,6 @@ router.use(paydunyaDiagnoseRouter);
 router.use(gomboplusWebhookRouter);
 router.use(adminRouter);
 router.use(pushNotificationRouter);
+router.use(testPushRouter);
 
 export default router;
