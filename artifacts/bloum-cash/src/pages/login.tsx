@@ -13,6 +13,9 @@ const loginSchema = z.object({
   pin: z.string().min(4, { message: "Mot de passe requis (min. 4 caractères)" }),
 });
 
+const TEAL = "#0EC4BA";
+const BLUE = "#2d52e8";
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
@@ -41,18 +44,28 @@ export default function Login() {
 
   const errors = form.formState.errors;
 
+  const fieldStyle = (hasError: boolean): React.CSSProperties => ({
+    width: "100%",
+    height: 52,
+    borderRadius: 12,
+    border: hasError ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+    background: hasError ? "#fef2f2" : "#f9fafb",
+    padding: "0 16px",
+    fontSize: 15,
+    color: "#111827",
+    outline: "none",
+    boxSizing: "border-box",
+  });
+
   return (
     <div
-      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto"
-      style={{ background: "#f0f2f5" }}
+      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto overflow-hidden"
+      style={{ background: BLUE }}
     >
       {/* ── En-tête bleu ── */}
-      <div
-        className="flex-shrink-0 flex flex-col items-center pt-14 pb-20 px-6"
-        style={{ background: "#2d52e8" }}
-      >
+      <div className="flex-shrink-0 flex flex-col items-center pt-12 pb-16 px-6">
         <div
-          className="flex items-center justify-center mb-5 overflow-hidden"
+          className="flex items-center justify-center mb-4 overflow-hidden"
           style={{
             width: 72,
             height: 72,
@@ -63,25 +76,24 @@ export default function Login() {
         >
           <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 72, height: 72, objectFit: "contain" }} />
         </div>
-        <h1 className="text-[24px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
-        <p className="text-white/80 text-[13px] mt-1">Connexion à votre compte</p>
+        <h1 className="text-[22px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
       </div>
 
-      {/* ── Carte blanche ── */}
+      {/* ── Carte blanche fixe ── */}
       <div
-        className="flex-1 flex flex-col overflow-y-auto"
+        className="flex-1 flex flex-col overflow-hidden"
         style={{
           background: "#fff",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           marginTop: -28,
-          padding: "28px 24px 28px 24px",
+          padding: "32px 24px 28px",
           boxShadow: "0 -6px 30px rgba(0,0,0,0.10)",
         }}
       >
         <h2
-          className="text-center font-extrabold text-gray-900 mb-7"
-          style={{ fontSize: 22 }}
+          className="text-center font-extrabold text-gray-900 mb-8"
+          style={{ fontSize: 24 }}
         >
           Connexion
         </h2>
@@ -97,28 +109,17 @@ export default function Login() {
 
           {/* Email */}
           <div>
-            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
+            <label className="block mb-2 font-semibold text-gray-700" style={{ fontSize: 14 }}>
               Adresse e-mail
             </label>
             <input
-              placeholder="nom@exemple.com"
+              placeholder="Adresse e-mail"
               type="text"
               inputMode="email"
               autoComplete="off"
               data-form-type="other"
               {...form.register("email")}
-              style={{
-                width: "100%",
-                height: 54,
-                borderRadius: 12,
-                border: errors.email ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
-                background: errors.email ? "#fef2f2" : "#f9fafb",
-                padding: "0 16px",
-                fontSize: 15,
-                color: "#111827",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
+              style={fieldStyle(!!errors.email)}
             />
             {errors.email && (
               <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.email.message}</p>
@@ -128,10 +129,10 @@ export default function Login() {
           {/* Mot de passe */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="font-semibold text-gray-800" style={{ fontSize: 14 }}>
+              <label className="font-semibold text-gray-700" style={{ fontSize: 14 }}>
                 Mot de passe
               </label>
-              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: "#2d52e8" }}>
+              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: TEAL }}>
                 Mot de passe oublié ?
               </Link>
             </div>
@@ -142,18 +143,7 @@ export default function Login() {
                 autoComplete="new-password"
                 data-form-type="other"
                 {...form.register("pin")}
-                style={{
-                  width: "100%",
-                  height: 54,
-                  borderRadius: 12,
-                  border: errors.pin ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
-                  background: errors.pin ? "#fef2f2" : "#f9fafb",
-                  padding: "0 48px 0 16px",
-                  fontSize: 15,
-                  color: "#111827",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
+                style={{ ...fieldStyle(!!errors.pin), padding: "0 48px 0 16px" }}
               />
               <button
                 type="button"
@@ -175,15 +165,15 @@ export default function Login() {
             disabled={loginMutation.isPending}
             style={{
               width: "100%",
-              height: 56,
+              height: 54,
               borderRadius: 14,
-              background: "#2d52e8",
+              background: TEAL,
               color: "#fff",
               fontSize: 16,
               fontWeight: 700,
               border: "none",
               cursor: "pointer",
-              marginTop: 4,
+              marginTop: 8,
               opacity: loginMutation.isPending ? 0.65 : 1,
             }}
           >
@@ -193,7 +183,7 @@ export default function Login() {
           {/* Lien inscription */}
           <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
             Nouveau sur Bloum Cash ?{" "}
-            <Link href="/register" style={{ color: "#2d52e8", fontWeight: 700 }}>
+            <Link href="/register" style={{ color: TEAL, fontWeight: 700 }}>
               S'inscrire
             </Link>
           </p>

@@ -18,6 +18,9 @@ const registerSchema = z.object({
   path: ["confirmPin"],
 });
 
+const TEAL = "#0EC4BA";
+const BLUE = "#2d52e8";
+
 export default function Register() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
@@ -61,7 +64,7 @@ export default function Register() {
 
   const fieldStyle = (hasError: boolean): React.CSSProperties => ({
     width: "100%",
-    height: 54,
+    height: 50,
     borderRadius: 12,
     border: hasError ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
     background: hasError ? "#fef2f2" : "#f9fafb",
@@ -74,43 +77,40 @@ export default function Register() {
 
   return (
     <div
-      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto"
-      style={{ background: "#f0f2f5" }}
+      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto overflow-hidden"
+      style={{ background: BLUE }}
     >
       {/* ── En-tête bleu ── */}
-      <div
-        className="flex-shrink-0 flex flex-col items-center pt-10 pb-16 px-6"
-        style={{ background: "#2d52e8" }}
-      >
+      <div className="flex-shrink-0 flex flex-col items-center pt-8 pb-14 px-6">
         <div
-          className="flex items-center justify-center mb-4 overflow-hidden"
+          className="flex items-center justify-center mb-3 overflow-hidden"
           style={{
-            width: 68,
-            height: 68,
+            width: 64,
+            height: 64,
             background: "#fff",
-            borderRadius: 20,
+            borderRadius: 18,
             boxShadow: "0 4px 20px rgba(0,0,0,0.18)",
           }}
         >
-          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 68, height: 68, objectFit: "contain" }} />
+          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 64, height: 64, objectFit: "contain" }} />
         </div>
-        <h1 className="text-[22px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
+        <h1 className="text-[20px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
       </div>
 
-      {/* ── Carte blanche scrollable ── */}
+      {/* ── Carte blanche fixe ── */}
       <div
-        className="flex-1 overflow-y-auto"
+        className="flex-1 flex flex-col overflow-hidden"
         style={{
           background: "#fff",
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
           marginTop: -24,
-          padding: "28px 24px 32px 24px",
+          padding: "26px 24px 20px",
           boxShadow: "0 -6px 30px rgba(0,0,0,0.10)",
         }}
       >
         <h2
-          className="text-center font-extrabold text-gray-900 mb-6"
+          className="text-center font-extrabold text-gray-900 mb-5"
           style={{ fontSize: 22 }}
         >
           Inscription
@@ -120,14 +120,14 @@ export default function Register() {
           onSubmit={form.handleSubmit(onSubmit)}
           autoComplete="off"
           data-form-type="other"
-          className="flex flex-col gap-5"
+          className="flex flex-col gap-4"
         >
           <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
           <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
 
           {/* Nom complet */}
           <div>
-            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
+            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>
               Nom Complet
             </label>
             <input
@@ -145,7 +145,7 @@ export default function Register() {
 
           {/* Email */}
           <div>
-            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
+            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>
               Adresse e-mail
             </label>
             <input
@@ -164,7 +164,7 @@ export default function Register() {
 
           {/* Mot de passe */}
           <div>
-            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
+            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>
               Mot de passe
             </label>
             <div className="relative">
@@ -192,7 +192,7 @@ export default function Register() {
 
           {/* Confirmer mot de passe */}
           <div>
-            <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
+            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>
               Confirmer le mot de passe
             </label>
             <div className="relative">
@@ -224,15 +224,15 @@ export default function Register() {
             disabled={registerMutation.isPending}
             style={{
               width: "100%",
-              height: 56,
+              height: 52,
               borderRadius: 14,
-              background: "#2d52e8",
+              background: TEAL,
               color: "#fff",
               fontSize: 16,
               fontWeight: 700,
               border: "none",
               cursor: "pointer",
-              marginTop: 4,
+              marginTop: 6,
               opacity: registerMutation.isPending ? 0.65 : 1,
             }}
           >
@@ -242,7 +242,7 @@ export default function Register() {
           {/* Lien connexion */}
           <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
             Vous avez déjà un compte ?{" "}
-            <Link href="/login" style={{ color: "#2d52e8", fontWeight: 700 }}>
+            <Link href="/login" style={{ color: TEAL, fontWeight: 700 }}>
               Se connecter
             </Link>
           </p>
