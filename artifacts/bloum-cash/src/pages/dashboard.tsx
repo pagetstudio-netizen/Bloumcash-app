@@ -138,7 +138,9 @@ export default function Dashboard() {
                 {/* ── Recommander ── */}
                 <button
                   onClick={() => {
-                    if (navigator.share) {
+                    if (typeof median !== "undefined" && median?.share?.sharePage) {
+                      median.share.sharePage({ text: SHARE_TEXT });
+                    } else if (navigator.share) {
                       navigator.share({ text: SHARE_TEXT }).catch(() => {});
                     } else {
                       navigator.clipboard?.writeText(SHARE_TEXT);
@@ -160,7 +162,7 @@ export default function Dashboard() {
 
                     {/* Facebook */}
                     <button
-                      onClick={() => socialLinks.facebook_url ? window.open(socialLinks.facebook_url, "_blank") : null}
+                      onClick={() => socialLinks.facebook_url ? window.open(socialLinks.facebook_url, "_system") : null}
                       disabled={!socialLinks.facebook_url}
                       className="w-full flex items-center gap-3.5 px-4 py-3.5 bg-card rounded-2xl border border-border active:bg-muted transition-colors disabled:opacity-40"
                     >
@@ -175,7 +177,7 @@ export default function Dashboard() {
 
                     {/* WhatsApp */}
                     <button
-                      onClick={() => socialLinks.whatsapp_url ? window.open(socialLinks.whatsapp_url, "_blank") : null}
+                      onClick={() => socialLinks.whatsapp_url ? window.open(socialLinks.whatsapp_url, "_system") : null}
                       disabled={!socialLinks.whatsapp_url}
                       className="w-full flex items-center gap-3.5 px-4 py-3.5 bg-card rounded-2xl border border-border active:bg-muted transition-colors disabled:opacity-40"
                     >
@@ -190,7 +192,7 @@ export default function Dashboard() {
 
                     {/* YouTube */}
                     <button
-                      onClick={() => socialLinks.youtube_url ? window.open(socialLinks.youtube_url, "_blank") : null}
+                      onClick={() => socialLinks.youtube_url ? window.open(socialLinks.youtube_url, "_system") : null}
                       disabled={!socialLinks.youtube_url}
                       className="w-full flex items-center gap-3.5 px-4 py-3.5 bg-card rounded-2xl border border-border active:bg-muted transition-colors disabled:opacity-40"
                     >

@@ -77,7 +77,11 @@ export default function Plus() {
               <div className="divide-y divide-border">
                 {group.items.map((item, itemIdx) => (
                   item.external ? (
-                    <a key={itemIdx} href={item.external} target="_blank" rel="noopener noreferrer">
+                    <button
+                      key={itemIdx}
+                      onClick={() => window.open(item.external, '_system')}
+                      className="w-full text-left"
+                    >
                       <div className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer active:bg-muted">
                         <div className="flex items-center gap-3">
                           <div className={`p-2 rounded-xl bg-muted ${item.color || 'text-foreground'}`}>
@@ -87,7 +91,7 @@ export default function Plus() {
                         </div>
                         <ChevronRight className="w-5 h-5 text-muted-foreground" />
                       </div>
-                    </a>
+                    </button>
                   ) : (
                     <Link key={itemIdx} href={item.href}>
                       <div className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer active:bg-muted">
