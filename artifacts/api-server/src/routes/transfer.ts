@@ -51,7 +51,7 @@ async function getFeePercent(): Promise<number> {
       if (!isNaN(v) && v >= 0) return v / 100;
     }
   } catch { /* fallback */ }
-  return 0.035;
+  return 0.05;
 }
 
 async function calculateFees(_fromOperator: string, _toOperator: string, amount: number): Promise<number> {

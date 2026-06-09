@@ -305,7 +305,7 @@ export default function Transfert() {
   if (!isAuthenticated) return null;
 
   const amountNum  = parseFloat(amount.replace(/[\s\u00a0]/g, "").replace(",", ".")) || 0;
-  const feeRate    = 0.035;
+  const feeRate    = 0.05;
   const fees       = amountNum > 0 ? Math.round(amountNum * feeRate) : 0;
   const total      = amountNum + fees;
 
@@ -384,7 +384,7 @@ export default function Transfert() {
       ``,
       `📋 Référence : ${transferRef || "N/A"}`,
       `💰 Montant : ${formatAmount(amountNum)}`,
-      `💸 Frais (3,5%) : ${formatAmount(txFees || fees)}`,
+      `💸 Frais (5%) : ${formatAmount(txFees || fees)}`,
       `📊 Total débité : ${formatAmount(txTotal || total)}`,
       `📱 De : +228 ${fromPhone} (${OPS[fromOp].name})`,
       `📱 Vers : +228 ${toPhone} (${OPS[toOp].name})`,
@@ -429,7 +429,7 @@ export default function Transfert() {
               <span className="font-semibold text-gray-800">{formatAmount(amountNum)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Frais (3,5%)</span>
+              <span className="text-gray-400">Frais (5%)</span>
               <span className="font-semibold text-orange-500">{formatAmount(txFees || fees)}</span>
             </div>
             <div className="flex justify-between border-t border-gray-200 pt-1.5">
@@ -652,7 +652,7 @@ export default function Transfert() {
                 </div>
                 <div className="w-px bg-gray-200" />
                 <div className="flex-1 py-3 text-center bg-gray-50">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-1">Frais 3,5%</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wide mb-1">Frais 5%</p>
                   <p className="text-xs font-bold text-orange-500">{amountNum > 0 ? `${fmt(fees)} F` : "—"}</p>
                 </div>
                 <div className="w-px bg-gray-200" />

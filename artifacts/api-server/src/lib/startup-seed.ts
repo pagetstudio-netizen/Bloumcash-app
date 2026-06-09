@@ -46,13 +46,13 @@ export async function runStartupSeed() {
       if (!ex.length) { await db.insert(operatorsConfigTable).values(op); }
     }
 
-    // Default settings
+    // Default settings (insert if missing)
     const defaults = [
       { key: "platform_name", value: "Bloum Cash" },
       { key: "support_email", value: "support@bloumcash.tg" },
       { key: "support_phone", value: "+228 92299772" },
-      { key: "fee_deposit_percent", value: "3.5" },
-      { key: "fee_withdraw_percent", value: "3.5" },
+      { key: "fee_deposit_percent", value: "5" },
+      { key: "fee_withdraw_percent", value: "5" },
       { key: "fee_exchange_percent", value: "4" },
       { key: "maintenance_mode", value: "false" },
       { key: "withdrawals_enabled", value: "true" },
@@ -60,6 +60,14 @@ export async function runStartupSeed() {
     for (const s of defaults) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
       if (!ex.length) { await db.insert(adminSettingsTable).values(s); }
+    }
+    // Always enforce current fee values (force-update on every startup)
+    const feeUpdates = [
+      { key: "fee_deposit_percent", value: "5" },
+      { key: "fee_withdraw_percent", value: "5" },
+    ];
+    for (const s of feeUpdates) {
+      await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
     }
 
     // Banners — pré-seeder avec les 3 images de la PWA

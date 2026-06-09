@@ -25,7 +25,7 @@ const faqs = [
   },
   {
     q: "Quels sont les frais de transfert ?",
-    a: "Les frais varient selon l'opérateur et le montant. Ils sont affichés clairement avant chaque confirmation de transaction.",
+    a: "Les frais de transfert sont de 5% du montant envoyé. Ils sont affichés clairement avant chaque confirmation de transaction.",
   },
   {
     q: "J'ai oublié mon mot de passe, que faire ?",
