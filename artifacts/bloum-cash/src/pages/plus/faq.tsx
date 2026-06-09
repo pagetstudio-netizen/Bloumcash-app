@@ -9,7 +9,7 @@ const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto
 const faqs = [
   {
     q: "Qu'est-ce que Bloum Cash ?",
-    a: "Bloum Cash est une application de paiement mobile conçue pour le Togo, permettant d'encaisser et transférer de l'argent via TMoney et Moov Money rapidement et en toute sécurité.",
+    a: "Bloum Cash est une application de paiement mobile conçue pour le Togo, permettant de transférer de l'argent via TMoney et Moov Money rapidement et en toute sécurité.",
   },
   {
     q: "Comment créer mon compte ?",
@@ -34,10 +34,6 @@ const faqs = [
   {
     q: "Comment effectuer un transfert d'argent ?",
     a: "Depuis le tableau de bord, appuyez sur « Transférer ». Renseignez le numéro du destinataire, choisissez l'opérateur, saisissez le montant et confirmez. La transaction est traitée instantanément.",
-  },
-  {
-    q: "Comment encaisser un paiement ?",
-    a: "Allez dans « Encaisser », configurez votre numéro mobile money et partagez votre lien de paiement avec vos clients. Les paiements sont crédités directement sur votre compte mobile money.",
   },
   {
     q: "Comment contacter le support ?",
