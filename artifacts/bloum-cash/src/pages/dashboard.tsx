@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import GlobalNotification from "@/components/global-notification";
+import ShareSheet from "@/components/share-sheet";
 import { useAuth } from "@/components/auth-provider";
 import {
   Bell, ChevronRight,
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
   const [banners, setBanners] = useState<DashBanner[]>(LOCAL_BANNERS);
   const [socialLinks, setSocialLinks] = useState<SocialLinks>({ facebook_url: "", whatsapp_url: "", youtube_url: "" });
@@ -137,15 +139,7 @@ export default function Dashboard() {
 
                 {/* ── Recommander ── */}
                 <button
-                  onClick={() => {
-                    if (typeof median !== "undefined" && median?.share?.sharePage) {
-                      median.share.sharePage({ text: SHARE_TEXT });
-                    } else if (navigator.share) {
-                      navigator.share({ text: SHARE_TEXT }).catch(() => {});
-                    } else {
-                      navigator.clipboard?.writeText(SHARE_TEXT);
-                    }
-                  }}
+                  onClick={() => { setDrawerOpen(false); setShareSheetOpen(true); }}
                   className="w-full flex items-center gap-3.5 px-4 py-3.5 bg-card rounded-2xl border border-border active:bg-muted transition-colors"
                 >
                   <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
@@ -380,6 +374,7 @@ export default function Dashboard() {
         )}
       </div>
       <GlobalNotification />
+      <ShareSheet open={shareSheetOpen} onClose={() => setShareSheetOpen(false)} />
     </div>
   );
 }
