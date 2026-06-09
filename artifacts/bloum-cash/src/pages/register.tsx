@@ -110,8 +110,8 @@ export default function Register() {
         }}
       >
         <h2
-          className="text-center font-extrabold text-gray-900 mb-5"
-          style={{ fontSize: 22 }}
+          className="text-center font-extrabold mb-5"
+          style={{ fontSize: 22, color: BLUE }}
         >
           Inscription
         </h2>
@@ -242,7 +242,7 @@ export default function Register() {
           {/* Lien connexion */}
           <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
             Vous avez déjà un compte ?{" "}
-            <Link href="/login" style={{ color: TEAL, fontWeight: 700 }}>
+            <Link href="/login" style={{ color: BLUE, fontWeight: 700 }}>
               Se connecter
             </Link>
           </p>

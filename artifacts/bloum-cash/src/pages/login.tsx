@@ -92,8 +92,8 @@ export default function Login() {
         }}
       >
         <h2
-          className="text-center font-extrabold text-gray-900 mb-8"
-          style={{ fontSize: 24 }}
+          className="text-center font-extrabold mb-8"
+          style={{ fontSize: 24, color: BLUE }}
         >
           Connexion
         </h2>
@@ -132,7 +132,7 @@ export default function Login() {
               <label className="font-semibold text-gray-700" style={{ fontSize: 14 }}>
                 Mot de passe
               </label>
-              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: TEAL }}>
+              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: BLUE }}>
                 Mot de passe oublié ?
               </Link>
             </div>
@@ -183,7 +183,7 @@ export default function Login() {
           {/* Lien inscription */}
           <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
             Nouveau sur Bloum Cash ?{" "}
-            <Link href="/register" style={{ color: TEAL, fontWeight: 700 }}>
+            <Link href="/register" style={{ color: BLUE, fontWeight: 700 }}>
               S'inscrire
             </Link>
           </p>
