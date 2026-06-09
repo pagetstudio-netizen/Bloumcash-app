@@ -132,7 +132,7 @@ export default function Login() {
                 Mot de passe
               </label>
               <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: "#2d52e8" }}>
-                Code PIN oublié ?
+                Mot de passe oublié ?
               </Link>
             </div>
             <div className="relative">
