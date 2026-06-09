@@ -262,7 +262,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── CAROUSEL D'IMAGES — fixe, défilement horizontal ── */}
-      <div className="flex-shrink-0 mt-3 relative">
+      <div className="flex-shrink-0 mt-3 mx-4 relative rounded-2xl overflow-hidden shadow-sm">
         <div
           ref={carouselRef}
           onScroll={handleCarouselScroll}
