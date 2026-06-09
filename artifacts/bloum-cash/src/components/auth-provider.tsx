@@ -100,6 +100,29 @@ function unlinkOneSignalUser(): void {
   }
 }
 
+/* ── Détection automatique de la localisation via IP ────────────────────
+ * Appelée silencieusement après chaque connexion — aucune popup, aucune
+ * saisie manuelle. Les données sont enregistrées côté serveur et visibles
+ * uniquement par l'administrateur.
+ * ─────────────────────────────────────────────────────────────────────── */
+
+async function detectAndSaveLocation(token: string): Promise<void> {
+  try {
+    const res = await fetch("https://ip-api.com/json/?fields=city,regionName,country,status&lang=fr", {
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json() as { status: string; city?: string; regionName?: string; country?: string };
+    if (data.status !== "success") return;
+    await fetch("/api/profile/location", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ city: data.city, region: data.regionName, country: data.country }),
+    });
+  } catch {
+    // Silencieux — la localisation est optionnelle
+  }
+}
+
 /* ── Provider ───────────────────────────────────────────────────────────── */
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -132,7 +155,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!storedEmail) return;
 
     if (isMedianApp) {
-      // Identifier dans OneSignal pour les campagnes (pas de popup)
       linkOneSignalUser(storedEmail);
     } else if (oneSignalInitialized) {
       subscribeWebNotifications(storedEmail);
@@ -143,6 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       trySubscribe();
     }
+
+    // Mettre à jour la localisation à chaque réouverture de l'app
+    detectAndSaveLocation(token);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,13 +178,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("bloum_token", authToken);
 
     if (isMedianApp) {
-      // Identifier dans OneSignal (pour ciblage campagnes) — jamais de popup
       if (userData.email) {
         linkOneSignalUser(userData.email);
       }
     } else if (userData.email) {
       subscribeWebNotifications(userData.email);
     }
+
+    // Détection automatique de la localisation — silencieuse, aucune popup
+    detectAndSaveLocation(authToken);
   };
 
   const logout = () => {

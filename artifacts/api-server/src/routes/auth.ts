@@ -5,7 +5,7 @@ import { usersTable, blacklistTable, verificationCodesTable } from "@workspace/d
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { signUserToken } from "../middleware/user-auth";
+import { signUserToken, requireUser } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
 import { sendWelcomeEmail, sendPinResetEmail } from "../lib/email";
 
@@ -295,6 +295,21 @@ router.post("/auth/change-pin", async (req, res) => {
     res.json({ success: true, message: "PIN modifié avec succès" });
   } catch (err) {
     req.log.error({ err }, "Change PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* ── Mise à jour localisation automatique ── */
+router.patch("/profile/location", requireUser, async (req, res) => {
+  try {
+    const userId = req.currentUser!.id;
+    const { city, region, country } = req.body as { city?: string; region?: string; country?: string };
+    await db.update(usersTable)
+      .set({ city: city ?? null, region: region ?? null, country: country ?? null })
+      .where(eq(usersTable.id, userId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Update location error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
