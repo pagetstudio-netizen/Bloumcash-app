@@ -3,10 +3,27 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, MessageCircleQuestion, 
-  Phone, KeyRound, FileText, Shield, Info, LogOut, ChevronRight, Bell, Loader2
+  Phone, KeyRound, FileText, Shield, LogOut, ChevronRight, Bell, Loader2
 } from "lucide-react";
+
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+
+function getAvatarStyle(name: string): { background: string; color: string } {
+  const colors = [
+    { background: "#e8edfb", color: "#1a3fc4" },
+    { background: "#f3effe", color: "#7c3aed" },
+    { background: "#fce7f3", color: "#db2777" },
+    { background: "#d1fae5", color: "#059669" },
+    { background: "#fef3c7", color: "#d97706" },
+    { background: "#fee2e2", color: "#dc2626" },
+    { background: "#cffafe", color: "#0891b2" },
+    { background: "#ecfccb", color: "#65a30d" },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
 
 const TEST_EMAIL = "blousprono@gmail.com";
 
@@ -60,7 +77,6 @@ export default function Plus() {
         { icon: <KeyRound className="w-5 h-5" />, label: "Modifier mot de passe", href: "/plus/modifier-pin" },
         { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions", external: "https://bloumcash.com/conditions-generales-dutilisation" },
         { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite", external: "https://bloumcash.com/politique-de-confidentialite" },
-        { icon: <Info className="w-5 h-5" />, label: "À propos de Bloum Cash", href: "/plus/apropos" },
       ]
     }
   ];
@@ -83,15 +99,21 @@ export default function Plus() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card rounded-2xl p-4 border border-border shadow-sm flex items-center gap-4"
         >
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center text-primary text-xl font-bold">
-            {user?.fullName?.substring(0, 2).toUpperCase() || "JD"}
-          </div>
+          {(() => {
+            const name = user?.fullName || "Utilisateur";
+            const avatarStyle = getAvatarStyle(name);
+            return (
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
+                style={avatarStyle}
+              >
+                {name.substring(0, 2).toUpperCase()}
+              </div>
+            );
+          })()}
           <div className="flex-1">
             <h2 className="font-bold text-lg text-foreground">{user?.fullName || "Utilisateur"}</h2>
             <p className="text-muted-foreground text-sm">{user?.email || "email@exemple.com"}</p>
-          </div>
-          <div className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider">
-            Vérifié
           </div>
         </motion.div>
 
