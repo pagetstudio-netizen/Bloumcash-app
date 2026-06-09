@@ -1,62 +1,50 @@
 #!/bin/bash
 # ============================================================
-# Bloum Cash — Script de déploiement production (Plesk)
-# Usage : bash deploy.sh
+#  Bloum Cash — Script de déploiement production (Plesk)
+#  Exécuté automatiquement par Plesk après un pull GitHub.
+#  Usage manuel : bash deploy.sh
 # ============================================================
 set -e
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Bloum Cash — Deploiement production"
+echo "  Bloum Cash — Déploiement production"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
-# ── Vérifier pnpm ───────────────────────────────────────────
+# ── Vérifier / installer pnpm ───────────────────────────────
 if ! command -v pnpm &> /dev/null; then
-  echo "pnpm non trouve — installation en cours..."
-  npm install -g pnpm
+  echo "→ pnpm non trouvé — installation..."
+  npm install -g pnpm@latest
 fi
 
+echo "→ pnpm $(pnpm --version)"
+echo "→ node $(node --version)"
+
+# ── Dossier uploads (images admin) ──────────────────────────
+mkdir -p artifacts/api-server/uploads
+
 # ── Installation des dépendances ────────────────────────────
-echo "Installation des dependances..."
+echo ""
+echo "→ Installation des dépendances..."
 pnpm install --frozen-lockfile
+
+# ── Build du frontend React/Vite ────────────────────────────
+echo ""
+echo "→ Build frontend..."
+pnpm --filter @workspace/bloum-cash run build
+
+# ── Build du serveur API (esbuild → dist/index.mjs) ─────────
+echo ""
+echo "→ Build API serveur..."
+pnpm --filter @workspace/api-server run build
 
 # ── Migration base de données ────────────────────────────────
 echo ""
-echo "Mise a jour de la base de donnees..."
+echo "→ Migration base de données..."
 pnpm --filter @workspace/db run push
 
-# ── Build du frontend (React/Vite) ──────────────────────────
-echo ""
-echo "Build du frontend..."
-pnpm --filter @workspace/bloum-cash run build
-
-# ── Build du serveur API (esbuild) ──────────────────────────
-echo ""
-echo "Build du serveur API..."
-pnpm --filter @workspace/api-server run build
-
-# ── Résumé ──────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Build termine avec succes !"
-echo ""
-echo "  Demarrage manuel : node artifacts/api-server/dist/index.mjs"
-echo "  Ou via PM2       : pm2 start ecosystem.config.cjs"
-echo "  Ou via pnpm      : pnpm start"
-echo ""
-echo "  Variables d'env requises dans Plesk -> Node.js -> Env vars :"
-echo "    PORT                    (ex: 3001)"
-echo "    SUPABASE_DATABASE_URL   (PostgreSQL Supabase)"
-echo "    PAYDUNYA_MASTER_KEY"
-echo "    PAYDUNYA_PRIVATE_KEY"
-echo "    PAYDUNYA_PUBLIC_KEY"
-echo "    PAYDUNYA_TOKEN"
-echo "    GOMBOPLUS_PUBLIC_KEY"
-echo "    GOMBOPLUS_PRIVATE_KEY"
-echo "    ADMIN_JWT_SECRET"
-echo "    USER_JWT_SECRET"
-echo "    ONESIGNAL_APP_ID        (optionnel)"
-echo "    ONESIGNAL_API_KEY       (optionnel)"
+echo "  ✅  Build terminé avec succès !"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
