@@ -13,9 +13,6 @@ const registerSchema = z.object({
   email: z.string().email({ message: "Email invalide" }),
   pin: z.string().min(4, { message: "Min. 4 caractères" }),
   confirmPin: z.string().min(4, { message: "Confirmez votre mot de passe" }),
-  village: z.string().optional(),
-  city: z.string().optional(),
-  region: z.string().optional(),
 }).refine((data) => data.pin === data.confirmPin, {
   message: "Les mots de passe ne correspondent pas",
   path: ["confirmPin"],
@@ -31,7 +28,7 @@ export default function Register() {
 
   const form = useForm<z.infer<typeof registerSchema>>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { fullName: "", email: "", pin: "", confirmPin: "", village: "", city: "", region: "" },
+    defaultValues: { fullName: "", email: "", pin: "", confirmPin: "" },
   });
 
   async function onSubmit(values: z.infer<typeof registerSchema>) {
@@ -41,9 +38,6 @@ export default function Register() {
           fullName: values.fullName,
           email: values.email,
           pin: values.pin,
-          ...(values.village ? { village: values.village } : {}),
-          ...(values.city ? { city: values.city } : {}),
-          ...(values.region ? { region: values.region } : {}),
           country: "Togo",
         } as Parameters<typeof registerMutation.mutateAsync>[0]["data"],
       });
@@ -222,51 +216,6 @@ export default function Register() {
             {errors.confirmPin && (
               <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.confirmPin.message}</p>
             )}
-          </div>
-
-          {/* ── Localisation (optionnel) ── */}
-          <div>
-            <p className="font-semibold text-gray-800 mb-3" style={{ fontSize: 14 }}>
-              Localisation <span className="font-normal text-gray-400">(optionnel)</span>
-            </p>
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
-                  Village
-                </label>
-                <input
-                  placeholder="Nom du village"
-                  type="text"
-                  autoComplete="off"
-                  {...form.register("village")}
-                  style={fieldStyle(false)}
-                />
-              </div>
-              <div>
-                <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
-                  Ville
-                </label>
-                <input
-                  placeholder="Lomé, Kara, Sokodé…"
-                  type="text"
-                  autoComplete="off"
-                  {...form.register("city")}
-                  style={fieldStyle(false)}
-                />
-              </div>
-              <div>
-                <label className="block mb-2 font-semibold text-gray-800" style={{ fontSize: 14 }}>
-                  Région
-                </label>
-                <input
-                  placeholder="Maritime, Plateaux, Centrale…"
-                  type="text"
-                  autoComplete="off"
-                  {...form.register("region")}
-                  style={fieldStyle(false)}
-                />
-              </div>
-            </div>
           </div>
 
           {/* Bouton S'inscrire */}
