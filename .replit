@@ -90,3 +90,14 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
+SUPABASE_DATABASE_URL = "postgresql://postgres.dtnyxkuzjbwyqyyooutb:qdhHvceMFn6xNpGA@aws-1-eu-central-1.pooler.supabase.com:6543/postgres"
+PAYDUNYA_MASTER_KEY = "tClgCK2F-Pq5z-asuL-eLow-HmkFBvF4zf1m"
+PAYDUNYA_PUBLIC_KEY = "live_public_5iV9b1wFJ0d6yq5YjPMGAFi3AGD"
+PAYDUNYA_PRIVATE_KEY = "live_private_ly1cE55vom9Sad81K1AhU9IWsid"
+PAYDUNYA_TOKEN = "QW2pxYXJMyAWRSlRAvUl"
+ADMIN_JWT_SECRET = "03172ad1a0243e5645f469dcb6cc212f92ad6a1f74f2312365a23a77c60d3d1f"
+USER_JWT_SECRET = "5773e5791f4447fad51d212aaecea702d127ac19a227bd2c4e99a71e8ac7ad0e"
+ONESIGNAL_API_KEY = "os_v2_app_vyxndonvire6tkbfhdkbeawvrxsjemvl2pwe3ovi2w2oappzt2xdhvuzbeeqd7ekpdhwn55xcao6pkyi2zrmwrmuhfv26ethpgtvjdq"
+ONESIGNAL_APP_ID = "ae2ed1b9-b544-49e9-a825-38d41202d58d"
+GOMBOPLUS_PUBLIC_KEY = "BDn7KFqCYb4hHnF3d4pPNg==.Z0FBQUFBQnFJcjdBc3lHWUxheWhaRHNsY3B5eWpsSlhua0pQYnJGVkVhYjhUZEZqQjdPUEJmVHM5WC1HMkdQaU4tUEowc2V0QVdNOVNBTHVfYktPUlEyZWFQS21NTkZPZ2pkcHNKWXoxd2dVNkU1elljdGVoaW1SRWRial9IeHJoSzJlMGVaSUtRSlZxZmVJTTlrQlBmcExETHY4aWN4dm1WREVVNUVRVlE2Vm1wVVdOVmxnYXB0cDRXX1QzQnh1alR0eHFhN0p0UWRIaEhCSDhuXzZxVk4zb0E1N1ZlV2NRbWtrRTdXS2ZFZW5reU1ScGRpS3pHQT0=.OFu5vqfE_UY="
+GOMBOPLUS_PRIVATE_KEY = "XBpZY2G8mlQFGCxMH2VudBPNFr8HHCYiwv-ib1lHzxsEnS7wNRbUlNowWRguYlauNFP8e_enUvEd-ZiCFgDl-Q=="
