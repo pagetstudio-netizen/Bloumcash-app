@@ -167,7 +167,7 @@ export default function Login() {
               width: "100%",
               height: 54,
               borderRadius: 14,
-              background: TEAL,
+              background: BLUE,
               color: "#fff",
               fontSize: 16,
               fontWeight: 700,

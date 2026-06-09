@@ -226,7 +226,7 @@ export default function Register() {
               width: "100%",
               height: 52,
               borderRadius: 14,
-              background: TEAL,
+              background: BLUE,
               color: "#fff",
               fontSize: 16,
               fontWeight: 700,
