@@ -67580,8 +67580,8 @@ app.use(
     credentials: true
   })
 );
-app.use(import_express17.default.json({ limit: "2mb" }));
-app.use(import_express17.default.urlencoded({ extended: true, limit: "2mb" }));
+app.use(import_express17.default.json({ limit: "12mb" }));
+app.use(import_express17.default.urlencoded({ extended: true, limit: "12mb" }));
 app.use("/uploads", import_express17.default.static(UPLOADS_DIR2, {
   index: false,
   dotfiles: "deny"

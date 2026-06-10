@@ -60,8 +60,8 @@ app.use(
 );
 
 /* ── Body parsing ── */
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+app.use(express.json({ limit: "12mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 
 /* ── Uploads statiques ── */
 app.use("/uploads", express.static(UPLOADS_DIR, {

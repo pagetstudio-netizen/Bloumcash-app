@@ -32,6 +32,7 @@ const INTERNAL_PAGES = [
   { label: "Historique", value: "/historique" },
   { label: "Encaisser (QR)", value: "/encaisser" },
   { label: "Promotions", value: "/promotions" },
+  { label: "Avis & Suggestions", value: "/suggestions" },
   { label: "Plus", value: "/plus" },
 ];
 
