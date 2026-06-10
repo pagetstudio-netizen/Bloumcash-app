@@ -10,9 +10,9 @@ export interface HealthStatus {
 }
 
 export interface LoginInput {
-  email: string;
+  phone: string;
   /**
-     * @minLength 6
+     * @minLength 4
      * @maxLength 6
      */
   pin: string;
@@ -20,9 +20,9 @@ export interface LoginInput {
 
 export interface RegisterInput {
   fullName: string;
-  email: string;
+  phone: string;
   /**
-     * @minLength 6
+     * @minLength 4
      * @maxLength 6
      */
   pin: string;

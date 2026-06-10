@@ -7,17 +7,55 @@ import {
   blockedIpsTable, whitelistedIpsTable, securityEventsTable,
   adminSettingsTable, countriesConfigTable, operatorsConfigTable,
   dashboardBannersTable, promotionsTable,
-  verificationCodesTable, adminDevicesTable,
 } from "@workspace/db";
-import { eq, desc, sql, asc, count, and, gte, isNotNull, gt } from "drizzle-orm";
+import { eq, desc, sql, asc, count, and, gte, isNotNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
+
+function base32Decode(encoded: string): Buffer {
+  const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const str = encoded.toUpperCase().replace(/=+$/, "");
+  let bits = 0, value = 0;
+  const bytes: number[] = [];
+  for (const c of str) {
+    const i = alpha.indexOf(c);
+    if (i === -1) throw new Error("Invalid base32 char");
+    value = (value << 5) | i;
+    bits += 5;
+    if (bits >= 8) { bits -= 8; bytes.push((value >> bits) & 0xff); }
+  }
+  return Buffer.from(bytes);
+}
+
+function totpGenerate(secret: string, counter: number): string {
+  const key = base32Decode(secret);
+  const buf = Buffer.alloc(8);
+  buf.writeBigInt64BE(BigInt(counter));
+  const hmac = createHmac("sha1", key).update(buf).digest();
+  const offset = hmac[19] & 0xf;
+  const code = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) |
+               ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+  return String(code % 1_000_000).padStart(6, "0");
+}
+
+const authenticator = {
+  generateSecret: (): string => {
+    const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    return Array.from(randomBytes(20), b => alpha[b % 32]).join("").slice(0, 32);
+  },
+  keyuri: (email: string, issuer: string, secret: string): string =>
+    `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`,
+  verify: ({ token, secret }: { token: string; secret: string }): boolean => {
+    const counter = Math.floor(Date.now() / 30_000);
+    return [-1, 0, 1].some(d => totpGenerate(secret, counter + d) === String(token));
+  },
+};
 import { requireAdmin, signAdminToken } from "../middleware/admin-auth";
 import * as paydunya from "../lib/paydunya";
 import { sendPushNotification, isOneSignalConfigured } from "../lib/onesignal";
-import { sendAdminVerificationCode, sendMassEmail } from "../lib/email";
+import { sendMassEmail } from "../lib/email";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -53,7 +91,7 @@ function saveUploadedImage(imageData: string, prefix: string): string | null {
   const base64 = matches[2];
   if (base64.length > 8_000_000) return null; // ~6 Mo max
   const safeExt = ext === "jpeg" ? "jpg" : ext;
-  const filename = `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${safeExt}`;
+  const filename = `${prefix}_${Date.now()}_${randomBytes(4).toString("hex")}.${safeExt}`;
   fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(base64, "base64"));
   return `/uploads/${filename}`;
 }
@@ -66,22 +104,11 @@ const ALLOWED_SETTING_KEYS = new Set([
   "facebook_url", "instagram_url", "telegram_url", "tiktok_url", "whatsapp_url", "youtube_url",
 ]);
 
-/* ─────────────────────────── AUTH ─────────────────────────── */
+/* ─────────────────────────── AUTH TOTP ─────────────────────────── */
 
-/* Génère un device fingerprint depuis les headers */
-function deviceHash(req: import("express").Request): string {
-  const ua = req.headers["user-agent"] ?? "";
-  const lang = req.headers["accept-language"] ?? "";
-  const ip = req.ip ?? "";
-  return crypto.createHash("sha256").update(`${ua}|${lang}|${ip}`).digest("hex").slice(0, 32);
-}
+const TOTP_PENDING_TTL_MS = 5 * 60 * 1000; /* 5 minutes pour scanner le QR */
 
-/* Génère un code 6 chiffres */
-function genCode(): string {
-  return String(Math.floor(100000 + crypto.randomInt(900000))).padStart(6, "0");
-}
-
-/* Étape 1 : login + vérification mot de passe → renvoie si 2FA requis */
+/* Étape 1 : identifiants → retourne requiresTotpSetup ou requiresTotp */
 router.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -94,121 +121,92 @@ router.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
     const ok = await bcrypt.compare(String(password), admin.passwordHash);
     if (!ok) { res.status(401).json({ error: "Identifiants incorrects" }); return; }
 
-    const dHash = deviceHash(req);
-    const now = new Date();
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 3600 * 1000);
+    if (!admin.totpSecret) {
+      /* Première connexion : générer un secret TOTP et stocker en attente */
+      const secret = authenticator.generateSecret();
+      const pendingKey = `admin_totp_pending_${admin.id}`;
+      const pendingValue = `${secret}|${Date.now()}`;
+      await db.insert(adminSettingsTable).values({ key: pendingKey, value: pendingValue })
+        .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: pendingValue, updatedAt: new Date() } });
 
-    /* ── Bypass OTP unique pour aujourd'hui ── */
-    const bypassKey = `admin_otp_bypass_${admin.id}`;
-    const todayStr = now.toISOString().slice(0, 10); /* YYYY-MM-DD */
-    const bypassRows = await db.select().from(adminSettingsTable)
-      .where(eq(adminSettingsTable.key, bypassKey)).limit(1);
-    const bypassValid = bypassRows[0]?.value === todayStr;
-
-    if (bypassValid) {
-      /* Consommer le bypass (usage unique) */
-      await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, bypassKey));
-      /* Enregistrer l'appareil et la dernière connexion */
-      const lastLoginKey = `admin_last_login_${admin.id}`;
-      await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
-        .onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
-      await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
-        .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
-      const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
-      req.log.info({ adminId: admin.id }, "Admin bypass OTP utilisé — appareil enregistré");
-      res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+      const totpUri = authenticator.keyuri(admin.email, "Bloum Cash Admin", secret);
+      req.log.info({ adminId: admin.id }, "Admin TOTP setup required");
+      res.json({ requiresTotpSetup: true, totpUri });
       return;
     }
 
-    /* Vérifier si appareil connu */
-    const knownDevice = await db.select().from(adminDevicesTable).where(
-      and(eq(adminDevicesTable.adminEmail, email), eq(adminDevicesTable.deviceHash, dHash))
-    ).limit(1);
-
-    /* On stocke la dernière connexion dans un setting par email */
-    const lastLoginKey = `admin_last_login_${admin.id}`;
-    const lastLoginRows = await db.select().from(adminSettingsTable)
-      .where(eq(adminSettingsTable.key, lastLoginKey)).limit(1);
-    const lastLogin = lastLoginRows[0]?.value ? new Date(lastLoginRows[0].value) : null;
-    const isInactive = !lastLogin || lastLogin < threeDaysAgo;
-
-    const isNewDevice = knownDevice.length === 0;
-    const needs2FA = isNewDevice || isInactive;
-
-    if (needs2FA) {
-      /* Générer et envoyer code */
-      const code = genCode();
-      const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); /* 10 min */
-
-      /* Supprimer anciens codes admin */
-      await db.delete(verificationCodesTable).where(
-        and(eq(verificationCodesTable.email, email), eq(verificationCodesTable.type, "admin_login"))
-      );
-      await db.insert(verificationCodesTable).values({ email, code, type: "admin_login", expiresAt });
-
-      sendAdminVerificationCode({
-        to: admin.email,
-        fullName: admin.fullName,
-        code,
-        reason: isNewDevice ? "new_device" : "inactivity",
-      }).catch((e) => req.log.error({ e }, "Erreur envoi code admin"));
-
-      res.json({ requires2FA: true, reason: isNewDevice ? "new_device" : "inactivity" });
-      return;
-    }
-
-    /* Pas de 2FA — connexion directe */
-    const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
-    /* Mettre à jour lastLogin et device */
-    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
-      .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
-    await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
-      .onConflictDoNothing();
-
-    res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+    /* Secret déjà configuré : demander le code TOTP */
+    req.log.info({ adminId: admin.id }, "Admin TOTP verification required");
+    res.json({ requiresTotp: true });
   } catch (err) { req.log.error({ err }, "Admin login error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
-/* Étape 2 : vérification du code 2FA admin */
-router.post("/admin/auth/verify-2fa", admin2FALimiter, async (req, res) => {
+/* Étape 2a : confirmation de la configuration TOTP (première fois) */
+router.post("/admin/auth/confirm-totp-setup", admin2FALimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
     if (!email || !code) {
       res.status(400).json({ error: "Email et code requis" }); return;
     }
 
-    const now = new Date();
-    const codes = await db.select().from(verificationCodesTable).where(
-      and(
-        eq(verificationCodesTable.email, email),
-        eq(verificationCodesTable.code, String(code)),
-        eq(verificationCodesTable.type, "admin_login"),
-        gt(verificationCodesTable.expiresAt, now),
-      )
-    ).limit(1);
+    const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email)).limit(1);
+    if (!admins.length) { res.status(401).json({ error: "Admin introuvable" }); return; }
+    const admin = admins[0];
 
-    if (!codes.length || codes[0].usedAt) {
-      res.status(400).json({ error: "Code invalide ou expiré" }); return;
+    /* Récupérer le secret en attente */
+    const pendingKey = `admin_totp_pending_${admin.id}`;
+    const pendingRows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey)).limit(1);
+    if (!pendingRows.length) {
+      res.status(400).json({ error: "Aucune configuration TOTP en attente. Reconnectez-vous." }); return;
+    }
+
+    const [secret, tsStr] = (pendingRows[0].value ?? "").split("|");
+    if (!secret || !tsStr || Date.now() - Number(tsStr) > TOTP_PENDING_TTL_MS) {
+      await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey));
+      res.status(400).json({ error: "Le QR code a expiré. Reconnectez-vous pour en générer un nouveau." }); return;
+    }
+
+    const isValid = authenticator.verify({ token: String(code), secret });
+    if (!isValid) {
+      res.status(400).json({ error: "Code invalide. Vérifiez l'heure de votre appareil et réessayez." }); return;
+    }
+
+    /* Sauvegarder le secret et supprimer le pending */
+    await db.update(adminUsersTable).set({ totpSecret: secret }).where(eq(adminUsersTable.id, admin.id));
+    await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey));
+
+    const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    req.log.info({ adminId: admin.id }, "Admin TOTP configuré et activé");
+    res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+  } catch (err) { req.log.error({ err }, "Admin confirm-totp-setup error"); res.status(500).json({ error: "Erreur serveur" }); }
+});
+
+/* Étape 2b : vérification TOTP à chaque connexion */
+router.post("/admin/auth/verify-totp", admin2FALimiter, async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      res.status(400).json({ error: "Email et code requis" }); return;
     }
 
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email)).limit(1);
     if (!admins.length) { res.status(401).json({ error: "Admin introuvable" }); return; }
     const admin = admins[0];
 
-    /* Marquer code comme utilisé */
-    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
+    if (!admin.totpSecret) {
+      res.status(400).json({ error: "TOTP non configuré. Reconnectez-vous pour configurer." }); return;
+    }
 
-    /* Enregistrer appareil et mise à jour lastLogin */
-    const dHash = deviceHash(req);
-    const lastLoginKey = `admin_last_login_${admin.id}`;
-    await db.insert(adminDevicesTable).values({ adminEmail: email, deviceHash: dHash })
-      .onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
-    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() })
-      .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
+    const isValid = authenticator.verify({ token: String(code), secret: admin.totpSecret });
+    if (!isValid) {
+      req.log.warn({ adminId: admin.id }, "Admin TOTP code invalide");
+      res.status(400).json({ error: "Code invalide ou expiré. Réessayez." }); return;
+    }
 
     const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    req.log.info({ adminId: admin.id }, "Admin connecté via TOTP");
     res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
-  } catch (err) { req.log.error({ err }, "Admin 2FA verify error"); res.status(500).json({ error: "Erreur serveur" }); }
+  } catch (err) { req.log.error({ err }, "Admin verify-totp error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 /* ─────────────────────────── STATS ─────────────────────────── */
@@ -998,7 +996,7 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
       return;
     }
 
-    const reference = "ADM" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
+    const reference = "ADM" + Date.now() + randomBytes(3).toString("hex").toUpperCase();
     const description = motif?.trim() || `Déboursement manuel admin vers ${phone}`;
 
     req.log.info(

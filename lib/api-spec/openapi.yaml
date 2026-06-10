@@ -326,28 +326,26 @@ components:
 
     LoginInput:
       type: object
-      required: [email, pin]
+      required: [phone, pin]
       properties:
-        email:
+        phone:
           type: string
-          format: email
         pin:
           type: string
-          minLength: 6
+          minLength: 4
           maxLength: 6
 
     RegisterInput:
       type: object
-      required: [fullName, email, pin]
+      required: [fullName, phone, pin]
       properties:
         fullName:
           type: string
-        email:
+        phone:
           type: string
-          format: email
         pin:
           type: string
-          minLength: 6
+          minLength: 4
           maxLength: 6
 
     ForgotPinInput:

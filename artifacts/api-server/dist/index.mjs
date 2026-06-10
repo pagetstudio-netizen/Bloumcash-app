@@ -18795,14 +18795,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto10 = __require("crypto");
+    var crypto9 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash2 = crypto10.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash2 = crypto9.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash2 + '"';
     }
@@ -22277,17 +22277,17 @@ var require_content_disposition = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto10 = __require("crypto");
+    var crypto9 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto10.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto9.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto10.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto9.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -31596,7 +31596,7 @@ var require_utils_webcrypto = __commonJS({
     var nodeCrypto2 = __require("crypto");
     module.exports = {
       postgresMd5PasswordHash,
-      randomBytes: randomBytes2,
+      randomBytes: randomBytes3,
       deriveKey,
       sha256,
       hashByName,
@@ -31606,7 +31606,7 @@ var require_utils_webcrypto = __commonJS({
     var webCrypto = nodeCrypto2.webcrypto || globalThis.crypto;
     var subtleCrypto = webCrypto.subtle;
     var textEncoder2 = new TextEncoder();
-    function randomBytes2(length) {
+    function randomBytes3(length) {
       return webCrypto.getRandomValues(Buffer.alloc(length));
     }
     async function md5(string4) {
@@ -31771,7 +31771,7 @@ var require_cert_signatures = __commonJS({
 var require_sasl = __commonJS({
   "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
-    var crypto10 = require_utils5();
+    var crypto9 = require_utils5();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
     function startSession(mechanisms, stream) {
       const candidates = ["SCRAM-SHA-256"];
@@ -31783,7 +31783,7 @@ var require_sasl = __commonJS({
       if (mechanism === "SCRAM-SHA-256-PLUS" && typeof stream.getPeerCertificate !== "function") {
         throw new Error("SASL: Mechanism SCRAM-SHA-256-PLUS requires a certificate");
       }
-      const clientNonce = crypto10.randomBytes(18).toString("base64");
+      const clientNonce = crypto9.randomBytes(18).toString("base64");
       const gs2Header = mechanism === "SCRAM-SHA-256-PLUS" ? "p=tls-server-end-point" : stream ? "y" : "n";
       return {
         mechanism,
@@ -31818,20 +31818,20 @@ var require_sasl = __commonJS({
         const peerCert = stream.getPeerCertificate().raw;
         let hashName = signatureAlgorithmHashFromCertificate(peerCert);
         if (hashName === "MD5" || hashName === "SHA-1") hashName = "SHA-256";
-        const certHash = await crypto10.hashByName(hashName, peerCert);
+        const certHash = await crypto9.hashByName(hashName, peerCert);
         const bindingData = Buffer.concat([Buffer.from("p=tls-server-end-point,,"), Buffer.from(certHash)]);
         channelBinding = bindingData.toString("base64");
       }
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto10.deriveKey(password, saltBytes, sv.iteration);
-      const clientKey = await crypto10.hmacSha256(saltedPassword, "Client Key");
-      const storedKey = await crypto10.sha256(clientKey);
-      const clientSignature = await crypto10.hmacSha256(storedKey, authMessage);
+      const saltedPassword = await crypto9.deriveKey(password, saltBytes, sv.iteration);
+      const clientKey = await crypto9.hmacSha256(saltedPassword, "Client Key");
+      const storedKey = await crypto9.sha256(clientKey);
+      const clientSignature = await crypto9.hmacSha256(storedKey, authMessage);
       const clientProof = xorBuffers(Buffer.from(clientKey), Buffer.from(clientSignature)).toString("base64");
-      const serverKey = await crypto10.hmacSha256(saltedPassword, "Server Key");
-      const serverSignatureBytes = await crypto10.hmacSha256(serverKey, authMessage);
+      const serverKey = await crypto9.hmacSha256(saltedPassword, "Server Key");
+      const serverSignatureBytes = await crypto9.hmacSha256(serverKey, authMessage);
       session.message = "SASLResponse";
       session.serverSignature = Buffer.from(serverSignatureBytes).toString("base64");
       session.response = clientFinalMessageWithoutProof + ",p=" + clientProof;
@@ -33999,7 +33999,7 @@ var require_client = __commonJS({
     var Query2 = require_query();
     var defaults2 = require_defaults();
     var Connection2 = require_connection();
-    var crypto10 = require_utils5();
+    var crypto9 = require_utils5();
     var activeQueryDeprecationNotice = nodeUtils.deprecate(
       () => {
       },
@@ -34234,7 +34234,7 @@ var require_client = __commonJS({
       _handleAuthMD5Password(msg) {
         this._getPassword(async () => {
           try {
-            const hashedPassword = await crypto10.postgresMd5PasswordHash(this.user, this.password, msg.salt);
+            const hashedPassword = await crypto9.postgresMd5PasswordHash(this.user, this.password, msg.salt);
             this.connection.password(hashedPassword);
           } catch (e) {
             this.emit("error", e);
@@ -40247,10 +40247,10 @@ var coerce = {
 var HealthCheckResponse = objectType({
   "status": stringType()
 });
-var loginBodyPinMin = 6;
+var loginBodyPinMin = 4;
 var loginBodyPinMax = 6;
 var LoginBody = objectType({
-  "email": stringType().email(),
+  "phone": stringType(),
   "pin": stringType().min(loginBodyPinMin).max(loginBodyPinMax)
 });
 var LoginResponse = objectType({
@@ -40261,11 +40261,11 @@ var LoginResponse = objectType({
     "email": stringType()
   })
 });
-var registerBodyPinMin = 6;
+var registerBodyPinMin = 4;
 var registerBodyPinMax = 6;
 var RegisterBody = objectType({
   "fullName": stringType(),
-  "email": stringType().email(),
+  "phone": stringType(),
   "pin": stringType().min(registerBodyPinMin).max(registerBodyPinMax)
 });
 var ForgotPinBody = objectType({
@@ -59932,6 +59932,7 @@ var adminUsersTable = pgTable("admin_users", {
   email: text("email").unique().notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("admin"),
+  totpSecret: text("totp_secret"),
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 var adminNotificationsTable = pgTable("admin_notifications", {
@@ -66835,42 +66836,6 @@ function baseTemplate(content) {
 </body>
 </html>`;
 }
-async function sendWelcomeEmail(opts) {
-  const html = baseTemplate(`
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="font-size:52px;margin-bottom:8px;">\u{1F389}</div>
-      <h1 style="margin:0;font-size:26px;font-weight:800;color:#1a2a6c;">Bienvenue, ${opts.fullName} !</h1>
-      <p style="margin:10px 0 0;color:#667299;font-size:15px;">Votre compte Bloum Cash est cr\xE9\xE9 avec succ\xE8s</p>
-    </div>
-    <div style="background:linear-gradient(135deg,#f0f4ff 0%,#e8eeff 100%);border-radius:14px;padding:24px;margin-bottom:28px;">
-      <p style="margin:0 0 12px;font-size:15px;color:#334;line-height:1.6;">
-        Avec <strong style="color:#1a3fc4;">Bloum Cash</strong>, vous pouvez d\xE9sormais :
-      </p>
-      <ul style="margin:0;padding-left:20px;color:#445;font-size:14px;line-height:2;">
-        <li>\u{1F4B8} Transf\xE9rer de l'argent entre <strong>TMoney</strong> et <strong>Moov Money</strong></li>
-        <li>\u{1F4F1} Payer via <strong>QR Code</strong> en quelques secondes</li>
-        <li>\u{1F4CA} Suivre toutes vos transactions en temps r\xE9el</li>
-        <li>\u{1F512} Profiter d'une s\xE9curit\xE9 bancaire de haut niveau</li>
-      </ul>
-    </div>
-    <div style="text-align:center;">
-      <a href="https://bloumcash.tg" style="display:inline-block;background:linear-gradient(135deg,#1a3fc4,#2b50e8);color:#fff;font-weight:700;font-size:15px;padding:14px 36px;border-radius:12px;text-decoration:none;letter-spacing:0.3px;">
-        Acc\xE9der \xE0 mon compte \u2192
-      </a>
-    </div>
-  `);
-  const resend = getResend();
-  if (!resend) {
-    console.warn("RESEND_API_KEY not set \u2014 welcome email skipped");
-    return;
-  }
-  return resend.emails.send({
-    from: FROM,
-    to: opts.to,
-    subject: `\u{1F389} Bienvenue sur Bloum Cash, ${opts.fullName} !`,
-    html
-  });
-}
 async function sendPinResetEmail(opts) {
   const html = baseTemplate(`
     <div style="text-align:center;margin-bottom:28px;">
@@ -66905,50 +66870,6 @@ async function sendPinResetEmail(opts) {
     from: FROM,
     to: opts.to,
     subject: "\u{1F510} Code de r\xE9initialisation \u2014 Bloum Cash",
-    html
-  });
-}
-async function sendAdminVerificationCode(opts) {
-  const reasonText = opts.reason === "inactivity" ? "Vous ne vous \xEAtes pas connect\xE9 depuis plus de 3 jours." : "Une connexion depuis un nouvel appareil ou navigateur a \xE9t\xE9 d\xE9tect\xE9e.";
-  const html = baseTemplate(`
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="font-size:48px;margin-bottom:8px;">${opts.reason === "new_device" ? "\u{1F4F1}" : "\u23F0"}</div>
-      <h1 style="margin:0;font-size:24px;font-weight:800;color:#1a2a6c;">V\xE9rification d'identit\xE9</h1>
-      <p style="margin:10px 0 0;color:#667299;font-size:15px;">Espace Administrateur \u2014 Bloum Cash</p>
-    </div>
-    <div style="background:#fff3f3;border:1px solid #ffc5c5;border-radius:12px;padding:16px;margin-bottom:24px;">
-      <p style="margin:0;font-size:14px;color:#c0392b;">
-        \u{1F512} <strong>Connexion s\xE9curis\xE9e requise</strong><br/>
-        ${reasonText}
-      </p>
-    </div>
-    <p style="font-size:15px;color:#445;line-height:1.7;margin-bottom:24px;">
-      Bonjour <strong>${opts.fullName}</strong>,<br/>
-      Entrez le code suivant pour acc\xE9der au panneau d'administration :
-    </p>
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#1a3fc4,#2b50e8);border-radius:16px;padding:4px;">
-        <div style="background:#fff;border-radius:13px;padding:20px 48px;">
-          <div style="font-size:42px;font-weight:900;letter-spacing:14px;color:#1a3fc4;font-family:monospace;">${opts.code}</div>
-        </div>
-      </div>
-    </div>
-    <div style="background:#fff8e8;border:1px solid #ffd970;border-radius:12px;padding:16px;text-align:center;">
-      <p style="margin:0;font-size:13px;color:#8a6500;">
-        \u23F1\uFE0F Ce code expire dans <strong>10 minutes</strong><br/>
-        Si ce n'est pas vous, changez votre mot de passe imm\xE9diatement.
-      </p>
-    </div>
-  `);
-  const resend = getResend();
-  if (!resend) {
-    console.warn("RESEND_API_KEY not set \u2014 admin verification email skipped");
-    return;
-  }
-  return resend.emails.send({
-    from: FROM,
-    to: opts.to,
-    subject: "\u{1F512} Code de v\xE9rification admin \u2014 Bloum Cash",
     html
   });
 }
@@ -67006,6 +66927,21 @@ var forgotPinLimiter = rate_limit_default({
   message: { error: "Trop de demandes de r\xE9initialisation. R\xE9essayez dans 1 heure." },
   skipSuccessfulRequests: false
 });
+function sanitizeStr(v, maxLen = 255) {
+  return String(v ?? "").trim().slice(0, maxLen);
+}
+function normalizeTogoPhone(raw) {
+  let digits = raw.replace(/[\s\-]/g, "");
+  if (digits.startsWith("+228")) digits = digits.slice(4);
+  else if (digits.startsWith("228")) digits = digits.slice(3);
+  if (!/^\d{8}$/.test(digits)) return null;
+  const prefix = parseInt(digits.slice(0, 2));
+  if (prefix >= 90 && prefix <= 93 || prefix >= 96 && prefix <= 99) return digits;
+  return null;
+}
+function phoneToEmail(phone) {
+  return `${phone}@users.bloumcash.app`;
+}
 async function isBlacklisted(phone) {
   if (!phone) return false;
   const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
@@ -67014,20 +66950,18 @@ async function isBlacklisted(phone) {
 function generateCode() {
   return String(Math.floor(1e5 + crypto3.randomInt(9e5))).padStart(6, "0");
 }
-function sanitizeStr(v, maxLen = 255) {
-  return String(v ?? "").trim().slice(0, maxLen);
-}
 router2.post("/auth/login", loginLimiter, async (req, res) => {
   try {
-    const email3 = sanitizeStr(req.body.email, 255);
+    const rawPhone = sanitizeStr(req.body.phone, 30);
     const pin = sanitizeStr(req.body.pin, 20);
-    if (!email3 || !pin) {
-      res.status(400).json({ error: "Email et PIN requis" });
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !pin) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone et mot de passe requis" });
       return;
     }
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email3)).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (!users.length) {
-      res.status(401).json({ error: "Email ou PIN incorrect" });
+      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
       return;
     }
     const user = users[0];
@@ -67045,18 +66979,18 @@ router2.post("/auth/login", loginLimiter, async (req, res) => {
     }
     const pinMatches = await bcryptjs_default.compare(pin, user.pin);
     if (!pinMatches) {
-      res.status(401).json({ error: "Email ou PIN incorrect" });
+      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
       return;
     }
     const token = signUserToken({ id: user.id, email: user.email });
-    await db.update(usersTable).set({ onesignalExternalUserId: user.email, lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, user.id));
+    await db.update(usersTable).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, user.id));
     sendPushNotification({
       externalUserId: user.email,
       title: "Bloum Cash",
       message: `Bienvenue, ${user.fullName} ! Vous \xEAtes maintenant connect\xE9.`,
       data: { type: "login" }
     }, req.log);
-    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
+    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -67065,46 +66999,41 @@ router2.post("/auth/login", loginLimiter, async (req, res) => {
 router2.post("/auth/register", registerLimiter, async (req, res) => {
   try {
     const fullName = sanitizeStr(req.body.fullName, 100);
-    const email3 = sanitizeStr(req.body.email, 255);
+    const rawPhone = sanitizeStr(req.body.phone, 30);
     const pin = sanitizeStr(req.body.pin, 20);
-    const phone = req.body.phone ? sanitizeStr(req.body.phone, 20) : null;
     const village = req.body.village ? sanitizeStr(req.body.village, 100) : null;
     const city = req.body.city ? sanitizeStr(req.body.city, 100) : null;
     const region = req.body.region ? sanitizeStr(req.body.region, 100) : null;
     const country = req.body.country ? sanitizeStr(req.body.country, 100) : "Togo";
-    if (!fullName || !email3 || !pin) {
-      res.status(400).json({ error: "Tous les champs sont requis" });
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!fullName || !phone) {
+      res.status(400).json({ error: "Nom complet et num\xE9ro de t\xE9l\xE9phone Togo requis" });
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email3)) {
-      res.status(400).json({ error: "Format d'email invalide" });
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
       return;
     }
-    if (!/^\d{4,6}$/.test(pin)) {
-      res.status(400).json({ error: "Le PIN doit \xEAtre 4 \xE0 6 chiffres" });
-      return;
-    }
-    if (phone && await isBlacklisted(phone)) {
+    if (await isBlacklisted(phone)) {
       res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Inscription refus\xE9e.", code: "PHONE_BLACKLISTED" });
       return;
     }
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, email3)).limit(1);
+    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (existing.length) {
-      res.status(400).json({ error: "Cet email est d\xE9j\xE0 utilis\xE9" });
+      res.status(400).json({ error: "Ce num\xE9ro de t\xE9l\xE9phone est d\xE9j\xE0 utilis\xE9" });
       return;
     }
+    const email3 = phoneToEmail(phone);
     const hashedPin = await bcryptjs_default.hash(pin, 12);
     const [user] = await db.insert(usersTable).values({ fullName, email: email3, pin: hashedPin, phone, onesignalExternalUserId: email3, village, city, region, country }).returning();
     const token = signUserToken({ id: user.id, email: user.email });
-    sendWelcomeEmail({ to: user.email, fullName: user.fullName }).catch(() => {
-    });
     sendPushNotification({
       externalUserId: user.email,
-      title: "Bienvenue sur Bloum Cash \u{1F389}",
+      title: "Bienvenue sur Bloum Cash !",
       message: `Bonjour ${user.fullName}, votre compte est cr\xE9\xE9 !`,
       data: { type: "register" }
     }, req.log);
-    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
+    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {
     req.log.error({ err }, "Register error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -67112,27 +67041,28 @@ router2.post("/auth/register", registerLimiter, async (req, res) => {
 });
 router2.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
   try {
-    const email3 = sanitizeStr(req.body.email, 255);
-    if (!email3) {
-      res.status(400).json({ error: "Email requis" });
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone requis" });
       return;
     }
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email3)).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (!users.length) {
-      res.json({ message: "Si cet email existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
+      res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
       return;
     }
     const user = users[0];
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1e3);
     await db.delete(verificationCodesTable).where(
-      and(eq(verificationCodesTable.email, email3), eq(verificationCodesTable.type, "pin_reset"))
+      and(eq(verificationCodesTable.email, user.email), eq(verificationCodesTable.type, "pin_reset"))
     );
-    await db.insert(verificationCodesTable).values({ email: email3, code, type: "pin_reset", expiresAt });
+    await db.insert(verificationCodesTable).values({ email: user.email, code, type: "pin_reset", expiresAt });
     sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
       req.log.error({ e }, "Erreur envoi email reset PIN");
     });
-    res.json({ message: "Si cet email existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
+    res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
   } catch (err) {
     req.log.error({ err }, "Forgot PIN error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -67140,21 +67070,28 @@ router2.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
 });
 router2.post("/auth/reset-pin", async (req, res) => {
   try {
-    const email3 = sanitizeStr(req.body.email, 255);
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
     const code = sanitizeStr(req.body.code, 10);
     const newPin = sanitizeStr(req.body.newPin, 20);
-    if (!email3 || !code || !newPin) {
-      res.status(400).json({ error: "Email, code et nouveau PIN requis" });
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !code || !newPin) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone, code et nouveau mot de passe requis" });
       return;
     }
-    if (!/^\d{4,6}$/.test(newPin)) {
-      res.status(400).json({ error: "Le PIN doit \xEAtre 4 \xE0 6 chiffres" });
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
       return;
     }
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (!users.length) {
+      res.status(400).json({ error: "Num\xE9ro introuvable" });
+      return;
+    }
+    const user = users[0];
     const now = /* @__PURE__ */ new Date();
     const codes = await db.select().from(verificationCodesTable).where(
       and(
-        eq(verificationCodesTable.email, email3),
+        eq(verificationCodesTable.email, user.email),
         eq(verificationCodesTable.code, code),
         eq(verificationCodesTable.type, "pin_reset"),
         gt(verificationCodesTable.expiresAt, now)
@@ -67165,9 +67102,9 @@ router2.post("/auth/reset-pin", async (req, res) => {
       return;
     }
     const hashedPin = await bcryptjs_default.hash(newPin, 12);
-    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.email, email3));
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
     await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
-    res.json({ success: true, message: "PIN r\xE9initialis\xE9 avec succ\xE8s" });
+    res.json({ success: true, message: "Mot de passe r\xE9initialis\xE9 avec succ\xE8s" });
   } catch (err) {
     req.log.error({ err }, "Reset PIN error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -67179,11 +67116,11 @@ router2.post("/auth/change-pin", async (req, res) => {
     const currentPin = sanitizeStr(req.body.currentPin, 20);
     const newPin = sanitizeStr(req.body.newPin, 20);
     if (!token || !currentPin || !newPin) {
-      res.status(400).json({ error: "Token, PIN actuel et nouveau PIN requis" });
+      res.status(400).json({ error: "Token, mot de passe actuel et nouveau mot de passe requis" });
       return;
     }
-    if (!/^\d{4,6}$/.test(newPin)) {
-      res.status(400).json({ error: "Le nouveau PIN doit \xEAtre 4 \xE0 6 chiffres" });
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le nouveau mot de passe doit avoir au moins 4 caract\xE8res" });
       return;
     }
     const { verifyUserToken: verifyUserToken2 } = await Promise.resolve().then(() => (init_user_auth(), user_auth_exports));
@@ -67202,16 +67139,16 @@ router2.post("/auth/change-pin", async (req, res) => {
     const user = users[0];
     const pinMatches = await bcryptjs_default.compare(currentPin, user.pin);
     if (!pinMatches) {
-      res.status(401).json({ error: "PIN actuel incorrect" });
+      res.status(401).json({ error: "Mot de passe actuel incorrect" });
       return;
     }
     if (currentPin === newPin) {
-      res.status(400).json({ error: "Le nouveau PIN doit \xEAtre diff\xE9rent de l'ancien" });
+      res.status(400).json({ error: "Le nouveau mot de passe doit \xEAtre diff\xE9rent de l'ancien" });
       return;
     }
     const hashedPin = await bcryptjs_default.hash(newPin, 12);
     await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
-    res.json({ success: true, message: "PIN modifi\xE9 avec succ\xE8s" });
+    res.json({ success: true, message: "Mot de passe modifi\xE9 avec succ\xE8s" });
   } catch (err) {
     req.log.error({ err }, "Change PIN error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -69441,9 +69378,46 @@ var gomboplus_webhook_default = router9;
 
 // src/routes/admin.ts
 var import_express10 = __toESM(require_express2(), 1);
-import crypto9 from "crypto";
+import { createHmac, randomBytes as randomBytes2 } from "crypto";
 import fs from "fs";
 import path from "path";
+function base32Decode(encoded) {
+  const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const str = encoded.toUpperCase().replace(/=+$/, "");
+  let bits = 0, value = 0;
+  const bytes = [];
+  for (const c of str) {
+    const i = alpha.indexOf(c);
+    if (i === -1) throw new Error("Invalid base32 char");
+    value = value << 5 | i;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push(value >> bits & 255);
+    }
+  }
+  return Buffer.from(bytes);
+}
+function totpGenerate(secret, counter) {
+  const key = base32Decode(secret);
+  const buf = Buffer.alloc(8);
+  buf.writeBigInt64BE(BigInt(counter));
+  const hmac = createHmac("sha1", key).update(buf).digest();
+  const offset = hmac[19] & 15;
+  const code = (hmac[offset] & 127) << 24 | (hmac[offset + 1] & 255) << 16 | (hmac[offset + 2] & 255) << 8 | hmac[offset + 3] & 255;
+  return String(code % 1e6).padStart(6, "0");
+}
+var authenticator = {
+  generateSecret: () => {
+    const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    return Array.from(randomBytes2(20), (b) => alpha[b % 32]).join("").slice(0, 32);
+  },
+  keyuri: (email3, issuer, secret) => `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email3)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`,
+  verify: ({ token, secret }) => {
+    const counter = Math.floor(Date.now() / 3e4);
+    return [-1, 0, 1].some((d) => totpGenerate(secret, counter + d) === String(token));
+  }
+};
 var UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 var router10 = (0, import_express10.Router)();
@@ -69471,7 +69445,7 @@ function saveUploadedImage(imageData, prefix) {
   const base643 = matches[2];
   if (base643.length > 8e6) return null;
   const safeExt = ext === "jpeg" ? "jpg" : ext;
-  const filename = `${prefix}_${Date.now()}_${crypto9.randomBytes(4).toString("hex")}.${safeExt}`;
+  const filename = `${prefix}_${Date.now()}_${randomBytes2(4).toString("hex")}.${safeExt}`;
   fs.writeFileSync(path.join(UPLOADS_DIR, filename), Buffer.from(base643, "base64"));
   return `/uploads/${filename}`;
 }
@@ -69491,15 +69465,7 @@ var ALLOWED_SETTING_KEYS = /* @__PURE__ */ new Set([
   "whatsapp_url",
   "youtube_url"
 ]);
-function deviceHash(req) {
-  const ua = req.headers["user-agent"] ?? "";
-  const lang = req.headers["accept-language"] ?? "";
-  const ip = req.ip ?? "";
-  return crypto9.createHash("sha256").update(`${ua}|${lang}|${ip}`).digest("hex").slice(0, 32);
-}
-function genCode() {
-  return String(Math.floor(1e5 + crypto9.randomInt(9e5))).padStart(6, "0");
-}
+var TOTP_PENDING_TTL_MS = 5 * 60 * 1e3;
 router10.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
   try {
     const { email: email3, password } = req.body;
@@ -69518,75 +69484,28 @@ router10.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
       res.status(401).json({ error: "Identifiants incorrects" });
       return;
     }
-    const dHash = deviceHash(req);
-    const now = /* @__PURE__ */ new Date();
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 3600 * 1e3);
-    const bypassKey = `admin_otp_bypass_${admin.id}`;
-    const todayStr = now.toISOString().slice(0, 10);
-    const bypassRows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, bypassKey)).limit(1);
-    const bypassValid = bypassRows[0]?.value === todayStr;
-    if (bypassValid) {
-      await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, bypassKey));
-      const lastLoginKey2 = `admin_last_login_${admin.id}`;
-      await db.insert(adminDevicesTable).values({ adminEmail: email3, deviceHash: dHash }).onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
-      await db.insert(adminSettingsTable).values({ key: lastLoginKey2, value: now.toISOString() }).onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
-      const token2 = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
-      req.log.info({ adminId: admin.id }, "Admin bypass OTP utilis\xE9 \u2014 appareil enregistr\xE9");
-      res.json({ token: token2, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+    if (!admin.totpSecret) {
+      const secret = authenticator.generateSecret();
+      const pendingKey = `admin_totp_pending_${admin.id}`;
+      const pendingValue = `${secret}|${Date.now()}`;
+      await db.insert(adminSettingsTable).values({ key: pendingKey, value: pendingValue }).onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: pendingValue, updatedAt: /* @__PURE__ */ new Date() } });
+      const totpUri = authenticator.keyuri(admin.email, "Bloum Cash Admin", secret);
+      req.log.info({ adminId: admin.id }, "Admin TOTP setup required");
+      res.json({ requiresTotpSetup: true, totpUri });
       return;
     }
-    const knownDevice = await db.select().from(adminDevicesTable).where(
-      and(eq(adminDevicesTable.adminEmail, email3), eq(adminDevicesTable.deviceHash, dHash))
-    ).limit(1);
-    const lastLoginKey = `admin_last_login_${admin.id}`;
-    const lastLoginRows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, lastLoginKey)).limit(1);
-    const lastLogin = lastLoginRows[0]?.value ? new Date(lastLoginRows[0].value) : null;
-    const isInactive = !lastLogin || lastLogin < threeDaysAgo;
-    const isNewDevice = knownDevice.length === 0;
-    const needs2FA = isNewDevice || isInactive;
-    if (needs2FA) {
-      const code = genCode();
-      const expiresAt = new Date(now.getTime() + 10 * 60 * 1e3);
-      await db.delete(verificationCodesTable).where(
-        and(eq(verificationCodesTable.email, email3), eq(verificationCodesTable.type, "admin_login"))
-      );
-      await db.insert(verificationCodesTable).values({ email: email3, code, type: "admin_login", expiresAt });
-      sendAdminVerificationCode({
-        to: admin.email,
-        fullName: admin.fullName,
-        code,
-        reason: isNewDevice ? "new_device" : "inactivity"
-      }).catch((e) => req.log.error({ e }, "Erreur envoi code admin"));
-      res.json({ requires2FA: true, reason: isNewDevice ? "new_device" : "inactivity" });
-      return;
-    }
-    const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
-    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() }).onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
-    await db.insert(adminDevicesTable).values({ adminEmail: email3, deviceHash: dHash }).onConflictDoNothing();
-    res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+    req.log.info({ adminId: admin.id }, "Admin TOTP verification required");
+    res.json({ requiresTotp: true });
   } catch (err) {
     req.log.error({ err }, "Admin login error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router10.post("/admin/auth/verify-2fa", admin2FALimiter, async (req, res) => {
+router10.post("/admin/auth/confirm-totp-setup", admin2FALimiter, async (req, res) => {
   try {
     const { email: email3, code } = req.body;
     if (!email3 || !code) {
       res.status(400).json({ error: "Email et code requis" });
-      return;
-    }
-    const now = /* @__PURE__ */ new Date();
-    const codes = await db.select().from(verificationCodesTable).where(
-      and(
-        eq(verificationCodesTable.email, email3),
-        eq(verificationCodesTable.code, String(code)),
-        eq(verificationCodesTable.type, "admin_login"),
-        gt(verificationCodesTable.expiresAt, now)
-      )
-    ).limit(1);
-    if (!codes.length || codes[0].usedAt) {
-      res.status(400).json({ error: "Code invalide ou expir\xE9" });
       return;
     }
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email3)).limit(1);
@@ -69595,15 +69514,61 @@ router10.post("/admin/auth/verify-2fa", admin2FALimiter, async (req, res) => {
       return;
     }
     const admin = admins[0];
-    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
-    const dHash = deviceHash(req);
-    const lastLoginKey = `admin_last_login_${admin.id}`;
-    await db.insert(adminDevicesTable).values({ adminEmail: email3, deviceHash: dHash }).onConflictDoUpdate({ target: [adminDevicesTable.adminEmail, adminDevicesTable.deviceHash], set: { lastSeenAt: now } });
-    await db.insert(adminSettingsTable).values({ key: lastLoginKey, value: now.toISOString() }).onConflictDoUpdate({ target: adminSettingsTable.key, set: { value: now.toISOString(), updatedAt: now } });
+    const pendingKey = `admin_totp_pending_${admin.id}`;
+    const pendingRows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey)).limit(1);
+    if (!pendingRows.length) {
+      res.status(400).json({ error: "Aucune configuration TOTP en attente. Reconnectez-vous." });
+      return;
+    }
+    const [secret, tsStr] = (pendingRows[0].value ?? "").split("|");
+    if (!secret || !tsStr || Date.now() - Number(tsStr) > TOTP_PENDING_TTL_MS) {
+      await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey));
+      res.status(400).json({ error: "Le QR code a expir\xE9. Reconnectez-vous pour en g\xE9n\xE9rer un nouveau." });
+      return;
+    }
+    const isValid2 = authenticator.verify({ token: String(code), secret });
+    if (!isValid2) {
+      res.status(400).json({ error: "Code invalide. V\xE9rifiez l'heure de votre appareil et r\xE9essayez." });
+      return;
+    }
+    await db.update(adminUsersTable).set({ totpSecret: secret }).where(eq(adminUsersTable.id, admin.id));
+    await db.delete(adminSettingsTable).where(eq(adminSettingsTable.key, pendingKey));
     const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    req.log.info({ adminId: admin.id }, "Admin TOTP configur\xE9 et activ\xE9");
     res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
   } catch (err) {
-    req.log.error({ err }, "Admin 2FA verify error");
+    req.log.error({ err }, "Admin confirm-totp-setup error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router10.post("/admin/auth/verify-totp", admin2FALimiter, async (req, res) => {
+  try {
+    const { email: email3, code } = req.body;
+    if (!email3 || !code) {
+      res.status(400).json({ error: "Email et code requis" });
+      return;
+    }
+    const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email3)).limit(1);
+    if (!admins.length) {
+      res.status(401).json({ error: "Admin introuvable" });
+      return;
+    }
+    const admin = admins[0];
+    if (!admin.totpSecret) {
+      res.status(400).json({ error: "TOTP non configur\xE9. Reconnectez-vous pour configurer." });
+      return;
+    }
+    const isValid2 = authenticator.verify({ token: String(code), secret: admin.totpSecret });
+    if (!isValid2) {
+      req.log.warn({ adminId: admin.id }, "Admin TOTP code invalide");
+      res.status(400).json({ error: "Code invalide ou expir\xE9. R\xE9essayez." });
+      return;
+    }
+    const token = signAdminToken({ id: admin.id, email: admin.email, role: admin.role });
+    req.log.info({ adminId: admin.id }, "Admin connect\xE9 via TOTP");
+    res.json({ token, admin: { id: admin.id, fullName: admin.fullName, email: admin.email, role: admin.role } });
+  } catch (err) {
+    req.log.error({ err }, "Admin verify-totp error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
@@ -70517,7 +70482,7 @@ router10.post("/admin/disburse", requireAdmin, async (req, res) => {
       });
       return;
     }
-    const reference = "ADM" + Date.now() + crypto9.randomBytes(3).toString("hex").toUpperCase();
+    const reference = "ADM" + Date.now() + randomBytes2(3).toString("hex").toUpperCase();
     const description = motif?.trim() || `D\xE9boursement manuel admin vers ${phone}`;
     req.log.info(
       { operator, phone, amount: amt, reference },

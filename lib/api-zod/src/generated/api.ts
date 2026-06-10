@@ -20,13 +20,13 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary User login
  */
-export const loginBodyPinMin = 6;
+export const loginBodyPinMin = 4;
 export const loginBodyPinMax = 6;
 
 
 
 export const LoginBody = zod.object({
-  "email": zod.string().email(),
+  "phone": zod.string(),
   "pin": zod.string().min(loginBodyPinMin).max(loginBodyPinMax)
 })
 
@@ -43,14 +43,14 @@ export const LoginResponse = zod.object({
 /**
  * @summary User registration
  */
-export const registerBodyPinMin = 6;
+export const registerBodyPinMin = 4;
 export const registerBodyPinMax = 6;
 
 
 
 export const RegisterBody = zod.object({
   "fullName": zod.string(),
-  "email": zod.string().email(),
+  "phone": zod.string(),
   "pin": zod.string().min(registerBodyPinMin).max(registerBodyPinMax)
 })
 

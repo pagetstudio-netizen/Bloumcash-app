@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { signUserToken, requireUser } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
-import { sendWelcomeEmail, sendPinResetEmail } from "../lib/email";
+import { sendPinResetEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -39,6 +39,24 @@ const forgotPinLimiter = rateLimit({
 });
 
 /* ── Helpers ── */
+function sanitizeStr(v: unknown, maxLen = 255): string {
+  return String(v ?? "").trim().slice(0, maxLen);
+}
+
+function normalizeTogoPhone(raw: string): string | null {
+  let digits = raw.replace(/[\s\-]/g, "");
+  if (digits.startsWith("+228")) digits = digits.slice(4);
+  else if (digits.startsWith("228")) digits = digits.slice(3);
+  if (!/^\d{8}$/.test(digits)) return null;
+  const prefix = parseInt(digits.slice(0, 2));
+  if ((prefix >= 90 && prefix <= 93) || (prefix >= 96 && prefix <= 99)) return digits;
+  return null;
+}
+
+function phoneToEmail(phone: string): string {
+  return `${phone}@users.bloumcash.app`;
+}
+
 async function isBlacklisted(phone: string | null | undefined): Promise<boolean> {
   if (!phone) return false;
   const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
@@ -49,23 +67,21 @@ function generateCode(): string {
   return String(Math.floor(100000 + crypto.randomInt(900000))).padStart(6, "0");
 }
 
-function sanitizeStr(v: unknown, maxLen = 255): string {
-  return String(v ?? "").trim().slice(0, maxLen);
-}
-
 /* ── LOGIN ── */
 router.post("/auth/login", loginLimiter, async (req, res) => {
   try {
-    const email = sanitizeStr(req.body.email, 255);
-    const pin = sanitizeStr(req.body.pin, 20);
-    if (!email || !pin) {
-      res.status(400).json({ error: "Email et PIN requis" });
+    const rawPhone = sanitizeStr(req.body.phone, 30);
+    const pin      = sanitizeStr(req.body.pin, 20);
+
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !pin) {
+      res.status(400).json({ error: "Numéro de téléphone et mot de passe requis" });
       return;
     }
 
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (!users.length) {
-      res.status(401).json({ error: "Email ou PIN incorrect" });
+      res.status(401).json({ error: "Numéro ou mot de passe incorrect" });
       return;
     }
 
@@ -86,14 +102,14 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
 
     const pinMatches = await bcrypt.compare(pin, user.pin);
     if (!pinMatches) {
-      res.status(401).json({ error: "Email ou PIN incorrect" });
+      res.status(401).json({ error: "Numéro ou mot de passe incorrect" });
       return;
     }
 
     const token = signUserToken({ id: user.id, email: user.email });
 
     await db.update(usersTable)
-      .set({ onesignalExternalUserId: user.email, lastLoginAt: new Date() })
+      .set({ lastLoginAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
     sendPushNotification({
@@ -103,7 +119,7 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
       data: { type: "login" },
     }, req.log);
 
-    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
+    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {
     req.log.error({ err }, "Login error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -114,40 +130,35 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
 router.post("/auth/register", registerLimiter, async (req, res) => {
   try {
     const fullName = sanitizeStr(req.body.fullName, 100);
-    const email    = sanitizeStr(req.body.email, 255);
+    const rawPhone = sanitizeStr(req.body.phone, 30);
     const pin      = sanitizeStr(req.body.pin, 20);
-    const phone    = req.body.phone ? sanitizeStr(req.body.phone, 20) : null;
     const village  = req.body.village  ? sanitizeStr(req.body.village, 100) : null;
     const city     = req.body.city     ? sanitizeStr(req.body.city, 100) : null;
     const region   = req.body.region   ? sanitizeStr(req.body.region, 100) : null;
     const country  = req.body.country  ? sanitizeStr(req.body.country, 100) : "Togo";
 
-    if (!fullName || !email || !pin) {
-      res.status(400).json({ error: "Tous les champs sont requis" });
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!fullName || !phone) {
+      res.status(400).json({ error: "Nom complet et numéro de téléphone Togo requis" });
+      return;
+    }
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caractères" });
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      res.status(400).json({ error: "Format d'email invalide" });
-      return;
-    }
-
-    if (!/^\d{4,6}$/.test(pin)) {
-      res.status(400).json({ error: "Le PIN doit être 4 à 6 chiffres" });
-      return;
-    }
-
-    if (phone && await isBlacklisted(phone)) {
+    if (await isBlacklisted(phone)) {
       res.status(403).json({ error: "Escroquerie détectée. Inscription refusée.", code: "PHONE_BLACKLISTED" });
       return;
     }
 
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (existing.length) {
-      res.status(400).json({ error: "Cet email est déjà utilisé" });
+      res.status(400).json({ error: "Ce numéro de téléphone est déjà utilisé" });
       return;
     }
 
+    const email = phoneToEmail(phone);
     const hashedPin = await bcrypt.hash(pin, 12);
     const [user] = await db.insert(usersTable)
       .values({ fullName, email, pin: hashedPin, phone, onesignalExternalUserId: email, village, city, region, country })
@@ -155,33 +166,33 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
 
     const token = signUserToken({ id: user.id, email: user.email });
 
-    sendWelcomeEmail({ to: user.email, fullName: user.fullName }).catch(() => {});
     sendPushNotification({
       externalUserId: user.email,
-      title: "Bienvenue sur Bloum Cash 🎉",
+      title: "Bienvenue sur Bloum Cash !",
       message: `Bonjour ${user.fullName}, votre compte est créé !`,
       data: { type: "register" },
     }, req.log);
 
-    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email } });
+    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {
     req.log.error({ err }, "Register error");
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
 
-/* ── FORGOT PIN ── */
+/* ── FORGOT PIN (par numéro de téléphone) ── */
 router.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
   try {
-    const email = sanitizeStr(req.body.email, 255);
-    if (!email) {
-      res.status(400).json({ error: "Email requis" });
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone) {
+      res.status(400).json({ error: "Numéro de téléphone requis" });
       return;
     }
 
-    const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
     if (!users.length) {
-      res.json({ message: "Si cet email existe, un code de réinitialisation a été envoyé." });
+      res.json({ message: "Si ce numéro existe, un code de réinitialisation a été envoyé." });
       return;
     }
 
@@ -190,15 +201,15 @@ router.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await db.delete(verificationCodesTable).where(
-      and(eq(verificationCodesTable.email, email), eq(verificationCodesTable.type, "pin_reset"))
+      and(eq(verificationCodesTable.email, user.email), eq(verificationCodesTable.type, "pin_reset"))
     );
-    await db.insert(verificationCodesTable).values({ email, code, type: "pin_reset", expiresAt });
+    await db.insert(verificationCodesTable).values({ email: user.email, code, type: "pin_reset", expiresAt });
 
     sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
       req.log.error({ e }, "Erreur envoi email reset PIN");
     });
 
-    res.json({ message: "Si cet email existe, un code de réinitialisation a été envoyé." });
+    res.json({ message: "Si ce numéro existe, un code de réinitialisation a été envoyé." });
   } catch (err) {
     req.log.error({ err }, "Forgot PIN error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -208,23 +219,31 @@ router.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
 /* ── RESET PIN ── */
 router.post("/auth/reset-pin", async (req, res) => {
   try {
-    const email  = sanitizeStr(req.body.email, 255);
-    const code   = sanitizeStr(req.body.code, 10);
-    const newPin = sanitizeStr(req.body.newPin, 20);
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
+    const code     = sanitizeStr(req.body.code, 10);
+    const newPin   = sanitizeStr(req.body.newPin, 20);
 
-    if (!email || !code || !newPin) {
-      res.status(400).json({ error: "Email, code et nouveau PIN requis" });
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !code || !newPin) {
+      res.status(400).json({ error: "Numéro de téléphone, code et nouveau mot de passe requis" });
       return;
     }
-    if (!/^\d{4,6}$/.test(newPin)) {
-      res.status(400).json({ error: "Le PIN doit être 4 à 6 chiffres" });
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caractères" });
       return;
     }
+
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (!users.length) {
+      res.status(400).json({ error: "Numéro introuvable" });
+      return;
+    }
+    const user = users[0];
 
     const now = new Date();
     const codes = await db.select().from(verificationCodesTable).where(
       and(
-        eq(verificationCodesTable.email, email),
+        eq(verificationCodesTable.email, user.email),
         eq(verificationCodesTable.code, code),
         eq(verificationCodesTable.type, "pin_reset"),
         gt(verificationCodesTable.expiresAt, now),
@@ -237,10 +256,10 @@ router.post("/auth/reset-pin", async (req, res) => {
     }
 
     const hashedPin = await bcrypt.hash(newPin, 12);
-    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.email, email));
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
     await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
 
-    res.json({ success: true, message: "PIN réinitialisé avec succès" });
+    res.json({ success: true, message: "Mot de passe réinitialisé avec succès" });
   } catch (err) {
     req.log.error({ err }, "Reset PIN error");
     res.status(500).json({ error: "Erreur serveur" });
@@ -255,11 +274,11 @@ router.post("/auth/change-pin", async (req, res) => {
     const newPin     = sanitizeStr(req.body.newPin, 20);
 
     if (!token || !currentPin || !newPin) {
-      res.status(400).json({ error: "Token, PIN actuel et nouveau PIN requis" });
+      res.status(400).json({ error: "Token, mot de passe actuel et nouveau mot de passe requis" });
       return;
     }
-    if (!/^\d{4,6}$/.test(newPin)) {
-      res.status(400).json({ error: "Le nouveau PIN doit être 4 à 6 chiffres" });
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le nouveau mot de passe doit avoir au moins 4 caractères" });
       return;
     }
 
@@ -281,18 +300,18 @@ router.post("/auth/change-pin", async (req, res) => {
     const user = users[0];
     const pinMatches = await bcrypt.compare(currentPin, user.pin);
     if (!pinMatches) {
-      res.status(401).json({ error: "PIN actuel incorrect" });
+      res.status(401).json({ error: "Mot de passe actuel incorrect" });
       return;
     }
     if (currentPin === newPin) {
-      res.status(400).json({ error: "Le nouveau PIN doit être différent de l'ancien" });
+      res.status(400).json({ error: "Le nouveau mot de passe doit être différent de l'ancien" });
       return;
     }
 
     const hashedPin = await bcrypt.hash(newPin, 12);
     await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
 
-    res.json({ success: true, message: "PIN modifié avec succès" });
+    res.json({ success: true, message: "Mot de passe modifié avec succès" });
   } catch (err) {
     req.log.error({ err }, "Change PIN error");
     res.status(500).json({ error: "Erreur serveur" });
