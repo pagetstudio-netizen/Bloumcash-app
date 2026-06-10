@@ -39,7 +39,7 @@ router.post("/send-push-notification", requireAdmin, async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Basic ${ONESIGNAL_API_KEY}`,
+        Authorization: `Key ${ONESIGNAL_API_KEY}`,
       },
       body: JSON.stringify(payload),
     });

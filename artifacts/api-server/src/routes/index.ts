@@ -11,6 +11,7 @@ import gomboplusWebhookRouter from "./gomboplus-webhook";
 import adminRouter from "./admin";
 import pushNotificationRouter from "./push-notification";
 import testPushRouter from "./test-push";
+import pushDiagnoseRouter from "./push-diagnose";
 import configRouter from "./config";
 import feedbackRouter from "./feedback";
 
@@ -29,6 +30,7 @@ router.use(gomboplusWebhookRouter);
 router.use(adminRouter);
 router.use(pushNotificationRouter);
 router.use(testPushRouter);
+router.use(pushDiagnoseRouter);
 router.use(feedbackRouter);
 
 export default router;
