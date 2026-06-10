@@ -71,15 +71,20 @@ export async function runStartupSeed() {
       await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
     }
 
-    // Banners — pré-seeder avec les 3 images de la PWA
-    const banners = await db.select().from(dashboardBannersTable).limit(1);
-    if (!banners.length) {
-      await db.insert(dashboardBannersTable).values([
-        { title: "Transfert sans déplacement", imageUrl: "/banners/banner1.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 0 },
-        { title: "TMoney & Moov Money", imageUrl: "/banners/banner2.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 1 },
-        { title: "Paiement QR Code", imageUrl: "/banners/banner3.jpg", actionType: "page", actionUrl: "/encaisser", isActive: true, sortOrder: 2 },
-      ]);
-      logger.info("✅ Bannières pré-seededées");
+    // Banners — pré-seeder avec les 5 images (insert si absent)
+    const allBanners = await db.select({ imageUrl: dashboardBannersTable.imageUrl }).from(dashboardBannersTable);
+    const existingUrls = new Set(allBanners.map(b => b.imageUrl));
+    const defaultBanners = [
+      { title: "Transfert sans déplacement", imageUrl: "/banners/banner1.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 0 },
+      { title: "TMoney & Moov Money", imageUrl: "/banners/banner2.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 1 },
+      { title: "Paiement QR Code", imageUrl: "/banners/banner3.jpg", actionType: "page", actionUrl: "/encaisser", isActive: true, sortOrder: 2 },
+      { title: "Effectuez vos transferts", imageUrl: "/banners/bloum-cash-banner-transfert.jpg", actionType: "page", actionUrl: "/transfert", isActive: true, sortOrder: 3 },
+      { title: "Donnez votre avis", imageUrl: "/banners/bloum-cash-banner-avis.jpg", actionType: "page", actionUrl: "/suggestions", isActive: true, sortOrder: 4 },
+    ];
+    const toInsert = defaultBanners.filter(b => !existingUrls.has(b.imageUrl));
+    if (toInsert.length) {
+      await db.insert(dashboardBannersTable).values(toInsert);
+      logger.info(`✅ ${toInsert.length} nouvelle(s) bannière(s) ajoutée(s)`);
     }
 
     // Welcome notification
