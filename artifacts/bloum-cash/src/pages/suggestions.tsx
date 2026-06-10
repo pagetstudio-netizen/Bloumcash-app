@@ -207,7 +207,7 @@ export default function Suggestions() {
                       {user.fullName?.[0] ?? "U"}
                     </div>
                     <div>
-                      <p className="text-xs font-semibold text-gray-700">{user.fullName}</p>
+                      <p className="text-xs font-semibold text-gray-700">Client Bloum Cash</p>
                       <p className="text-xs text-gray-400">Envoyé depuis votre compte</p>
                     </div>
                   </div>
