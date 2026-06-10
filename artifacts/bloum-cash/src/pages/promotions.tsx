@@ -148,13 +148,13 @@ export default function Promotions() {
       >
         <div className="flex-1 relative z-10">
           <p className="text-white/70 text-[11px] font-semibold uppercase tracking-widest mb-1">Offres exclusives</p>
-          <h2 className="text-white font-bold text-[16px] leading-tight">Profitez de nos<br />meilleures offres 🎁</h2>
+          <h2 className="text-white font-bold text-[16px] leading-tight">Profitez de nos<br />meilleures offres</h2>
         </div>
         <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl flex-shrink-0 relative z-10"
+          className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 relative z-10"
           style={{ background: "rgba(255,255,255,0.15)" }}
         >
-          🎉
+          <Gift className="w-8 h-8 text-white" />
         </div>
         <div className="absolute top-0 right-0 w-28 h-28 bg-white/5 rounded-full blur-2xl translate-x-8 -translate-y-8" />
         <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full blur-xl -translate-x-6 translate-y-6" />
