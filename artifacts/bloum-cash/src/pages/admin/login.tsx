@@ -27,11 +27,12 @@ export default function AdminLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Identifiants incorrects"); return; }
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* réponse non-JSON (ex: erreur serveur HTML) */ }
+      if (!res.ok) { setError(String(data.error ?? `Erreur serveur (${res.status}). Vérifiez la configuration.`)); return; }
 
       if (data.requiresTotpSetup) {
-        setTotpUri(data.totpUri ?? "");
+        setTotpUri(String(data.totpUri ?? ""));
         setStep("setup-totp");
         return;
       }
@@ -41,11 +42,11 @@ export default function AdminLogin() {
         return;
       }
 
-      localStorage.setItem("bloum_admin_token", data.token);
+      localStorage.setItem("bloum_admin_token", String(data.token ?? ""));
       localStorage.setItem("bloum_admin_user", JSON.stringify(data.admin));
       setLocation("/admin");
-    } catch {
-      setError("Erreur réseau. Veuillez réessayer.");
+    } catch (e: unknown) {
+      setError("Erreur réseau. Vérifiez que le serveur est en ligne.");
     } finally {
       setLoading(false);
     }
@@ -61,13 +62,14 @@ export default function AdminLogin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, code }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Code invalide"); return; }
-      localStorage.setItem("bloum_admin_token", data.token);
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { /* réponse non-JSON */ }
+      if (!res.ok) { setError(String(data.error ?? `Erreur serveur (${res.status})`)); return; }
+      localStorage.setItem("bloum_admin_token", String(data.token ?? ""));
       localStorage.setItem("bloum_admin_user", JSON.stringify(data.admin));
       setLocation("/admin");
     } catch {
-      setError("Erreur réseau. Veuillez réessayer.");
+      setError("Erreur réseau. Vérifiez que le serveur est en ligne.");
     } finally {
       setLoading(false);
     }

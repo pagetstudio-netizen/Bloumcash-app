@@ -53,11 +53,13 @@ export default function Register() {
         message: "Bienvenue sur Bloum Cash.",
         onClose: () => setLocation("/dashboard"),
       });
-    } catch {
+    } catch (err: unknown) {
+      const apiMsg = (err as { data?: { error?: string } })?.data?.error;
+      const message = apiMsg ?? "Erreur de connexion au serveur. Vérifiez votre réseau et réessayez.";
       showModal({
         type: "error",
         title: "Erreur d'inscription",
-        message: "Ce numéro est peut-être déjà utilisé. Veuillez réessayer.",
+        message,
       });
     }
   }
