@@ -33,7 +33,16 @@ const INTERNAL_PAGES = [
   { label: "Encaisser (QR)", value: "/encaisser" },
   { label: "Promotions", value: "/promotions" },
   { label: "Avis & Suggestions", value: "/suggestions" },
+  { label: "Notifications", value: "/notifications" },
   { label: "Plus", value: "/plus" },
+  { label: "Mon QR Code", value: "/plus/mon-qr-code" },
+  { label: "Statistiques", value: "/plus/statistiques" },
+  { label: "Aide", value: "/plus/aide" },
+  { label: "FAQ", value: "/plus/faq" },
+  { label: "Support WhatsApp", value: "/plus/whatsapp" },
+  { label: "Paramètres", value: "/plus/parametres" },
+  { label: "Produits (marchands)", value: "/encaisser/produits" },
+  { label: "Boutiques (marchands)", value: "/encaisser/boutiques" },
 ];
 
 interface ModalState {

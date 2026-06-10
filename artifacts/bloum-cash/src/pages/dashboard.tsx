@@ -265,27 +265,38 @@ export default function Dashboard() {
           className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {banners.map((banner, i) => (
-            <div
-              key={banner.id}
-              className="flex-shrink-0 w-full snap-center bg-[#1a3fc4] overflow-hidden"
-              style={{
-                height: "190px",
-                cursor: "default",
-              }}
-            >
-              <img
-                src={banner.imageUrl}
-                alt={banner.title ?? `Bannière ${i + 1}`}
-                className="w-full h-full"
-                style={{ objectFit: "cover", objectPosition: "center center" }}
-                draggable={false}
-                loading={i === 0 ? "eager" : "lazy"}
-                decoding="async"
-                fetchPriority={i === 0 ? "high" : "low"}
-              />
-            </div>
-          ))}
+          {banners.map((banner, i) => {
+            const hasAction = banner.actionType === "page" || banner.actionType === "link";
+            const handleBannerClick = () => {
+              if (banner.actionType === "page" && banner.actionUrl) {
+                setLocation(banner.actionUrl);
+              } else if (banner.actionType === "link" && banner.actionUrl) {
+                window.open(banner.actionUrl, "_blank", "noopener,noreferrer");
+              }
+            };
+            return (
+              <div
+                key={banner.id}
+                onClick={hasAction ? handleBannerClick : undefined}
+                className="flex-shrink-0 w-full snap-center bg-[#1a3fc4] overflow-hidden"
+                style={{
+                  height: "190px",
+                  cursor: hasAction ? "pointer" : "default",
+                }}
+              >
+                <img
+                  src={banner.imageUrl}
+                  alt={banner.title ?? `Bannière ${i + 1}`}
+                  className="w-full h-full"
+                  style={{ objectFit: "cover", objectPosition: "center center" }}
+                  draggable={false}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  fetchPriority={i === 0 ? "high" : "low"}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {/* Indicateurs dots */}
