@@ -60071,8 +60071,13 @@ if (!connectionString) {
     "DATABASE_URL doit \xEAtre d\xE9fini."
   );
 }
+var isSupabase = connectionString.includes("supabase.com") || connectionString.includes("supabase.co");
 var pool = new Pool3({
-  connectionString
+  connectionString,
+  ssl: isSupabase ? { rejectUnauthorized: false } : void 0,
+  max: 10,
+  idleTimeoutMillis: 3e4,
+  connectionTimeoutMillis: 1e4
 });
 var db = drizzle(pool, { schema: schema_exports });
 
