@@ -20525,27 +20525,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router15;
+    module.exports = Router16;
     module.exports.Route = Route;
-    function Router15(options) {
-      if (!(this instanceof Router15)) {
-        return new Router15(options);
+    function Router16(options) {
+      if (!(this instanceof Router16)) {
+        return new Router16(options);
       }
       const opts = options || {};
-      function router15(req, res, next) {
-        router15.handle(req, res, next);
+      function router16(req, res, next) {
+        router16.handle(req, res, next);
       }
-      Object.setPrototypeOf(router15, this);
-      router15.caseSensitive = opts.caseSensitive;
-      router15.mergeParams = opts.mergeParams;
-      router15.params = {};
-      router15.strict = opts.strict;
-      router15.stack = [];
-      return router15;
+      Object.setPrototypeOf(router16, this);
+      router16.caseSensitive = opts.caseSensitive;
+      router16.mergeParams = opts.mergeParams;
+      router16.params = {};
+      router16.strict = opts.strict;
+      router16.stack = [];
+      return router16;
     }
-    Router15.prototype = function() {
+    Router16.prototype = function() {
     };
-    Router15.prototype.param = function param(name, fn) {
+    Router16.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20565,7 +20565,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router15.prototype.handle = function handle(req, res, callback) {
+    Router16.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20692,7 +20692,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router15.prototype.use = function use(handler) {
+    Router16.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20725,7 +20725,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router15.prototype.route = function route(path3) {
+    Router16.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20740,7 +20740,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router15.prototype[method] = function(path3) {
+      Router16.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20923,13 +20923,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router15 = require_router();
+    var Router16 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router15 = null;
+      var router16 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20938,13 +20938,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router15 === null) {
-            router15 = new Router15({
+          if (router16 === null) {
+            router16 = new Router16({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router15;
+          return router16;
         }
       });
     };
@@ -21015,15 +21015,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router15 = this.router;
+      var router16 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router15.use(path3, fn2);
+          return router16.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router15.use(path3, function mounted_app(req, res, next) {
+        router16.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23596,7 +23596,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router15 = require_router();
+    var Router16 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23618,8 +23618,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router15.Route;
-    exports.Router = Router15;
+    exports.Route = Router16.Route;
+    exports.Router = Router16;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -36345,14 +36345,14 @@ var require_dist3 = __commonJS({
 });
 
 // src/app.ts
-var import_express15 = __toESM(require_express2(), 1);
+var import_express16 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path2 from "path";
 import fs2 from "fs";
 
 // src/routes/index.ts
-var import_express14 = __toESM(require_express2(), 1);
+var import_express15 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -48476,6 +48476,7 @@ __export(schema_exports, {
   qrCodesTable: () => qrCodesTable,
   securityEventsTable: () => securityEventsTable,
   transactionsTable: () => transactionsTable,
+  userFeedbackTable: () => userFeedbackTable,
   usersTable: () => usersTable,
   verificationCodesTable: () => verificationCodesTable,
   whitelistedIpsTable: () => whitelistedIpsTable
@@ -60046,6 +60047,19 @@ var dashboardBannersTable = pgTable("dashboard_banners", {
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
+// ../../lib/db/src/schema/feedback.ts
+var userFeedbackTable = pgTable("user_feedback", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id"),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("nouveau"),
+  userPhone: text("user_phone"),
+  userName: text("user_name"),
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
 var connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
@@ -70912,22 +70926,95 @@ router13.get("/config", (_req, res) => {
 });
 var config_default = router13;
 
-// src/routes/index.ts
+// src/routes/feedback.ts
+var import_express14 = __toESM(require_express2(), 1);
+init_user_auth();
 var router14 = (0, import_express14.Router)();
-router14.use(health_default);
-router14.use(config_default);
-router14.use(auth_default);
-router14.use(transactions_default);
-router14.use(stats_default);
-router14.use(qrcodes_default);
-router14.use(transfer_default);
-router14.use(paydunya_webhook_default);
-router14.use(paydunya_diagnose_default);
-router14.use(gomboplus_webhook_default);
-router14.use(admin_default);
-router14.use(push_notification_default);
-router14.use(test_push_default);
-var routes_default = router14;
+var feedbackLimiter = rate_limit_default({
+  windowMs: 60 * 60 * 1e3,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop d'envois. R\xE9essayez dans 1 heure." }
+});
+router14.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
+  try {
+    const userId = req.currentUser.id;
+    const { type, title, message } = req.body;
+    const VALID_TYPES = ["suggestion", "retour", "bug"];
+    if (!type || !VALID_TYPES.includes(String(type))) {
+      res.status(400).json({ error: "Type invalide. Choisissez : suggestion, retour ou bug." });
+      return;
+    }
+    if (!title || String(title).trim().length < 3) {
+      res.status(400).json({ error: "Titre requis (minimum 3 caract\xE8res)." });
+      return;
+    }
+    if (!message || String(message).trim().length < 10) {
+      res.status(400).json({ error: "Description requise (minimum 10 caract\xE8res)." });
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    const user = users[0];
+    await db.insert(userFeedbackTable).values({
+      userId,
+      type: String(type),
+      title: String(title).trim().slice(0, 100),
+      message: String(message).trim().slice(0, 1e3),
+      status: "nouveau",
+      userPhone: user?.phone ?? null,
+      userName: user?.fullName ?? null
+    });
+    res.status(201).json({ success: true, message: "Retour envoy\xE9 avec succ\xE8s." });
+  } catch (err) {
+    req.log.error({ err }, "Feedback submit error");
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+router14.get("/admin/feedback", requireAdmin, async (req, res) => {
+  try {
+    const items = await db.select().from(userFeedbackTable).orderBy(desc(userFeedbackTable.createdAt)).limit(500);
+    res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "Admin feedback list error");
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+router14.patch("/admin/feedback/:id/status", requireAdmin, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { status } = req.body;
+    const VALID_STATUSES = ["nouveau", "lu", "trait\xE9"];
+    if (!status || !VALID_STATUSES.includes(String(status))) {
+      res.status(400).json({ error: "Statut invalide." });
+      return;
+    }
+    await db.update(userFeedbackTable).set({ status: String(status) }).where(eq(userFeedbackTable.id, id));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Admin feedback status update error");
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+var feedback_default = router14;
+
+// src/routes/index.ts
+var router15 = (0, import_express15.Router)();
+router15.use(health_default);
+router15.use(config_default);
+router15.use(auth_default);
+router15.use(transactions_default);
+router15.use(stats_default);
+router15.use(qrcodes_default);
+router15.use(transfer_default);
+router15.use(paydunya_webhook_default);
+router15.use(paydunya_diagnose_default);
+router15.use(gomboplus_webhook_default);
+router15.use(admin_default);
+router15.use(push_notification_default);
+router15.use(test_push_default);
+router15.use(feedback_default);
+var routes_default = router15;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -70951,7 +71038,7 @@ var logger = (0, import_pino.default)({
 var _appDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
 var UPLOADS_DIR2 = path2.resolve(_appDir, "..", "..", "..", "uploads");
 if (!fs2.existsSync(UPLOADS_DIR2)) fs2.mkdirSync(UPLOADS_DIR2, { recursive: true });
-var app = (0, import_express15.default)();
+var app = (0, import_express16.default)();
 app.disable("x-powered-by");
 app.use(
   (0, import_pino_http.default)({
@@ -70989,9 +71076,9 @@ app.use(
     credentials: true
   })
 );
-app.use(import_express15.default.json({ limit: "2mb" }));
-app.use(import_express15.default.urlencoded({ extended: true, limit: "2mb" }));
-app.use("/uploads", import_express15.default.static(UPLOADS_DIR2, {
+app.use(import_express16.default.json({ limit: "2mb" }));
+app.use(import_express16.default.urlencoded({ extended: true, limit: "2mb" }));
+app.use("/uploads", import_express16.default.static(UPLOADS_DIR2, {
   index: false,
   dotfiles: "deny"
 }));
@@ -70999,7 +71086,7 @@ app.use("/api", routes_default);
 var _serverDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
 var FRONTEND_DIST = path2.resolve(_serverDir, "..", "..", "..", "artifacts", "bloum-cash", "dist", "public");
 if (fs2.existsSync(FRONTEND_DIST)) {
-  app.use(import_express15.default.static(FRONTEND_DIST, { index: false }));
+  app.use(import_express16.default.static(FRONTEND_DIST, { index: false }));
   app.get("/{*path}", (_req, res) => {
     const indexPath = path2.join(FRONTEND_DIST, "index.html");
     if (fs2.existsSync(indexPath)) {

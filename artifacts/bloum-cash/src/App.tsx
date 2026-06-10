@@ -34,6 +34,7 @@ import Conditions from "@/pages/plus/conditions";
 import Confidentialite from "@/pages/plus/confidentialite";
 import Apropos from "@/pages/plus/apropos";
 import Notifications from "@/pages/notifications";
+import Suggestions from "@/pages/suggestions";
 
 import ConfigTmoney from "@/pages/encaisser/tmoney";
 import ConfigMoov from "@/pages/encaisser/moov";
@@ -55,6 +56,7 @@ import AdminSecurity from "@/pages/admin/security";
 import AdminSettings from "@/pages/admin/settings";
 import AdminAdmins from "@/pages/admin/admins";
 import AdminPromotions from "@/pages/admin/promotions";
+import AdminFeedback from "@/pages/admin/feedback";
 
 setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
 
@@ -113,6 +115,7 @@ function Router() {
         <Route path="/admin/security" component={AdminSecurity} />
         <Route path="/admin/admins" component={AdminAdmins} />
         <Route path="/admin/promotions" component={AdminPromotions} />
+        <Route path="/admin/feedback" component={AdminFeedback} />
         <Route path="/admin/settings" component={AdminSettings} />
         <Route path="/admin" component={AdminDashboard} />
 
@@ -144,6 +147,7 @@ function Router() {
         <Route path="/plus/confidentialite" component={Confidentialite} />
         <Route path="/plus/apropos" component={Apropos} />
         <Route path="/notifications" component={Notifications} />
+        <Route path="/suggestions" component={Suggestions} />
         <Route path="/encaisser/tmoney" component={ConfigTmoney} />
         <Route path="/encaisser/moov" component={ConfigMoov} />
         <Route path="/encaisser/produits" component={Produits} />

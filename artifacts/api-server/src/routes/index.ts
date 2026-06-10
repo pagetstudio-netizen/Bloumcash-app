@@ -12,6 +12,7 @@ import adminRouter from "./admin";
 import pushNotificationRouter from "./push-notification";
 import testPushRouter from "./test-push";
 import configRouter from "./config";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(gomboplusWebhookRouter);
 router.use(adminRouter);
 router.use(pushNotificationRouter);
 router.use(testPushRouter);
+router.use(feedbackRouter);
 
 export default router;
