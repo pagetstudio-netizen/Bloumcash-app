@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { signUserToken, requireUser } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
-import { sendPinResetEmail } from "../lib/email";
+import { sendPinResetSms } from "../lib/africasms";
 import { notifyNewUser } from "../lib/telegram";
 
 const router: IRouter = Router();
@@ -208,8 +208,8 @@ router.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
     );
     await db.insert(verificationCodesTable).values({ email: user.email, code, type: "pin_reset", expiresAt });
 
-    sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
-      req.log.error({ e }, "Erreur envoi email reset PIN");
+    sendPinResetSms({ phone: user.phone ?? rawPhone, fullName: user.fullName, code }).catch((e) => {
+      req.log.error({ e }, "Erreur envoi SMS reset PIN");
     });
 
     res.json({ message: "Si ce numéro existe, un code de réinitialisation a été envoyé." });

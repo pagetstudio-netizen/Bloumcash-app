@@ -59933,6 +59933,7 @@ var adminUsersTable = pgTable("admin_users", {
   id: serial("id").primaryKey(),
   fullName: text("full_name").notNull(),
   email: text("email").unique().notNull(),
+  phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("admin"),
   totpSecret: text("totp_secret"),
@@ -61845,6 +61846,2925 @@ async function sendPushNotification(options, log) {
     log?.warn({ err, externalUserId: options.externalUserId }, "OneSignal \u2014 erreur r\xE9seau lors de l'envoi");
   }
 }
+
+// src/lib/logger.ts
+var import_pino = __toESM(require_pino(), 1);
+var isProduction = process.env.NODE_ENV === "production";
+var logger = (0, import_pino.default)({
+  level: process.env.LOG_LEVEL ?? "info",
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "res.headers['set-cookie']"
+  ],
+  ...isProduction ? {} : {
+    transport: {
+      target: "pino-pretty",
+      options: { colorize: true }
+    }
+  }
+});
+
+// src/lib/africasms.ts
+var BASE_URL = "https://www.africasms.com/api/sms/send";
+function getConfig() {
+  const username = process.env.AFRICASMS_USERNAME;
+  const apiKey = process.env.AFRICASMS_API_KEY;
+  const sender = process.env.AFRICASMS_SENDER ?? "BLOUMCASH";
+  if (!username || !apiKey) return null;
+  return { username, apiKey, sender };
+}
+function normalizeForSms(phone) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("228")) return digits;
+  if (digits.length === 8) return "228" + digits;
+  return digits;
+}
+async function sendSms(opts) {
+  const config2 = getConfig();
+  if (!config2) {
+    logger.warn("AfricaSMS non configur\xE9 \u2014 AFRICASMS_USERNAME ou AFRICASMS_API_KEY manquant");
+    return { success: false, error: "SMS non configur\xE9" };
+  }
+  const to = normalizeForSms(opts.phone);
+  const params = new URLSearchParams({
+    username: config2.username,
+    api_key: config2.apiKey,
+    to,
+    from: config2.sender,
+    message: opts.message
+  });
+  try {
+    const res = await fetch(`${BASE_URL}?${params.toString()}`, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(1e4)
+    });
+    const text2 = await res.text().catch(() => "");
+    if (!res.ok) {
+      logger.error({ status: res.status, body: text2 }, "AfricaSMS HTTP error");
+      return { success: false, error: `HTTP ${res.status}: ${text2}` };
+    }
+    let data = {};
+    try {
+      data = JSON.parse(text2);
+    } catch {
+    }
+    const success2 = res.ok && (!data.status || data.status === "success" || data.status === "200" || String(data.status) === "1800");
+    if (success2) {
+      logger.info({ to, sender: config2.sender }, "SMS envoy\xE9 avec succ\xE8s (AfricaSMS)");
+      return { success: true, message: String(data.message ?? text2) };
+    } else {
+      logger.error({ to, data }, "AfricaSMS \u2014 r\xE9ponse d'erreur");
+      return { success: false, error: String(data.message ?? data.error ?? text2) };
+    }
+  } catch (err) {
+    logger.error({ err, to }, "AfricaSMS \u2014 erreur r\xE9seau");
+    return { success: false, error: err?.message ?? "Erreur r\xE9seau SMS" };
+  }
+}
+async function sendPinResetSms(opts) {
+  return sendSms({
+    phone: opts.phone,
+    message: `Bloum Cash - Bonjour ${opts.fullName}, votre code de r\xE9initialisation est : ${opts.code}. Valable 15 minutes. Ne le partagez jamais.`
+  });
+}
+
+// src/lib/telegram.ts
+var TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+var TG_API = TOKEN ? `https://api.telegram.org/bot${TOKEN}` : null;
+var groupChatId = null;
+function esc2(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function fmt(n) {
+  return Number(n ?? 0).toLocaleString("fr-FR");
+}
+function togoDt() {
+  return (/* @__PURE__ */ new Date()).toLocaleString("fr-FR", {
+    timeZone: "Africa/Lome",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+async function tgFetch(method, body) {
+  if (!TG_API) return null;
+  try {
+    const res = await fetch(`${TG_API}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(1e4)
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+async function loadGroupChatId() {
+  try {
+    const rows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, "telegram_group_chat_id")).limit(1);
+    if (rows[0]?.value) {
+      groupChatId = rows[0].value;
+      logger.info({ groupChatId }, "\u{1F916} Telegram group chat ID charg\xE9");
+    }
+  } catch {
+  }
+}
+async function saveGroupChatId(chatId) {
+  groupChatId = chatId;
+  try {
+    await db.insert(adminSettingsTable).values({ key: "telegram_group_chat_id", value: chatId }).onConflictDoUpdate({
+      target: adminSettingsTable.key,
+      set: { value: chatId, updatedAt: /* @__PURE__ */ new Date() }
+    });
+  } catch {
+  }
+}
+async function sendMessage(chatId, text2, extra = {}) {
+  await tgFetch("sendMessage", {
+    chat_id: chatId,
+    text: text2,
+    parse_mode: "HTML",
+    ...extra
+  });
+}
+async function sendToGroup(text2, extra = {}) {
+  if (!groupChatId) return;
+  await sendMessage(groupChatId, text2, extra);
+}
+function notifyNewUser(user) {
+  sendToGroup(
+    `\u{1F195} <b>NOUVEL UTILISATEUR</b>
+
+\u{1F464} Nom : ${esc2(user.fullName)}
+\u{1F4F1} T\xE9l\xE9phone : <code>${esc2(user.phone)}</code>
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyPayment(tx) {
+  sendToGroup(
+    `\u{1F4B8} <b>TRANSFERT R\xC9USSI</b>
+
+\u{1F4CB} R\xE9f : <code>${esc2(tx.reference)}</code>
+\u{1F4B0} Montant : <b>${fmt(tx.amount)} FCFA</b>
+\u{1F4B3} Commission : ${fmt(tx.fees ?? 0)} FCFA
+\u{1F4E4} De : ${esc2(tx.fromPhone ?? "?")} (${esc2(tx.fromOperator ?? "?")})
+\u{1F4E5} Vers : ${esc2(tx.toPhone ?? "?")} (${esc2(tx.toOperator ?? "?")})
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyFeedback(fb) {
+  const typeIcon = fb.type === "bug" ? "\u{1F41B}" : fb.type === "suggestion" ? "\u{1F4A1}" : "\u{1F4AC}";
+  const typeLabel = fb.type === "bug" ? "Signalement de bug" : fb.type === "suggestion" ? "Suggestion" : "Retour utilisateur";
+  sendToGroup(
+    `${typeIcon} <b>${typeLabel.toUpperCase()}</b>
+
+\u{1F4CC} <b>${esc2(fb.title)}</b>
+\u{1F4DD} ${esc2(fb.message)}
+
+\u{1F464} ${esc2(fb.userName ?? "Inconnu")} \u2014 ${esc2(fb.userPhone ?? "?")}
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyAdminLoginFail(email3, ip) {
+  sendToGroup(
+    `\u26A0\uFE0F <b>TENTATIVE DE CONNEXION ADMIN \xC9CHOU\xC9E</b>
+
+\u{1F4E7} Email : <code>${esc2(email3)}</code>
+\u{1F310} IP : <code>${esc2(ip)}</code>
+\u{1F550} ${togoDt()}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
+        ]
+      }
+    }
+  ).catch(() => {
+  });
+}
+function notifyAdminTotpFail(email3, ip) {
+  sendToGroup(
+    `\u{1F510} <b>CODE TOTP INVALIDE \u2014 ADMIN</b>
+
+\u{1F4E7} Email : <code>${esc2(email3)}</code>
+\u{1F310} IP : <code>${esc2(ip)}</code>
+\u{1F550} ${togoDt()}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
+        ]
+      }
+    }
+  ).catch(() => {
+  });
+}
+function notifyIpBlocked(opts) {
+  const title = opts.auto ? "\u{1F50D} VPN/PROXY BLOQU\xC9 AUTOMATIQUEMENT" : "\u{1F6AB} IP BLOQU\xC9E";
+  sendToGroup(
+    `${title}
+
+\u{1F310} IP : <code>${esc2(opts.ip)}</code>
+` + (opts.country ? `\u{1F3F3}\uFE0F Pays : ${esc2(opts.country)}
+` : "") + (opts.type ? `\u{1F4E1} Type : ${esc2(opts.type)}
+` : "") + `\u{1F4DD} Raison : ${esc2(opts.reason)}
+` + (opts.path ? `\u{1F517} Chemin : ${esc2(opts.path)}
+` : "") + `\u{1F4C5} ${togoDt()}
+
+L'IP a \xE9t\xE9 bloqu\xE9e d\xE9finitivement en base de donn\xE9es.`
+  ).catch(() => {
+  });
+}
+async function sendDailyReport() {
+  if (!groupChatId) return;
+  try {
+    const todayStart = /* @__PURE__ */ new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const [totalUsers] = await db.select({ c: count() }).from(usersTable);
+    const [todayUsers] = await db.select({ c: count() }).from(usersTable).where(gte(usersTable.createdAt, todayStart));
+    const [todayTx] = await db.select({
+      c: count(),
+      vol: sql`coalesce(sum(${transactionsTable.amount}), 0)`,
+      fees: sql`coalesce(sum(${transactionsTable.fees}), 0)`
+    }).from(transactionsTable).where(gte(transactionsTable.createdAt, todayStart));
+    const [successTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "success")
+      )
+    );
+    const [failedTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "failed")
+      )
+    );
+    const [pendingTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "pending")
+      )
+    );
+    const now = /* @__PURE__ */ new Date();
+    const hLabel = now.getUTCHours() === 0 ? "00h00" : "12h00";
+    await sendMessage(
+      groupChatId,
+      `\u{1F4CA} <b>BILAN ${hLabel} \u2014 BLOUM CASH</b>
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+
+\u{1F465} <b>Utilisateurs</b>
+\u2022 Total : <b>${fmt(totalUsers.c)}</b>
+\u2022 Aujourd'hui : +${todayUsers.c} nouveaux
+
+\u{1F4B8} <b>Transactions du jour</b>
+\u2022 Total : ${todayTx.c} op\xE9rations
+\u2022 Volume : <b>${fmt(todayTx.vol)} FCFA</b>
+\u2022 Commissions : ${fmt(todayTx.fees)} FCFA
+\u2022 \u2705 R\xE9ussies : ${successTx.c}
+\u2022 \u274C \xC9chou\xE9es : ${failedTx.c}
+\u2022 \u23F3 En attente : ${pendingTx.c}
+
+\u{1F4C5} ${togoDt()} (Togo UTC+0)
+<i>Rapport automatique Bloum Cash Admin</i>`
+    );
+  } catch (err) {
+    logger.error({ err }, "Telegram daily report error");
+  }
+}
+async function handleUpdate(update) {
+  const message = update.message;
+  const callbackQuery = update.callback_query;
+  if (message) {
+    const text2 = String(message.text ?? "");
+    const chat = message.chat;
+    const chatId = String(chat?.id ?? "");
+    const normalized = text2.toLowerCase().replace(/[''`]/g, "'").replace(/\s+/g, " ").trim();
+    if (normalized.includes("salut c'est toi le bot") || normalized.includes("salut c est toi le bot") || normalized.includes("salut cest toi le bot")) {
+      await saveGroupChatId(chatId);
+      await sendMessage(
+        chatId,
+        `\u2705 <b>Groupe d\xE9tect\xE9 et enregistr\xE9 !</b>
+
+Je vais maintenant envoyer toutes les notifications ici :
+\u2022 \u{1F195} Nouveaux utilisateurs inscrits
+\u2022 \u{1F4B8} Paiements et transferts r\xE9ussis
+\u2022 \u{1F4AC} Retours &amp; suggestions utilisateurs
+\u2022 \u26A0\uFE0F Tentatives de connexion admin \xE9chou\xE9es
+\u2022 \u{1F6AB} IP bloqu\xE9es (avec bouton blocage rapide)
+\u2022 \u{1F4CA} Bilans quotidiens \xE0 00h et 12h (Togo)
+
+<i>Bloum Cash Admin Bot actif \u2713</i>`
+      );
+      logger.info({ chatId }, "\u{1F916} Telegram group chat ID enregistr\xE9");
+    }
+  }
+  if (callbackQuery) {
+    const data = String(callbackQuery.data ?? "");
+    const callbackId = String(callbackQuery.id ?? "");
+    const cbMsg = callbackQuery.message;
+    if (data.startsWith("block_ip:")) {
+      const ip = data.slice(9).trim();
+      if (!ip) return;
+      try {
+        await db.insert(blockedIpsTable).values({ ip, reason: "Bloqu\xE9 via bouton Telegram" });
+        await db.insert(securityEventsTable).values({
+          type: "ip_blocked",
+          ip,
+          details: "Bloqu\xE9 via bouton Telegram par l'admin"
+        });
+        await tgFetch("answerCallbackQuery", {
+          callback_query_id: callbackId,
+          text: `\u2705 IP ${ip} bloqu\xE9e d\xE9finitivement !`,
+          show_alert: true
+        });
+        if (cbMsg) {
+          const cbChat = cbMsg.chat;
+          const cbMsgId = cbMsg.message_id;
+          const originalText = String(cbMsg.text ?? "");
+          await tgFetch("editMessageText", {
+            chat_id: cbChat?.id,
+            message_id: cbMsgId,
+            text: originalText + `
+
+\u{1F6AB} <b>IP bloqu\xE9e d\xE9finitivement par l'admin.</b>`,
+            parse_mode: "HTML"
+          });
+        }
+        logger.info({ ip }, "\u{1F6AB} IP bloqu\xE9e via bouton Telegram");
+      } catch (err) {
+        const e = err;
+        const alreadyBlocked = e?.code === "23505" || e?.message?.includes("unique");
+        await tgFetch("answerCallbackQuery", {
+          callback_query_id: callbackId,
+          text: alreadyBlocked ? `\u26A0\uFE0F IP ${ip} d\xE9j\xE0 bloqu\xE9e` : `\u274C Erreur lors du blocage`,
+          show_alert: true
+        });
+      }
+    }
+  }
+}
+async function pollForever() {
+  let offset = 0;
+  logger.info("\u{1F916} Telegram long polling d\xE9marr\xE9");
+  while (true) {
+    try {
+      const res = await fetch(
+        `${TG_API}/getUpdates?offset=${offset}&timeout=25&allowed_updates=message,callback_query`,
+        { signal: AbortSignal.timeout(35e3) }
+      );
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 5e3));
+        continue;
+      }
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.result)) {
+        for (const update of data.result) {
+          offset = update.update_id + 1;
+          handleUpdate(update).catch(
+            (err) => logger.error({ err }, "Telegram handleUpdate error")
+          );
+        }
+      }
+    } catch {
+      await new Promise((r) => setTimeout(r, 5e3));
+    }
+  }
+}
+var lastReportHour = -1;
+function startScheduler() {
+  setInterval(async () => {
+    const now = /* @__PURE__ */ new Date();
+    const h = now.getUTCHours();
+    const m = now.getUTCMinutes();
+    if (m === 0 && (h === 0 || h === 12) && h !== lastReportHour) {
+      lastReportHour = h;
+      sendDailyReport().catch(
+        (err) => logger.error({ err }, "Telegram scheduled report error")
+      );
+    }
+  }, 6e4);
+}
+async function startTelegram() {
+  if (!TOKEN) {
+    logger.warn("\u26A0\uFE0F TELEGRAM_BOT_TOKEN non configur\xE9 \u2014 bot Telegram d\xE9sactiv\xE9");
+    return;
+  }
+  await loadGroupChatId();
+  pollForever().catch(
+    (err) => logger.error({ err }, "Telegram polling fatal error")
+  );
+  startScheduler();
+  logger.info("\u{1F916} Telegram bot pr\xEAt (polling + scheduler quotidien)");
+}
+
+// src/routes/auth.ts
+var router2 = (0, import_express2.Router)();
+var loginLimiter = rate_limit_default({
+  windowMs: 15 * 60 * 1e3,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de tentatives de connexion. R\xE9essayez dans 15 minutes." },
+  skipSuccessfulRequests: true
+});
+var registerLimiter = rate_limit_default({
+  windowMs: 60 * 60 * 1e3,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de cr\xE9ations de compte depuis cette adresse IP. R\xE9essayez dans 1 heure." }
+});
+var forgotPinLimiter = rate_limit_default({
+  windowMs: 60 * 60 * 1e3,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de demandes de r\xE9initialisation. R\xE9essayez dans 1 heure." },
+  skipSuccessfulRequests: false
+});
+function sanitizeStr(v, maxLen = 255) {
+  return String(v ?? "").trim().slice(0, maxLen);
+}
+function normalizeTogoPhone(raw) {
+  let digits = raw.replace(/[\s\-]/g, "");
+  if (digits.startsWith("+228")) digits = digits.slice(4);
+  else if (digits.startsWith("228")) digits = digits.slice(3);
+  if (!/^\d{8}$/.test(digits)) return null;
+  const prefix = parseInt(digits.slice(0, 2));
+  if (prefix >= 90 && prefix <= 93 || prefix >= 96 && prefix <= 99) return digits;
+  return null;
+}
+function phoneToEmail(phone) {
+  return `${phone}@users.bloumcash.app`;
+}
+async function isBlacklisted(phone) {
+  if (!phone) return false;
+  const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
+  return rows.length > 0;
+}
+function generateCode() {
+  return String(Math.floor(1e5 + crypto3.randomInt(9e5))).padStart(6, "0");
+}
+router2.post("/auth/login", loginLimiter, async (req, res) => {
+  try {
+    const rawPhone = sanitizeStr(req.body.phone, 30);
+    const pin = sanitizeStr(req.body.pin, 20);
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !pin) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone et mot de passe requis" });
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (!users.length) {
+      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
+      return;
+    }
+    const user = users[0];
+    if (user.status === "banned") {
+      res.status(403).json({ error: "Votre compte a \xE9t\xE9 d\xE9sactiv\xE9. Contactez le support.", code: "ACCOUNT_BANNED" });
+      return;
+    }
+    if (user.status === "suspended") {
+      res.status(403).json({ error: "Votre compte est temporairement suspendu. Contactez le support.", code: "ACCOUNT_SUSPENDED" });
+      return;
+    }
+    if (await isBlacklisted(user.phone)) {
+      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Acc\xE8s refus\xE9.", code: "PHONE_BLACKLISTED" });
+      return;
+    }
+    const pinMatches = await bcryptjs_default.compare(pin, user.pin);
+    if (!pinMatches) {
+      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
+      return;
+    }
+    const token = signUserToken({ id: user.id, email: user.email });
+    await db.update(usersTable).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, user.id));
+    sendPushNotification({
+      externalUserId: user.email,
+      title: "Bloum Cash",
+      message: `Bienvenue, ${user.fullName} ! Vous \xEAtes maintenant connect\xE9.`,
+      data: { type: "login" }
+    }, req.log);
+    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
+  } catch (err) {
+    req.log.error({ err }, "Login error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router2.post("/auth/register", registerLimiter, async (req, res) => {
+  try {
+    const fullName = sanitizeStr(req.body.fullName, 100);
+    const rawPhone = sanitizeStr(req.body.phone, 30);
+    const pin = sanitizeStr(req.body.pin, 20);
+    const village = req.body.village ? sanitizeStr(req.body.village, 100) : null;
+    const city = req.body.city ? sanitizeStr(req.body.city, 100) : null;
+    const region = req.body.region ? sanitizeStr(req.body.region, 100) : null;
+    const country = req.body.country ? sanitizeStr(req.body.country, 100) : "Togo";
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!fullName || !phone) {
+      res.status(400).json({ error: "Nom complet et num\xE9ro de t\xE9l\xE9phone Togo requis" });
+      return;
+    }
+    if (!pin || pin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
+      return;
+    }
+    if (await isBlacklisted(phone)) {
+      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Inscription refus\xE9e.", code: "PHONE_BLACKLISTED" });
+      return;
+    }
+    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (existing.length) {
+      res.status(400).json({ error: "Ce num\xE9ro de t\xE9l\xE9phone est d\xE9j\xE0 utilis\xE9" });
+      return;
+    }
+    const email3 = phoneToEmail(phone);
+    const hashedPin = await bcryptjs_default.hash(pin, 12);
+    const [user] = await db.insert(usersTable).values({ fullName, email: email3, pin: hashedPin, phone, onesignalExternalUserId: email3, village, city, region, country }).returning();
+    const token = signUserToken({ id: user.id, email: user.email });
+    sendPushNotification({
+      externalUserId: user.email,
+      title: "Bienvenue sur Bloum Cash !",
+      message: `Bonjour ${user.fullName}, votre compte est cr\xE9\xE9 !`,
+      data: { type: "register" }
+    }, req.log);
+    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
+    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
+  } catch (err) {
+    req.log.error({ err }, "Register error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router2.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
+  try {
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone requis" });
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (!users.length) {
+      res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
+      return;
+    }
+    const user = users[0];
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1e3);
+    await db.delete(verificationCodesTable).where(
+      and(eq(verificationCodesTable.email, user.email), eq(verificationCodesTable.type, "pin_reset"))
+    );
+    await db.insert(verificationCodesTable).values({ email: user.email, code, type: "pin_reset", expiresAt });
+    sendPinResetSms({ phone: user.phone ?? rawPhone, fullName: user.fullName, code }).catch((e) => {
+      req.log.error({ e }, "Erreur envoi SMS reset PIN");
+    });
+    res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
+  } catch (err) {
+    req.log.error({ err }, "Forgot PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router2.post("/auth/reset-pin", async (req, res) => {
+  try {
+    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
+    const code = sanitizeStr(req.body.code, 10);
+    const newPin = sanitizeStr(req.body.newPin, 20);
+    const phone = normalizeTogoPhone(rawPhone);
+    if (!phone || !code || !newPin) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone, code et nouveau mot de passe requis" });
+      return;
+    }
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
+    if (!users.length) {
+      res.status(400).json({ error: "Num\xE9ro introuvable" });
+      return;
+    }
+    const user = users[0];
+    const now = /* @__PURE__ */ new Date();
+    const codes = await db.select().from(verificationCodesTable).where(
+      and(
+        eq(verificationCodesTable.email, user.email),
+        eq(verificationCodesTable.code, code),
+        eq(verificationCodesTable.type, "pin_reset"),
+        gt(verificationCodesTable.expiresAt, now)
+      )
+    ).limit(1);
+    if (!codes.length || codes[0].usedAt) {
+      res.status(400).json({ error: "Code invalide ou expir\xE9" });
+      return;
+    }
+    const hashedPin = await bcryptjs_default.hash(newPin, 12);
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
+    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
+    res.json({ success: true, message: "Mot de passe r\xE9initialis\xE9 avec succ\xE8s" });
+  } catch (err) {
+    req.log.error({ err }, "Reset PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router2.post("/auth/change-pin", async (req, res) => {
+  try {
+    const token = sanitizeStr(req.body.token, 500);
+    const currentPin = sanitizeStr(req.body.currentPin, 20);
+    const newPin = sanitizeStr(req.body.newPin, 20);
+    if (!token || !currentPin || !newPin) {
+      res.status(400).json({ error: "Token, mot de passe actuel et nouveau mot de passe requis" });
+      return;
+    }
+    if (newPin.length < 4) {
+      res.status(400).json({ error: "Le nouveau mot de passe doit avoir au moins 4 caract\xE8res" });
+      return;
+    }
+    const { verifyUserToken: verifyUserToken2 } = await Promise.resolve().then(() => (init_user_auth(), user_auth_exports));
+    let payload;
+    try {
+      payload = verifyUserToken2(token);
+    } catch {
+      res.status(401).json({ error: "Token invalide ou expir\xE9" });
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, payload.id)).limit(1);
+    if (!users.length) {
+      res.status(404).json({ error: "Utilisateur introuvable" });
+      return;
+    }
+    const user = users[0];
+    const pinMatches = await bcryptjs_default.compare(currentPin, user.pin);
+    if (!pinMatches) {
+      res.status(401).json({ error: "Mot de passe actuel incorrect" });
+      return;
+    }
+    if (currentPin === newPin) {
+      res.status(400).json({ error: "Le nouveau mot de passe doit \xEAtre diff\xE9rent de l'ancien" });
+      return;
+    }
+    const hashedPin = await bcryptjs_default.hash(newPin, 12);
+    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
+    res.json({ success: true, message: "Mot de passe modifi\xE9 avec succ\xE8s" });
+  } catch (err) {
+    req.log.error({ err }, "Change PIN error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router2.patch("/profile/location", requireUser, async (req, res) => {
+  try {
+    const userId = req.currentUser.id;
+    const { city, region, country } = req.body;
+    await db.update(usersTable).set({ city: city ?? null, region: region ?? null, country: country ?? null }).where(eq(usersTable.id, userId));
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Update location error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var auth_default = router2;
+
+// src/routes/transactions.ts
+var import_express3 = __toESM(require_express2(), 1);
+init_user_auth();
+import crypto4 from "crypto";
+var router3 = (0, import_express3.Router)();
+function formatTransaction(t) {
+  const date6 = new Date(t.createdAt);
+  const today = /* @__PURE__ */ new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  let dateLabel;
+  if (date6.toDateString() === today.toDateString()) {
+    dateLabel = "Aujourd'hui";
+  } else if (date6.toDateString() === yesterday.toDateString()) {
+    dateLabel = "Hier";
+  } else {
+    dateLabel = date6.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+  const timeLabel = date6.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return {
+    id: String(t.id),
+    type: t.type,
+    title: t.title,
+    amount: t.amount,
+    date: dateLabel,
+    time: timeLabel,
+    status: t.status,
+    operator: t.operator,
+    reference: t.reference,
+    fromPhone: t.fromPhone ?? null,
+    toPhone: t.toPhone ?? null,
+    fees: t.fees ?? null,
+    description: t.description ?? null
+  };
+}
+router3.get("/transactions", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const { search, filter, period } = req.query;
+    let conditions = eq(transactionsTable.userId, userId);
+    let rows = await db.select().from(transactionsTable).where(conditions).orderBy(desc(transactionsTable.createdAt));
+    let result = rows.map(formatTransaction);
+    if (filter === "incoming") result = result.filter((t) => t.type === "incoming");
+    if (filter === "outgoing") result = result.filter((t) => t.type === "outgoing");
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter(
+        (t) => t.title.toLowerCase().includes(s) || (t.fromPhone ?? "").includes(s) || (t.toPhone ?? "").includes(s) || t.reference.toLowerCase().includes(s)
+      );
+    }
+    if (period === "today") {
+      result = result.filter((t) => t.date === "Aujourd'hui");
+    } else if (period === "week") {
+      const weekAgo = /* @__PURE__ */ new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      result = result.filter((t) => new Date(t.date) >= weekAgo);
+    }
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "List transactions error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router3.get("/transactions/recent", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId)).orderBy(desc(transactionsTable.createdAt)).limit(5);
+    res.json(rows.map(formatTransaction));
+  } catch (err) {
+    req.log.error({ err }, "Recent transactions error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router3.get("/transactions/:id", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const id = parseInt(req.params.id);
+    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.id, id), eq(transactionsTable.userId, userId))).limit(1);
+    if (!rows.length) {
+      res.status(404).json({ error: "Transaction introuvable" });
+      return;
+    }
+    res.json(formatTransaction(rows[0]));
+  } catch (err) {
+    req.log.error({ err }, "Get transaction error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router3.post("/transactions", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;
+    const reference = "BC" + Date.now() + crypto4.randomBytes(3).toString("hex").toUpperCase();
+    const [t] = await db.insert(transactionsTable).values({
+      reference,
+      type,
+      title,
+      amount,
+      operator,
+      fromPhone: fromPhone ?? null,
+      toPhone: toPhone ?? null,
+      description: description ?? null,
+      status: "success",
+      userId
+    }).returning();
+    res.status(201).json(formatTransaction(t));
+  } catch (err) {
+    req.log.error({ err }, "Create transaction error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var transactions_default = router3;
+
+// src/routes/stats.ts
+var import_express4 = __toESM(require_express2(), 1);
+init_user_auth();
+var router4 = (0, import_express4.Router)();
+function getPeriodStart(period) {
+  const now = /* @__PURE__ */ new Date();
+  switch (period) {
+    case "today": {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "week": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 7);
+      return d;
+    }
+    case "year": {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      return d;
+    }
+    default: {
+      const d = new Date(now);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
+}
+router4.get("/stats/summary", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const period = req.query.period || "month";
+    const since = getPeriodStart(period);
+    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, since)));
+    let incoming = 0;
+    let outgoing = 0;
+    for (const row of rows) {
+      if (row.type === "incoming") incoming += row.amount;
+      else outgoing += row.amount;
+    }
+    res.json({
+      totalAmount: incoming,
+      incoming,
+      outgoing,
+      transactionCount: rows.length,
+      period
+    });
+  } catch (err) {
+    req.log.error({ err }, "Stats summary error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router4.get("/stats/chart", requireUser, async (req, res) => {
+  try {
+    const userId = extractUser(req).id;
+    const period = req.query.period || "month";
+    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, getPeriodStart(period)))).orderBy(transactionsTable.createdAt);
+    const grouped = {};
+    for (const row of rows) {
+      const d = new Date(row.createdAt);
+      let key;
+      if (period === "today") {
+        key = d.toLocaleTimeString("fr-FR", { hour: "2-digit" }) + "h";
+      } else if (period === "year") {
+        key = d.toLocaleDateString("fr-FR", { month: "short" });
+      } else {
+        key = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      }
+      grouped[key] = (grouped[key] || 0) + (row.type === "incoming" ? row.amount : 0);
+    }
+    const points = Object.entries(grouped).map(([label, value]) => ({
+      label,
+      value: Math.round(value / 1e3)
+    }));
+    if (!points.length) {
+      res.json([
+        { label: "01/06", value: 0 },
+        { label: "02/06", value: 0 },
+        { label: "03/06", value: 0 },
+        { label: "04/06", value: 0 },
+        { label: "05/06", value: 0 },
+        { label: "06/06", value: 0 },
+        { label: "07/06", value: 0 }
+      ]);
+      return;
+    }
+    res.json(points);
+  } catch (err) {
+    req.log.error({ err }, "Stats chart error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var stats_default = router4;
+
+// src/routes/qrcodes.ts
+var import_express5 = __toESM(require_express2(), 1);
+import crypto5 from "crypto";
+
+// src/lib/paydunya-softpay-map.ts
+var OPERATOR_MAP = {
+  // ─── Togo ─────────────────────────────────────────────────────────────────
+  "tmoney-togo": {
+    label: "T-Money Togo",
+    country: "TG",
+    endpoint: "t-money-togo",
+    channels: ["t-money-togo"],
+    isPending: true,
+    requiredFields: ["name_t_money", "email_t_money", "phone_t_money", "payment_token"],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      name_t_money: name,
+      email_t_money: email3,
+      phone_t_money: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "t-money-togo",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      name_t_money: name,
+      phone_t_money: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "moov-togo": {
+    label: "Moov Money Togo",
+    country: "TG",
+    endpoint: "moov-togo",
+    channels: ["moov-togo"],
+    isPending: false,
+    requiredFields: [
+      "moov_togo_customer_fullname",
+      "moov_togo_email",
+      "moov_togo_customer_address",
+      "moov_togo_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken, address }) => ({
+      moov_togo_customer_fullname: name,
+      moov_togo_email: email3,
+      moov_togo_customer_address: address ?? "Lom\xE9, Togo",
+      moov_togo_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "moov-togo",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      moov_togo_customer_fullname: name,
+      moov_togo_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  // ─── Bénin ────────────────────────────────────────────────────────────────
+  "moov-benin": {
+    label: "Moov Money B\xE9nin",
+    country: "BJ",
+    endpoint: "moov-benin",
+    channels: ["moov-benin"],
+    isPending: false,
+    requiredFields: [
+      "moov_benin_customer_fullname",
+      "moov_benin_email",
+      "moov_benin_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      moov_benin_customer_fullname: name,
+      moov_benin_email: email3,
+      moov_benin_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "moov-benin",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      moov_benin_customer_fullname: name,
+      moov_benin_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "mtn-benin": {
+    label: "MTN MoMo B\xE9nin",
+    country: "BJ",
+    endpoint: "mtn-benin",
+    channels: ["mtn-benin"],
+    isPending: false,
+    requiredFields: [
+      "mtn_benin_customer_fullname",
+      "mtn_benin_email",
+      "mtn_benin_phone_number",
+      "mtn_benin_wallet_provider",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      mtn_benin_customer_fullname: name,
+      mtn_benin_email: email3,
+      mtn_benin_phone_number: phone,
+      mtn_benin_wallet_provider: "MTNBENIN",
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "mtn-benin",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      mtn_benin_customer_fullname: name,
+      mtn_benin_phone_number: phone,
+      mtn_benin_wallet_provider: "MTNBENIN",
+      amount,
+      ref: reference
+    })
+  },
+  // ─── Burkina Faso ─────────────────────────────────────────────────────────
+  "moov-burkina": {
+    label: "Moov Money Burkina Faso",
+    country: "BF",
+    endpoint: "moov-burkina",
+    channels: ["moov-burkina"],
+    isPending: false,
+    requiredFields: [
+      "moov_burkina_faso_fullName",
+      "moov_burkina_faso_email",
+      "moov_burkina_faso_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      moov_burkina_faso_fullName: name,
+      moov_burkina_faso_email: email3,
+      moov_burkina_faso_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "moov-burkina",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      moov_burkina_faso_fullName: name,
+      moov_burkina_faso_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "orange-burkina": {
+    label: "Orange Money Burkina Faso",
+    country: "BF",
+    endpoint: "orange-money-burkina",
+    channels: ["orange-money-burkina"],
+    isPending: false,
+    requiredFields: [
+      "orange_burkina_faso_customer_fullname",
+      "orange_burkina_faso_email",
+      "orange_burkina_faso_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      orange_burkina_faso_customer_fullname: name,
+      orange_burkina_faso_email: email3,
+      orange_burkina_faso_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "orange-money-burkina",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      orange_burkina_faso_customer_fullname: name,
+      orange_burkina_faso_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  // ─── Côte d'Ivoire ────────────────────────────────────────────────────────
+  "moov-ci": {
+    label: "Moov Money C\xF4te d'Ivoire",
+    country: "CI",
+    endpoint: "moov-ci",
+    channels: ["moov-ci"],
+    isPending: false,
+    requiredFields: [
+      "moov_ci_customer_fullname",
+      "moov_ci_email",
+      "moov_ci_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      moov_ci_customer_fullname: name,
+      moov_ci_email: email3,
+      moov_ci_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "moov-ci",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      moov_ci_customer_fullname: name,
+      moov_ci_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "mtn-ci": {
+    label: "MTN MoMo C\xF4te d'Ivoire",
+    country: "CI",
+    endpoint: "mtn-ci",
+    channels: ["mtn-ci"],
+    isPending: false,
+    requiredFields: [
+      "mtn_ci_customer_fullname",
+      "mtn_ci_email",
+      "mtn_ci_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      mtn_ci_customer_fullname: name,
+      mtn_ci_email: email3,
+      mtn_ci_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "mtn-ci",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      mtn_ci_customer_fullname: name,
+      mtn_ci_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "orange-ci": {
+    label: "Orange Money C\xF4te d'Ivoire",
+    country: "CI",
+    endpoint: "orange-money-ci",
+    channels: ["orange-money-ci"],
+    isPending: false,
+    requiredFields: [
+      "orange_ci_customer_fullname",
+      "orange_ci_email",
+      "orange_ci_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      orange_ci_customer_fullname: name,
+      orange_ci_email: email3,
+      orange_ci_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "orange-money-ci",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      orange_ci_customer_fullname: name,
+      orange_ci_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  },
+  "wave-ci": {
+    label: "Wave C\xF4te d'Ivoire",
+    country: "CI",
+    endpoint: "wave-ci",
+    channels: ["wave-ci"],
+    isPending: false,
+    requiredFields: [
+      "wave_ci_customer_fullname",
+      "wave_ci_email",
+      "wave_ci_phone_number",
+      "payment_token"
+    ],
+    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
+      wave_ci_customer_fullname: name,
+      wave_ci_email: email3,
+      wave_ci_phone_number: phone,
+      payment_token: paymentToken
+    }),
+    disburseEndpoint: "wave-ci",
+    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
+      wave_ci_customer_fullname: name,
+      wave_ci_phone_number: phone,
+      amount,
+      ref: reference
+    })
+  }
+};
+var TOGO_OPERATOR_MAP = {
+  tmoney: "tmoney-togo",
+  moov: "moov-togo"
+};
+
+// src/lib/paydunya.ts
+function getAppBaseUrl() {
+  if (process.env.PAYDUNYA_CALLBACK_URL) {
+    return process.env.PAYDUNYA_CALLBACK_URL.replace(/\/$/, "");
+  }
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    const firstDomain = replitDomains.split(",")[0].trim();
+    return `https://${firstDomain}`;
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return "https://bloumcash.com";
+}
+function getBaseUrl() {
+  if (process.env.PAYDUNYA_BASE_URL) {
+    return process.env.PAYDUNYA_BASE_URL.replace(/\/$/, "");
+  }
+  if (process.env.PAYDUNYA_SANDBOX === "true") {
+    return "https://app.paydunya.com/sandbox-api/v1";
+  }
+  return "https://app.paydunya.com/api/v1";
+}
+function getHeaders() {
+  return {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "PAYDUNYA-MASTER-KEY": process.env.PAYDUNYA_MASTER_KEY ?? "",
+    "PAYDUNYA-PRIVATE-KEY": process.env.PAYDUNYA_PRIVATE_KEY ?? "",
+    "PAYDUNYA-PUBLIC-KEY": process.env.PAYDUNYA_PUBLIC_KEY ?? "",
+    "PAYDUNYA-TOKEN": process.env.PAYDUNYA_TOKEN ?? ""
+  };
+}
+var PaydunyaError = class extends Error {
+  constructor(message, code, retryable = false, rawResponse) {
+    super(message);
+    this.code = code;
+    this.retryable = retryable;
+    this.rawResponse = rawResponse;
+    this.name = "PaydunyaError";
+  }
+};
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function classifyProviderError(msg, status, raw) {
+  const lower = msg.toLowerCase();
+  if (status === 401) return "AUTH_FAILED";
+  if (status === 404) return "ENDPOINT_NOT_FOUND";
+  if (status === 503 || status === 502 || status === 504) return "SERVICE_UNAVAILABLE";
+  if (lower.includes("payin is not enabled") || lower.includes("payin n'est pas activ\xE9") || lower.includes("not enabled") || lower.includes("1001")) return "PAYIN_NOT_ENABLED";
+  if (lower.includes("num\xE9ro") && (lower.includes("invalide") || lower.includes("inexistant")) || lower.includes("phone") && (lower.includes("invalid") || lower.includes("not found")) || lower.includes("subscriber not found") || lower.includes("abonn\xE9 introuvable")) return "INVALID_PHONE";
+  const rc = String(raw.response_code ?? "");
+  if (rc === "1001") return "PAYIN_NOT_ENABLED";
+  return "PROVIDER_ERROR";
+}
+async function paydunyaFetch(url2, options, logger2) {
+  const startMs = Date.now();
+  const safeHeaders = { ...options.headers };
+  for (const k of ["PAYDUNYA-MASTER-KEY", "PAYDUNYA-PRIVATE-KEY", "PAYDUNYA-PUBLIC-KEY", "PAYDUNYA-TOKEN"]) {
+    safeHeaders[k] = safeHeaders[k] ? "***set***" : "***MISSING***";
+  }
+  logger2.info(
+    { url: url2, method: options.method, headers: safeHeaders, body: options.body },
+    "PayDunya \u25B6 requ\xEAte"
+  );
+  let response;
+  try {
+    response = await fetch(url2, options);
+  } catch (netErr) {
+    logger2.error({ url: url2, elapsed: Date.now() - startMs, err: netErr }, "PayDunya \u2716 erreur r\xE9seau");
+    throw new PaydunyaError(
+      "Erreur r\xE9seau lors de la connexion \xE0 PayDunya.",
+      "NETWORK_ERROR",
+      true
+    );
+  }
+  const elapsed = Date.now() - startMs;
+  const rawText = await response.text();
+  const contentType = response.headers.get("content-type") ?? "";
+  logger2.info(
+    { url: url2, httpStatus: response.status, contentType, elapsed, body: rawText },
+    "PayDunya \u25C0 r\xE9ponse"
+  );
+  if (contentType.includes("text/html") || rawText.trimStart().startsWith("<!")) {
+    logger2.error(
+      { url: url2, httpStatus: response.status, contentType, body: rawText.slice(0, 500) },
+      "PayDunya \u2716 HTML re\xE7u (endpoint invalide ou cl\xE9s incorrectes)"
+    );
+    throw new PaydunyaError(
+      `PayDunya a retourn\xE9 du HTML (HTTP ${response.status}). V\xE9rifiez l'URL de base et vos cl\xE9s API.`,
+      "HTML_RESPONSE",
+      false
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    logger2.error({ url: url2, rawText }, "PayDunya \u2716 corps non-JSON");
+    throw new PaydunyaError(
+      `PayDunya a retourn\xE9 un corps non-JSON (HTTP ${response.status}).`,
+      "INVALID_JSON",
+      false
+    );
+  }
+  return { data: parsed, status: response.status, rawText };
+}
+async function paydunyaFetchWithRetry(url2, options, logger2) {
+  const MAX = 2;
+  let lastErr;
+  for (let attempt = 0; attempt <= MAX; attempt++) {
+    try {
+      const result = await paydunyaFetch(url2, options, logger2);
+      if ((result.status === 502 || result.status === 503 || result.status === 504) && attempt < MAX) {
+        const delay = 1e3 * (attempt + 1);
+        logger2.warn({ url: url2, httpStatus: result.status, attempt, nextRetryMs: delay }, "PayDunya \u26A0 retryable \u2014 retry\u2026");
+        await sleep(delay);
+        continue;
+      }
+      return result;
+    } catch (err) {
+      if (err instanceof PaydunyaError && err.retryable && attempt < MAX) {
+        await sleep(1e3 * (attempt + 1));
+        lastErr = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+function checkConfiguration() {
+  const keys = {
+    PAYDUNYA_MASTER_KEY: process.env.PAYDUNYA_MASTER_KEY ? "set" : "missing",
+    PAYDUNYA_PRIVATE_KEY: process.env.PAYDUNYA_PRIVATE_KEY ? "set" : "missing",
+    PAYDUNYA_PUBLIC_KEY: process.env.PAYDUNYA_PUBLIC_KEY ? "set" : "missing",
+    PAYDUNYA_TOKEN: process.env.PAYDUNYA_TOKEN ? "set" : "missing"
+  };
+  const missingKeys = Object.entries(keys).filter(([, v]) => v === "missing").map(([k]) => k);
+  const baseUrl = getBaseUrl();
+  const mode = process.env.PAYDUNYA_BASE_URL ? "custom" : process.env.PAYDUNYA_SANDBOX === "true" ? "sandbox" : "live";
+  return { ok: missingKeys.length === 0, baseUrl, mode, keys, missingKeys };
+}
+function isConfigured() {
+  return checkConfiguration().ok;
+}
+async function createInvoice(amount, description, channels, logger2) {
+  if (!amount || amount <= 0) {
+    throw new PaydunyaError("Le montant doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
+  }
+  const cfg = checkConfiguration();
+  if (!cfg.ok) {
+    throw new PaydunyaError(
+      `Cl\xE9s PayDunya manquantes : ${cfg.missingKeys.join(", ")}. Configurez ces secrets.`,
+      "NOT_CONFIGURED"
+    );
+  }
+  const url2 = `${getBaseUrl()}/checkout-invoice/create`;
+  const invoiceBody = {
+    invoice: {
+      total_amount: amount,
+      description,
+      channels
+    },
+    store: {
+      name: process.env.PAYDUNYA_STORE_NAME || "Bloum Cash",
+      tagline: "Transferts TMoney & Moov Money au Togo",
+      postal_address: "Lom\xE9, Togo",
+      phone: process.env.PAYDUNYA_STORE_PHONE || "",
+      website_url: ""
+    },
+    actions: {
+      cancel_url: `${getAppBaseUrl()}/api/paydunya/webhook`,
+      return_url: `${getAppBaseUrl()}/api/paydunya/webhook`,
+      callback_url: `${getAppBaseUrl()}/api/paydunya/webhook`
+    }
+  };
+  const { data, status } = await paydunyaFetchWithRetry(
+    url2,
+    { method: "POST", headers: getHeaders(), body: JSON.stringify(invoiceBody) },
+    logger2
+  );
+  if (data.response_code !== "00" || !data.token) {
+    const rawMsg = String(data.response_text ?? data.message ?? JSON.stringify(data));
+    const code = classifyProviderError(rawMsg, status, data);
+    logger2.error(
+      { url: url2, httpStatus: status, responseCode: data.response_code, paydunya_raw: data },
+      `PayDunya \u2716 checkout-invoice/create \xE9chou\xE9 \u2014 ${rawMsg}`
+    );
+    throw new PaydunyaError(
+      `[checkout-invoice/create] PayDunya response_code=${data.response_code} : "${rawMsg}"`,
+      code,
+      false,
+      data
+    );
+  }
+  const token = String(data.token);
+  logger2.info(
+    { mode: cfg.mode, baseUrl: cfg.baseUrl, tokenPrefix: token.slice(0, 8) + "\u2026", channels },
+    "PayDunya \u2714 invoice cr\xE9\xE9e \u2014 token obtenu"
+  );
+  return token;
+}
+async function chargeOperator(operatorKey, params, logger2) {
+  const config2 = OPERATOR_MAP[operatorKey];
+  if (!config2) {
+    throw new PaydunyaError(`Op\xE9rateur non support\xE9 : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
+  }
+  if (!params.paymentToken?.trim()) {
+    throw new PaydunyaError(
+      "payment_token absent. Il doit provenir de checkout-invoice/create \u2014 jamais g\xE9n\xE9r\xE9 localement.",
+      "EMPTY_TOKEN"
+    );
+  }
+  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
+  if (cleanPhone.length < 8) {
+    throw new PaydunyaError(`Num\xE9ro de t\xE9l\xE9phone invalide : "${params.phone}"`, "INVALID_PHONE");
+  }
+  const payload = config2.payloadBuilder({
+    name: params.name || "Client Bloum Cash",
+    email: params.email || `${cleanPhone}@bloumcash.tg`,
+    phone: cleanPhone,
+    paymentToken: params.paymentToken,
+    address: params.address
+  });
+  for (const field of config2.requiredFields) {
+    const val = payload[field];
+    if (val === void 0 || val === null || String(val).trim() === "") {
+      throw new PaydunyaError(
+        `Champ requis manquant dans le payload SoftPay pour ${config2.label} : "${field}"`,
+        "MISSING_FIELD"
+      );
+    }
+  }
+  const url2 = `${getBaseUrl()}/softpay/${config2.endpoint}`;
+  logger2.info(
+    {
+      operator: operatorKey,
+      label: config2.label,
+      endpoint: url2,
+      mode: checkConfiguration().mode,
+      payloadKeys: Object.keys(payload),
+      paymentTokenPrefix: params.paymentToken.slice(0, 8) + "\u2026"
+    },
+    "PayDunya \u25B6 SoftPay charge"
+  );
+  const { data, status } = await paydunyaFetchWithRetry(
+    url2,
+    { method: "POST", headers: getHeaders(), body: JSON.stringify(payload) },
+    logger2
+  );
+  if (status === 401) {
+    throw new PaydunyaError(
+      `[/softpay/${config2.endpoint}] HTTP 401 \u2014 Authentification refus\xE9e. V\xE9rifiez PAYDUNYA-MASTER-KEY, PAYDUNYA-PRIVATE-KEY et PAYDUNYA-TOKEN.`,
+      "AUTH_FAILED",
+      false,
+      data
+    );
+  }
+  if (status === 404) {
+    throw new PaydunyaError(
+      `[/softpay/${config2.endpoint}] HTTP 404 \u2014 Endpoint introuvable. L'op\xE9rateur "${operatorKey}" est peut-\xEAtre indisponible sur votre compte.`,
+      "ENDPOINT_NOT_FOUND",
+      false,
+      data
+    );
+  }
+  if (status === 503 || status === 502 || status === 504) {
+    throw new PaydunyaError(
+      `[/softpay/${config2.endpoint}] HTTP ${status} \u2014 Service PayDunya temporairement indisponible.`,
+      "SERVICE_UNAVAILABLE",
+      true,
+      data
+    );
+  }
+  const success2 = data.success === true;
+  const rawMsg = String(data.message ?? data.response_text ?? data.error ?? "");
+  const displayMsg = rawMsg || (success2 ? "Paiement mobile money initi\xE9 avec succ\xE8s." : "Paiement refus\xE9 (aucun message PayDunya).");
+  if (!success2) {
+    const errorCode = classifyProviderError(rawMsg, status, data);
+    logger2.warn(
+      { operator: operatorKey, httpStatus: status, errorCode, paydunya_raw: data },
+      `PayDunya \u2716 SoftPay refus\xE9 \u2014 ${rawMsg}`
+    );
+    return {
+      success: false,
+      message: `[/softpay/${config2.endpoint}] ${displayMsg}`,
+      isPending: false,
+      invoiceToken: params.paymentToken,
+      rawPaydunyaResponse: data
+    };
+  }
+  logger2.info(
+    { operator: operatorKey, isPending: config2.isPending, fees: data.fees, currency: data.currency },
+    "PayDunya \u2714 SoftPay charge accept\xE9e"
+  );
+  return {
+    success: true,
+    message: displayMsg,
+    fees: typeof data.fees === "number" ? data.fees : void 0,
+    currency: typeof data.currency === "string" ? data.currency : "XOF",
+    isPending: config2.isPending,
+    invoiceToken: params.paymentToken,
+    rawPaydunyaResponse: data
+  };
+}
+async function chargeTogoWallet(operator, params, logger2) {
+  return chargeOperator(TOGO_OPERATOR_MAP[operator], params, logger2);
+}
+async function confirmInvoice(invoiceToken, logger2) {
+  const url2 = `${getBaseUrl()}/checkout-invoice/confirm/${invoiceToken}`;
+  const { data } = await paydunyaFetchWithRetry(
+    url2,
+    { method: "GET", headers: getHeaders() },
+    logger2
+  );
+  const status = String(data.status ?? data.invoice_status ?? "pending").toLowerCase();
+  return { status, completed: status === "completed", rawPaydunyaResponse: data };
+}
+function getBaseUrlV2() {
+  if (process.env.PAYDUNYA_SANDBOX === "true") {
+    return "https://app.paydunya.com/sandbox-api/v2";
+  }
+  return "https://app.paydunya.com/api/v2";
+}
+var WITHDRAW_MODE = {
+  "tmoney-togo": "t-money-togo",
+  "moov-togo": "moov-togo"
+};
+async function disburseWallet(operatorKey, params, logger2) {
+  if (!OPERATOR_MAP[operatorKey]) {
+    throw new PaydunyaError(`Op\xE9rateur de payout non support\xE9 : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
+  }
+  const withdrawMode = WITHDRAW_MODE[operatorKey];
+  if (!withdrawMode) {
+    throw new PaydunyaError(`Aucun withdraw_mode v2 pour l'op\xE9rateur : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
+  }
+  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
+  if (cleanPhone.length < 8) {
+    throw new PaydunyaError(`Num\xE9ro destinataire invalide : "${params.phone}"`, "INVALID_PHONE");
+  }
+  if (params.amount <= 0) {
+    throw new PaydunyaError("Montant de payout invalide (doit \xEAtre > 0).", "INVALID_AMOUNT");
+  }
+  const callbackUrl = process.env.PAYDUNYA_DISBURSE_CALLBACK_URL || `${getAppBaseUrl()}/api/paydunya/disburse-webhook`;
+  const baseV2 = getBaseUrlV2();
+  logger2.info(
+    { operator: operatorKey, withdrawMode, phone: cleanPhone, amount: params.amount, ref: params.reference },
+    "PayDunya \u25B6 disburse/get-invoice (v2)"
+  );
+  const { data: inv, status: invStatus } = await paydunyaFetchWithRetry(
+    `${baseV2}/disburse/get-invoice`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        account_alias: cleanPhone,
+        amount: params.amount,
+        withdraw_mode: withdrawMode,
+        callback_url: callbackUrl
+      })
+    },
+    logger2
+  );
+  const disburseToken = inv.disburse_token ?? inv.token;
+  if (inv.response_code !== "00" || !disburseToken) {
+    const rawMsg2 = String(inv.response_text ?? inv.message ?? JSON.stringify(inv));
+    logger2.error(
+      { httpStatus: invStatus, responseCode: inv.response_code, paydunya_raw: inv },
+      `PayDunya \u2716 disburse/get-invoice \xE9chou\xE9 \u2014 ${rawMsg2}`
+    );
+    return {
+      success: false,
+      message: `[disburse/get-invoice] ${rawMsg2}`,
+      rawPaydunyaResponse: inv
+    };
+  }
+  logger2.info(
+    { disburseTokenPrefix: disburseToken.slice(0, 8) + "\u2026" },
+    "PayDunya \u2714 disburse_token obtenu \u2014 soumission en cours"
+  );
+  const { data: sub, status: subStatus } = await paydunyaFetchWithRetry(
+    `${baseV2}/disburse/submit-invoice`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        disburse_invoice: disburseToken,
+        disburse_id: params.reference
+      })
+    },
+    logger2
+  );
+  const success2 = sub.response_code === "00" || sub.success === true;
+  const rawMsg = String(sub.response_text ?? sub.message ?? "");
+  const message = rawMsg || (success2 ? "Payout initi\xE9 avec succ\xE8s." : "Payout refus\xE9 (aucun message PayDunya).");
+  if (!success2) {
+    logger2.warn(
+      { operator: operatorKey, httpStatus: subStatus, paydunya_raw: sub },
+      `PayDunya \u2716 disburse/submit-invoice refus\xE9 \u2014 ${rawMsg}`
+    );
+  } else {
+    logger2.info(
+      { operator: operatorKey, disburseToken: disburseToken.slice(0, 8) + "\u2026", ref: params.reference },
+      "PayDunya \u2714 disburse soumis"
+    );
+  }
+  return {
+    success: success2,
+    message,
+    transactionId: disburseToken,
+    rawPaydunyaResponse: sub
+  };
+}
+async function disburseTogoWallet(operator, params, logger2) {
+  return disburseWallet(TOGO_OPERATOR_MAP[operator], params, logger2);
+}
+
+// src/routes/qrcodes.ts
+init_user_auth();
+var router5 = (0, import_express5.Router)();
+function generateRef() {
+  return "QR" + Date.now() + crypto5.randomBytes(3).toString("hex").toUpperCase();
+}
+router5.post("/qr/generate", requireUser, async (req, res) => {
+  try {
+    const { businessName, phone, operator, amount, description } = req.body;
+    if (!businessName || !phone || !operator || !amount) {
+      res.status(400).json({ error: "Champs requis manquants" });
+      return;
+    }
+    const reference = generateRef();
+    const qrData = JSON.stringify({ reference, businessName, phone, operator, amount });
+    const [qr] = await db.insert(qrCodesTable).values({
+      reference,
+      businessName,
+      phone,
+      operator,
+      amount: parseInt(String(amount)),
+      qrData,
+      description: description ?? null,
+      status: "active"
+    }).returning();
+    res.status(201).json({
+      reference: qr.reference,
+      businessName: qr.businessName,
+      phone: qr.phone,
+      operator: qr.operator,
+      amount: qr.amount,
+      qrData: qr.qrData,
+      description: qr.description ?? null,
+      createdAt: qr.createdAt.toISOString()
+    });
+  } catch (err) {
+    req.log.error({ err }, "Generate QR error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router5.get("/qr/:reference", async (req, res) => {
+  try {
+    const rows = await db.select().from(qrCodesTable).where(eq(qrCodesTable.reference, req.params.reference)).limit(1);
+    if (!rows.length) {
+      res.status(404).json({ error: "QR Code introuvable" });
+      return;
+    }
+    const qr = rows[0];
+    res.json({
+      reference: qr.reference,
+      businessName: qr.businessName,
+      phone: qr.phone,
+      operator: qr.operator,
+      amount: qr.amount,
+      qrData: qr.qrData,
+      description: qr.description ?? null,
+      createdAt: qr.createdAt.toISOString()
+    });
+  } catch (err) {
+    req.log.error({ err }, "Get QR error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router5.post("/qr/:reference/pay", requireUser, async (req, res) => {
+  try {
+    const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
+    if (!payerPhone || !payerOperator) {
+      res.status(400).json({ error: "Num\xE9ro et op\xE9rateur du payeur requis" });
+      return;
+    }
+    const rows = await db.select().from(qrCodesTable).where(eq(qrCodesTable.reference, req.params.reference)).limit(1);
+    if (!rows.length) {
+      res.status(404).json({ error: "QR Code introuvable" });
+      return;
+    }
+    const qr = rows[0];
+    const txRef = "BC" + Date.now() + crypto5.randomBytes(3).toString("hex").toUpperCase();
+    const name = payerName ?? "Client Bloum Cash";
+    const email3 = payerEmail ?? `${payerPhone.replace(/\D/g, "")}@bloumcash.tg`;
+    if (!isConfigured()) {
+      req.log.warn("PayDunya not configured \u2014 QR payment in demo mode");
+      const [tx2] = await db.insert(transactionsTable).values({
+        reference: txRef,
+        type: "incoming",
+        title: `Paiement QR - ${qr.businessName}`,
+        amount: qr.amount,
+        operator: qr.operator,
+        fromPhone: payerPhone ?? null,
+        toPhone: qr.phone,
+        description: `Paiement via QR Code ${qr.reference}`,
+        status: "success"
+      }).returning();
+      res.json({
+        success: true,
+        message: "Paiement effectu\xE9 avec succ\xE8s (mode d\xE9mo)",
+        reference: txRef,
+        transactionId: String(tx2.id),
+        isPending: false
+      });
+      return;
+    }
+    const operatorKey = TOGO_OPERATOR_MAP[payerOperator];
+    const operatorConfig = OPERATOR_MAP[operatorKey];
+    const channels = operatorConfig?.channels ?? [operatorKey];
+    let paymentToken;
+    try {
+      paymentToken = await createInvoice(
+        qr.amount,
+        `Paiement QR Bloum Cash \u2014 ${qr.businessName} \u2014 ref ${txRef}`,
+        channels,
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof PaydunyaError;
+      const msg = isPduErr ? err.message : "Erreur lors de la cr\xE9ation de l'invoice PayDunya.";
+      const code = isPduErr ? err.code : "INVOICE_ERROR";
+      req.log.error({ err, code }, "QR invoice creation failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+    let chargeResult;
+    try {
+      chargeResult = await chargeTogoWallet(
+        payerOperator,
+        { name, email: email3, phone: payerPhone, paymentToken },
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof PaydunyaError;
+      const msg = isPduErr ? err.message : "Erreur lors du d\xE9bit mobile money.";
+      const code = isPduErr ? err.code : "CHARGE_ERROR";
+      req.log.error({ err, code }, "QR charge failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+    if (!chargeResult.success) {
+      res.status(402).json({
+        error: chargeResult.message,
+        code: "PAYMENT_REFUSED"
+      });
+      return;
+    }
+    const isPending = chargeResult.isPending ?? false;
+    const [tx] = await db.insert(transactionsTable).values({
+      reference: txRef,
+      type: "incoming",
+      title: `Paiement QR - ${qr.businessName}`,
+      amount: qr.amount,
+      operator: qr.operator,
+      fromPhone: payerPhone ?? null,
+      toPhone: qr.phone,
+      toOperator: qr.operator,
+      /* requis pour le payout webhook */
+      paydunyaToken: paymentToken,
+      /* requis pour retrouver la tx dans le webhook */
+      description: `Paiement via QR Code ${qr.reference}`,
+      status: isPending ? "pending" : "success"
+    }).returning();
+    if (!isPending && qr.phone && qr.operator) {
+      req.log.info(
+        { reference: txRef, toOperator: qr.operator, toPhone: qr.phone, amount: qr.amount },
+        "QR pay: payin imm\xE9diat \u2014 d\xE9clenchement payout b\xE9n\xE9ficiaire"
+      );
+      try {
+        const payoutResult = await disburseTogoWallet(
+          qr.operator,
+          { name: qr.businessName, phone: qr.phone, amount: qr.amount, reference: txRef },
+          req.log
+        );
+        if (payoutResult.success) {
+          req.log.info({ reference: txRef, transactionId: payoutResult.transactionId }, "QR payout b\xE9n\xE9ficiaire OK");
+        } else {
+          req.log.error({ reference: txRef, message: payoutResult.message }, "QR payout b\xE9n\xE9ficiaire REFUS\xC9");
+          await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
+        }
+      } catch (payoutErr) {
+        req.log.error({ err: payoutErr, reference: txRef }, "Erreur payout QR \u2014 payin OK mais retrait \xE9chou\xE9");
+        await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
+      }
+    }
+    res.json({
+      success: true,
+      message: chargeResult.message,
+      reference: txRef,
+      transactionId: String(tx.id),
+      isPending
+    });
+  } catch (err) {
+    req.log.error({ err }, "Pay QR error");
+    res.status(500).json({ error: "Erreur serveur interne" });
+  }
+});
+var qrcodes_default = router5;
+
+// src/routes/transfer.ts
+var import_express6 = __toESM(require_express2(), 1);
+import crypto6 from "crypto";
+
+// src/lib/gomboplus.ts
+var BASE_URL2 = "https://api.gomboplus.com";
+function getAppBaseUrl2() {
+  if (process.env.GOMBOPLUS_CALLBACK_URL) {
+    return process.env.GOMBOPLUS_CALLBACK_URL.replace(/\/$/, "");
+  }
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) {
+    return `https://${replitDomains.split(",")[0].trim()}`;
+  }
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  return "https://bloumcash.com";
+}
+function getHeaders2() {
+  return {
+    "Content-Type": "application/json",
+    "X-Public-Key": process.env.GOMBOPLUS_PUBLIC_KEY ?? "",
+    "X-Private-Key": process.env.GOMBOPLUS_PRIVATE_KEY ?? ""
+  };
+}
+function isConfigured2() {
+  return !!(process.env.GOMBOPLUS_PUBLIC_KEY && process.env.GOMBOPLUS_PRIVATE_KEY);
+}
+function getWebhookUrl() {
+  return `${getAppBaseUrl2()}/api/gomboplus/webhook`;
+}
+var GomboPlusError = class extends Error {
+  constructor(message, code, rawResponse) {
+    super(message);
+    this.code = code;
+    this.rawResponse = rawResponse;
+    this.name = "GomboPlusError";
+  }
+};
+var OPERATOR_GP_MAP = {
+  tmoney: { operator: "yas", country: "TG", label: "YAS/T-Money Togo" },
+  moov: { operator: "moov", country: "TG", label: "Moov Money Togo" }
+};
+async function gombofetch(endpoint, options, logger2) {
+  const url2 = `${BASE_URL2}${endpoint}`;
+  const headers = getHeaders2();
+  const safeHeaders = { ...headers, "X-Public-Key": "***", "X-Private-Key": "***" };
+  logger2.info({ url: url2, method: options.method, headers: safeHeaders, body: options.body }, "GomboPlus \u25B6 requ\xEAte");
+  let response;
+  try {
+    response = await fetch(url2, { ...options, headers });
+  } catch (err) {
+    logger2.error({ url: url2, err }, "GomboPlus \u2716 erreur r\xE9seau");
+    throw new GomboPlusError("Erreur r\xE9seau lors de la connexion \xE0 GomboPlus.", "NETWORK_ERROR");
+  }
+  const rawText = await response.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    logger2.error({ url: url2, httpStatus: response.status, rawText: rawText.slice(0, 300) }, "GomboPlus \u2716 corps non-JSON");
+    throw new GomboPlusError(
+      `GomboPlus a retourn\xE9 un corps non-JSON (HTTP ${response.status}).`,
+      "INVALID_JSON"
+    );
+  }
+  logger2.info({ url: url2, httpStatus: response.status, body: parsed }, "GomboPlus \u25C0 r\xE9ponse");
+  return parsed;
+}
+async function cashin(params, logger2) {
+  const opMap = OPERATOR_GP_MAP[params.operator];
+  if (!opMap) {
+    throw new GomboPlusError(`Op\xE9rateur non support\xE9 par GomboPlus : ${params.operator}`, "UNSUPPORTED_OPERATOR");
+  }
+  if (params.amount <= 0) {
+    throw new GomboPlusError("Le montant doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
+  }
+  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
+  const data = await gombofetch(
+    "/api/mobile-services/mobile-deposit/",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount: params.amount,
+        recipient_number: cleanPhone,
+        country: opMap.country,
+        operator: opMap.operator,
+        callback_url: getWebhookUrl()
+      })
+    },
+    logger2
+  );
+  const content = data.content;
+  const gpRef = content?.reference ?? "";
+  const statusStr = String(data.status ?? "");
+  const code = Number(data.code ?? 0);
+  if (statusStr !== "succes" || code !== 202 && code !== 200) {
+    const msg = String(data.message ?? JSON.stringify(data));
+    logger2.error({ data, params: { ...params, phone: "***" } }, `GomboPlus \u2716 CASHIN \xE9chou\xE9 \u2014 ${msg}`);
+    return { success: false, gpReference: gpRef, message: msg, rawResponse: data };
+  }
+  logger2.info({ gpReference: gpRef, amount: params.amount, operator: opMap.label }, "GomboPlus \u2714 CASHIN initi\xE9");
+  return {
+    success: true,
+    gpReference: gpRef,
+    message: String(data.message ?? "Demande de paiement envoy\xE9e."),
+    rawResponse: data
+  };
+}
+async function cashout(params, logger2) {
+  const opMap = OPERATOR_GP_MAP[params.operator];
+  if (!opMap) {
+    throw new GomboPlusError(`Op\xE9rateur non support\xE9 par GomboPlus : ${params.operator}`, "UNSUPPORTED_OPERATOR");
+  }
+  if (params.amount <= 0) {
+    throw new GomboPlusError("Le montant de payout doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
+  }
+  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
+  const data = await gombofetch(
+    "/api/mobile-services/mobile-withdrawal/",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount: params.amount,
+        recipient_number: cleanPhone,
+        country: opMap.country,
+        operator: opMap.operator,
+        callback_url: getWebhookUrl()
+      })
+    },
+    logger2
+  );
+  const content = data.content;
+  const gpRef = content?.reference ?? "";
+  const statusStr = String(data.status ?? "");
+  const code = Number(data.code ?? 0);
+  if (statusStr !== "succes" || code !== 202 && code !== 200) {
+    const msg = String(data.message ?? JSON.stringify(data));
+    logger2.error({ data, params: { ...params, phone: "***" } }, `GomboPlus \u2716 CASHOUT \xE9chou\xE9 \u2014 ${msg}`);
+    return { success: false, gpReference: gpRef, message: msg, rawResponse: data };
+  }
+  logger2.info({ gpReference: gpRef, amount: params.amount, operator: opMap.label }, "GomboPlus \u2714 CASHOUT initi\xE9");
+  return {
+    success: true,
+    gpReference: gpRef,
+    message: String(data.message ?? "Paiement envoy\xE9 au destinataire."),
+    rawResponse: data
+  };
+}
+async function checkStatus(gpReference, logger2) {
+  const data = await gombofetch(
+    "/api/mobile-services/check-transaction-status/",
+    {
+      method: "POST",
+      body: JSON.stringify({ transaction_reference: gpReference })
+    },
+    logger2
+  );
+  const content = data.content;
+  const rawStatus = String(content?.status ?? data.status ?? "pending").toLowerCase();
+  const STATUS_MAP = {
+    pending: "pending",
+    completed: "completed",
+    success: "completed",
+    failed: "failed",
+    cancelled: "cancelled",
+    canceled: "cancelled"
+  };
+  return { status: STATUS_MAP[rawStatus] ?? "pending", raw: data };
+}
+
+// src/routes/transfer.ts
+init_user_auth();
+
+// src/lib/format.ts
+function formatAmount(amount) {
+  return amount.toLocaleString("fr-FR").replace(/\u202f/g, "\xA0") + " FCFA";
+}
+
+// src/routes/transfer.ts
+var router6 = (0, import_express6.Router)();
+var OPERATOR_DB_NAME = {
+  tmoney: "TMoney",
+  moov: "Moov Money"
+};
+async function getOperatorGateway(operator) {
+  const name = OPERATOR_DB_NAME[operator.toLowerCase()];
+  if (!name) return "PayDunya";
+  try {
+    const rows = await db.select({ gateway: operatorsConfigTable.gateway }).from(operatorsConfigTable).where(
+      and(
+        ilike(operatorsConfigTable.name, name),
+        eq(operatorsConfigTable.countryCode, "TG")
+      )
+    ).limit(1);
+    const gw = rows[0]?.gateway ?? "PayDunya";
+    return gw === "GomboPlus" ? "GomboPlus" : "PayDunya";
+  } catch {
+    return "PayDunya";
+  }
+}
+async function getFeePercent() {
+  try {
+    const rows = await db.select({ value: adminSettingsTable.value }).from(adminSettingsTable).where(eq(adminSettingsTable.key, "fee_deposit_percent")).limit(1);
+    if (rows.length && rows[0].value) {
+      const v = parseFloat(rows[0].value);
+      if (!isNaN(v) && v >= 0) return v / 100;
+    }
+  } catch {
+  }
+  return 0.05;
+}
+async function calculateFees(_fromOperator, _toOperator, amount) {
+  const rate = await getFeePercent();
+  return Math.ceil(amount * rate);
+}
+router6.post("/transfer/fees", requireUser, async (req, res) => {
+  try {
+    const { fromOperator, toOperator, amount } = req.body;
+    if (!fromOperator || !toOperator || !amount) {
+      res.status(400).json({ error: "Champs requis manquants" });
+      return;
+    }
+    const amt = parseInt(String(amount));
+    const rate = await getFeePercent();
+    const fees = Math.ceil(amt * rate);
+    res.json({ amount: amt, fees, total: amt + fees, feePercent: +(rate * 100).toFixed(2), estimatedTime: "Instantan\xE9" });
+  } catch (err) {
+    req.log.error({ err }, "Calculate fees error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+router6.post("/transfer", requireUser, async (req, res) => {
+  try {
+    const {
+      fromOperator,
+      fromPhone,
+      toOperator,
+      toPhone,
+      amount,
+      payerName,
+      payerEmail
+    } = req.body;
+    if (!fromOperator || !fromPhone || !toOperator || !toPhone || !amount) {
+      res.status(400).json({ error: "Champs requis manquants" });
+      return;
+    }
+    const amt = parseInt(String(amount));
+    if (isNaN(amt) || amt <= 0) {
+      res.status(400).json({ error: "Montant invalide" });
+      return;
+    }
+    const fees = await calculateFees(fromOperator, toOperator, amt);
+    const total = amt + fees;
+    const reference = "TR" + Date.now() + crypto6.randomBytes(3).toString("hex").toUpperCase();
+    const name = payerName ?? "Client Bloum Cash";
+    const email3 = payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
+    const currentUser = extractUser(req);
+    const userId = currentUser?.id ?? null;
+    if (userId) {
+      const [userRow] = await db.select({ status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      if (userRow?.status === "banned") {
+        res.status(403).json({ error: "Votre compte est banni. Contactez le support.", code: "ACCOUNT_BANNED" });
+        return;
+      }
+      if (userRow?.status === "suspended") {
+        res.status(403).json({ error: "Votre compte est temporairement suspendu.", code: "ACCOUNT_SUSPENDED" });
+        return;
+      }
+    }
+    const blRows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, fromPhone)).limit(1);
+    if (blRows.length) {
+      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Acc\xE8s refus\xE9. Bye.", code: "PHONE_BLACKLISTED" });
+      return;
+    }
+    const gateway = await getOperatorGateway(fromOperator);
+    req.log.info({ fromOperator, gateway, reference }, "Transfer \u2014 gateway s\xE9lectionn\xE9e");
+    if (gateway === "GomboPlus") {
+      if (!isConfigured2()) {
+        req.log.warn("GomboPlus non configur\xE9 \u2014 mode d\xE9mo");
+        await db.insert(transactionsTable).values({
+          reference,
+          type: "outgoing",
+          title: `Transfert vers ${toPhone}`,
+          amount: amt,
+          operator: fromOperator,
+          fromPhone,
+          toPhone,
+          toOperator,
+          fees,
+          description: `Transfert ${fromOperator} \u2192 ${toOperator} (GomboPlus d\xE9mo)`,
+          status: "success",
+          payoutSent: true,
+          userId
+        });
+        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+        res.status(201).json({
+          success: true,
+          message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 GomboPlus non configur\xE9)",
+          reference,
+          fees,
+          total,
+          isPending: false,
+          gateway: "GomboPlus"
+        });
+        return;
+      }
+      let cashinResult;
+      try {
+        cashinResult = await cashin(
+          { phone: fromPhone, amount: total, operator: fromOperator, reference },
+          req.log
+        );
+      } catch (err) {
+        const isGpErr = err instanceof GomboPlusError;
+        const msg = isGpErr ? err.message : "Erreur lors de la demande de paiement GomboPlus.";
+        const code = isGpErr ? err.code : "GP_CASHIN_ERROR";
+        req.log.error({ err, code }, "GomboPlus cashin \u2014 \xE9chec");
+        res.status(502).json({ error: msg, code });
+        return;
+      }
+      if (!cashinResult.success) {
+        res.status(402).json({ error: cashinResult.message, code: "GP_PAYMENT_REFUSED" });
+        return;
+      }
+      const storedToken = `gp:${cashinResult.gpReference}`;
+      try {
+        await db.insert(transactionsTable).values({
+          reference,
+          type: "outgoing",
+          title: `Transfert vers ${toPhone}`,
+          amount: amt,
+          operator: fromOperator,
+          fromPhone,
+          toPhone,
+          toOperator,
+          fees,
+          description: `Transfert ${fromOperator} \u2192 ${toOperator} via GomboPlus`,
+          status: "pending",
+          payoutSent: false,
+          userId,
+          paydunyaToken: storedToken
+        });
+      } catch (dbErr) {
+        req.log.error({
+          err: dbErr,
+          CRITICAL: "GOMBOPLUS_CASHIN_SENT_BUT_DB_INSERT_FAILED",
+          reference,
+          gpReference: cashinResult.gpReference,
+          fromPhone,
+          toPhone,
+          fromOperator,
+          toOperator,
+          amount: amt,
+          fees
+        }, "\u26A0\uFE0F CRITIQUE \u2014 CASHIN GomboPlus envoy\xE9 mais \xE9chec insertion DB. R\xE9cup\xE9ration manuelle requise.");
+      }
+      req.log.info(
+        { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt, gpRef: cashinResult.gpReference },
+        "GomboPlus CASHIN initi\xE9 \u2014 en attente validation payeur"
+      );
+      res.status(201).json({
+        success: true,
+        message: "Demande de paiement envoy\xE9e. Veuillez valider sur votre t\xE9l\xE9phone mobile.",
+        reference,
+        fees,
+        total,
+        isPending: true,
+        gateway: "GomboPlus"
+      });
+      return;
+    }
+    if (!isConfigured()) {
+      req.log.warn("PayDunya not configured \u2014 saving transaction in demo mode");
+      await db.insert(transactionsTable).values({
+        reference,
+        type: "outgoing",
+        title: `Transfert vers ${toPhone}`,
+        amount: amt,
+        operator: fromOperator,
+        fromPhone,
+        toPhone,
+        toOperator,
+        fees,
+        description: `Transfert ${fromOperator} \u2192 ${toOperator}`,
+        status: "success",
+        payoutSent: true,
+        userId
+      });
+      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+      res.status(201).json({
+        success: true,
+        message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 PayDunya non configur\xE9)",
+        reference,
+        fees,
+        total,
+        isPending: false,
+        paydunhaConfigured: false,
+        gateway: "PayDunya"
+      });
+      return;
+    }
+    const operatorKey = TOGO_OPERATOR_MAP[fromOperator];
+    const operatorConfig = OPERATOR_MAP[operatorKey];
+    const channels = operatorConfig?.channels ?? [operatorKey];
+    let paymentToken;
+    try {
+      paymentToken = await createInvoice(
+        total,
+        `Transfert Bloum Cash ${fromOperator} \u2192 ${toOperator} \u2014 ref ${reference}`,
+        channels,
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof PaydunyaError;
+      const msg = isPduErr ? err.message : "Erreur lors de la cr\xE9ation de l'invoice PayDunya.";
+      const code = isPduErr ? err.code : "INVOICE_ERROR";
+      req.log.error({ err, code }, "Invoice creation failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+    let chargeResult;
+    try {
+      chargeResult = await chargeTogoWallet(
+        fromOperator,
+        { name, email: email3, phone: fromPhone, paymentToken },
+        req.log
+      );
+    } catch (err) {
+      const isPduErr = err instanceof PaydunyaError;
+      const msg = isPduErr ? err.message : "Erreur lors de la demande de paiement mobile money.";
+      const code = isPduErr ? err.code : "CHARGE_ERROR";
+      req.log.error({ err, code }, "Charge failed");
+      res.status(502).json({ error: msg, code });
+      return;
+    }
+    if (!chargeResult.success) {
+      res.status(402).json({ error: chargeResult.message, code: "PAYMENT_REFUSED" });
+      return;
+    }
+    try {
+      await db.insert(transactionsTable).values({
+        reference,
+        type: "outgoing",
+        title: `Transfert vers ${toPhone}`,
+        amount: amt,
+        operator: fromOperator,
+        fromPhone,
+        toPhone,
+        toOperator,
+        fees,
+        description: `Transfert ${fromOperator} \u2192 ${toOperator}`,
+        status: "pending",
+        payoutSent: false,
+        userId,
+        paydunyaToken: paymentToken
+      });
+    } catch (dbErr) {
+      req.log.error({
+        err: dbErr,
+        CRITICAL: "PAYDUNYA_CHARGE_SENT_BUT_DB_INSERT_FAILED",
+        reference,
+        paydunyaToken: paymentToken,
+        fromPhone,
+        toPhone,
+        fromOperator,
+        toOperator,
+        amount: amt,
+        fees
+      }, "\u26A0\uFE0F CRITIQUE \u2014 Push PayDunya envoy\xE9 mais \xE9chec insertion DB. R\xE9cup\xE9ration manuelle requise.");
+    }
+    req.log.info(
+      { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt },
+      "Demande de paiement PayDunya envoy\xE9e \u2014 en attente de validation"
+    );
+    res.status(201).json({
+      success: true,
+      message: "Demande de paiement envoy\xE9e. Veuillez valider sur votre t\xE9l\xE9phone mobile.",
+      reference,
+      fees,
+      total,
+      isPending: true,
+      paydunhaConfigured: true,
+      gateway: "PayDunya"
+    });
+  } catch (err) {
+    req.log.error({ err }, "Transfer error");
+    res.status(500).json({ error: "Erreur serveur interne" });
+  }
+});
+router6.get("/transfer/:reference/status", requireUser, async (req, res) => {
+  try {
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.reference, req.params.reference)).limit(1);
+    if (!rows.length) {
+      res.status(404).json({ error: "Transaction introuvable" });
+      return;
+    }
+    const tx = rows[0];
+    if (tx.status === "pending" && tx.paydunyaToken) {
+      const isGomboPlus = tx.paydunyaToken.startsWith("gp:");
+      if (isGomboPlus && isConfigured2()) {
+        try {
+          const gpReference = tx.paydunyaToken.slice(3);
+          const { status: gpStatus } = await checkStatus(gpReference, req.log);
+          if (gpStatus === "completed") {
+            const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, tx.reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
+            if (updated.length > 0) {
+              req.log.info({ reference: tx.reference }, "Polling GomboPlus: CASHIN confirm\xE9 \u2014 d\xE9clenchement CASHOUT");
+              try {
+                const payoutResult = await cashout(
+                  { phone: tx.toPhone, amount: tx.amount, operator: tx.toOperator, reference: tx.reference },
+                  req.log
+                );
+                if (payoutResult.success) {
+                  await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+                  tx.status = "success";
+                  if (tx.userId) {
+                    const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+                    if (userRows[0]?.email) {
+                      sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
+                    }
+                  }
+                } else {
+                  await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+                  tx.status = "payout_failed";
+                }
+              } catch {
+                await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+                tx.status = "payout_failed";
+              }
+            } else {
+              const fresh = await db.select({ status: transactionsTable.status }).from(transactionsTable).where(eq(transactionsTable.reference, tx.reference)).limit(1);
+              if (fresh.length) tx.status = fresh[0].status;
+            }
+          } else if (gpStatus === "failed" || gpStatus === "cancelled") {
+            await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
+            tx.status = "failed";
+            if (tx.userId) {
+              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+              if (userRows[0]?.email) {
+                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert \xE9chou\xE9 \u274C", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu \xEAtre effectu\xE9.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
+              }
+            }
+          }
+        } catch {
+        }
+      } else if (!isGomboPlus && isConfigured()) {
+        try {
+          const confirmed = await confirmInvoice(tx.paydunyaToken, req.log);
+          if (confirmed.completed) {
+            const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, tx.reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
+            if (updated.length > 0) {
+              req.log.info({ reference: tx.reference }, "Polling: payin PayDunya confirm\xE9 \u2014 d\xE9clenchement payout");
+              try {
+                const payoutResult = await disburseTogoWallet(
+                  tx.toOperator,
+                  { name: "B\xE9n\xE9ficiaire Bloum Cash", phone: tx.toPhone, amount: tx.amount, reference: tx.reference },
+                  req.log
+                );
+                if (payoutResult.success) {
+                  await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+                  tx.status = "success";
+                  if (tx.userId) {
+                    const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+                    if (userRows[0]?.email) {
+                      sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
+                    }
+                  }
+                } else {
+                  await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+                  tx.status = "payout_failed";
+                }
+              } catch (payoutErr) {
+                await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+                tx.status = "payout_failed";
+                req.log.error({ err: payoutErr, reference: tx.reference }, "Polling: erreur payout PayDunya \u2014 INTERVENTION MANUELLE REQUISE");
+              }
+            } else {
+              const fresh = await db.select({ status: transactionsTable.status }).from(transactionsTable).where(eq(transactionsTable.reference, tx.reference)).limit(1);
+              if (fresh.length) tx.status = fresh[0].status;
+            }
+          } else if (confirmed.status === "failed" || confirmed.status === "cancelled") {
+            await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
+            tx.status = "failed";
+            if (tx.userId) {
+              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+              if (userRows[0]?.email) {
+                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert \xE9chou\xE9 \u274C", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu \xEAtre effectu\xE9.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
+              }
+            }
+          }
+        } catch {
+        }
+      }
+    }
+    res.json({ reference: tx.reference, status: tx.status, amount: tx.amount, fees: tx.fees });
+  } catch (err) {
+    req.log.error({ err }, "Transfer status error");
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+var transfer_default = router6;
+
+// src/routes/paydunya-webhook.ts
+var import_express7 = __toESM(require_express2(), 1);
+
+// src/middleware/webhook-auth.ts
+import crypto7 from "crypto";
+var WEBHOOK_SECRET = process.env.WEBHOOK_SECRET ?? "";
+function requireWebhookSecret(req, res, next) {
+  if (!WEBHOOK_SECRET) {
+    req.log.warn(
+      { path: req.path },
+      "WEBHOOK_SECRET non d\xE9fini \u2014 webhook accept\xE9 sans v\xE9rification. Configurez la variable WEBHOOK_SECRET pour s\xE9curiser les callbacks."
+    );
+    next();
+    return;
+  }
+  const provided = req.headers["x-webhook-secret"] ?? "";
+  const expected = Buffer.from(WEBHOOK_SECRET);
+  const actual = Buffer.from(provided);
+  if (actual.length !== expected.length || !crypto7.timingSafeEqual(actual, expected)) {
+    req.log.warn(
+      { path: req.path, ip: req.ip },
+      "Webhook refus\xE9 \u2014 X-Webhook-Secret invalide"
+    );
+    res.status(401).json({ error: "Webhook non autoris\xE9" });
+    return;
+  }
+  next();
+}
+
+// src/routes/paydunya-webhook.ts
+var router7 = (0, import_express7.Router)();
+router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
+  try {
+    const payload = req.body;
+    req.log.info({ payload }, "PayDunya webhook re\xE7u");
+    const dataNode = payload?.data;
+    const invoiceData = dataNode?.invoice;
+    const token = invoiceData?.token ?? dataNode?.token ?? payload?.token;
+    const status = dataNode?.status ?? invoiceData?.status ?? payload?.status;
+    if (!token) {
+      req.log.warn({ payload }, "PayDunya webhook: token manquant dans le payload");
+      res.status(400).json({ error: "Token manquant dans le payload webhook" });
+      return;
+    }
+    req.log.info(
+      { token: token.slice(0, 8) + "\u2026", status },
+      "PayDunya webhook \u2014 traitement"
+    );
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, token)).limit(1);
+    if (!rows.length) {
+      req.log.warn(
+        { token: token.slice(0, 8) + "\u2026" },
+        "PayDunya webhook: aucune transaction trouv\xE9e pour ce token"
+      );
+      res.json({ received: true, status, matched: false });
+      return;
+    }
+    const tx = rows[0];
+    req.log.info(
+      { reference: tx.reference, currentStatus: tx.status, webhookStatus: status },
+      "PayDunya webhook \u2014 transaction trouv\xE9e"
+    );
+    if (status === "completed") {
+      const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(
+        and(
+          eq(transactionsTable.paydunyaToken, token),
+          eq(transactionsTable.payoutSent, false)
+        )
+      ).returning({ id: transactionsTable.id, reference: transactionsTable.reference });
+      if (updated.length === 0) {
+        req.log.info(
+          { reference: tx.reference },
+          "PayDunya webhook: payout d\xE9j\xE0 d\xE9clench\xE9 (polling ou webhook pr\xE9c\xE9dent) \u2014 skip"
+        );
+        res.json({ received: true, status, reference: tx.reference, skipped: true });
+        return;
+      }
+      req.log.info(
+        { reference: tx.reference },
+        "PayDunya webhook: payin confirm\xE9 \u2014 d\xE9clenchement payout vers destinataire"
+      );
+      if (!tx.toPhone || !tx.toOperator || tx.amount <= 0) {
+        req.log.error(
+          { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
+          "PayDunya webhook: infos destinataire manquantes \u2014 payout impossible. INTERVENTION MANUELLE REQUISE."
+        );
+        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+        res.json({ received: true, status, reference: tx.reference });
+        return;
+      }
+      try {
+        const payoutResult = await disburseTogoWallet(
+          tx.toOperator,
+          {
+            name: "B\xE9n\xE9ficiaire Bloum Cash",
+            phone: tx.toPhone,
+            amount: tx.amount,
+            reference: tx.reference
+          },
+          req.log
+        );
+        if (payoutResult.success) {
+          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.info(
+            { reference: tx.reference, transactionId: payoutResult.transactionId },
+            "PayDunya webhook: payout destinataire OK \u2192 transaction SUCCESS"
+          );
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null
+          });
+          if (tx.userId) {
+            const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+            if (userRows.length && userRows[0].email) {
+              sendPushNotification(
+                {
+                  externalUserId: userRows[0].email,
+                  title: "Transfert confirm\xE9 \u2705",
+                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone} a \xE9t\xE9 confirm\xE9 avec succ\xE8s.`,
+                  data: { type: "transfer_confirmed", reference: tx.reference }
+                },
+                req.log
+              );
+            }
+          }
+        } else {
+          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.error(
+            { reference: tx.reference, message: payoutResult.message },
+            "PayDunya webhook: payout refus\xE9 apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
+          );
+        }
+      } catch (payoutErr) {
+        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+        req.log.error(
+          { err: payoutErr, reference: tx.reference },
+          "PayDunya webhook: erreur payout apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
+        );
+      }
+    } else if (status === "cancelled" || status === "failed") {
+      await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.paydunyaToken, token));
+      req.log.warn(
+        { reference: tx.reference, status },
+        "PayDunya webhook: paiement annul\xE9/\xE9chou\xE9 \u2014 aucun payout effectu\xE9"
+      );
+      if (tx.userId) {
+        const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+        if (userRows.length && userRows[0].email) {
+          sendPushNotification(
+            {
+              externalUserId: userRows[0].email,
+              title: "Transfert annul\xE9 \u274C",
+              message: `Votre transfert de ${formatAmount(tx.amount)} a \xE9t\xE9 annul\xE9 ou a \xE9chou\xE9.`,
+              data: { type: "transfer_failed", reference: tx.reference }
+            },
+            req.log
+          );
+        }
+      }
+    } else {
+      req.log.info(
+        { status, reference: tx.reference },
+        "PayDunya webhook: statut non g\xE9r\xE9 \u2014 aucune mise \xE0 jour DB"
+      );
+    }
+    res.json({ received: true, status, reference: tx.reference });
+  } catch (err) {
+    req.log.error({ err }, "PayDunya webhook \u2014 erreur serveur");
+    res.status(500).json({ error: "Erreur serveur webhook" });
+  }
+});
+router7.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
+  try {
+    const payload = req.body;
+    req.log.info({ payload }, "PayDunya disburse webhook re\xE7u");
+    const disburseToken = payload?.disburse_invoice ?? payload?.token;
+    const status = payload?.status?.toLowerCase();
+    req.log.info(
+      { disburseTokenPrefix: disburseToken ? disburseToken.slice(0, 8) + "\u2026" : "?", status },
+      "PayDunya disburse webhook \u2014 traitement"
+    );
+    if (disburseToken) {
+      const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, disburseToken)).limit(1);
+      if (rows.length) {
+        const tx = rows[0];
+        if (status === "success") {
+          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.info({ reference: tx.reference }, "PayDunya disburse webhook: payout confirm\xE9 \u2714");
+        } else if (status === "failed") {
+          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.warn({ reference: tx.reference }, "PayDunya disburse webhook: payout \xE9chou\xE9 \u2014 INTERVENTION MANUELLE REQUISE \u2716");
+        }
+      }
+    }
+    res.json({ received: true, status });
+  } catch (err) {
+    req.log.error({ err }, "PayDunya disburse webhook \u2014 erreur serveur");
+    res.status(500).json({ error: "Erreur serveur webhook disburse" });
+  }
+});
+var paydunya_webhook_default = router7;
+
+// src/routes/paydunya-diagnose.ts
+var import_express8 = __toESM(require_express2(), 1);
+
+// src/middleware/admin-auth.ts
+import crypto8 from "crypto";
+var _adminSecretFallback = "bloum-cash-admin-secret-2026-xK9mP";
+if (!process.env.ADMIN_JWT_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("ADMIN_JWT_SECRET env var must be set in production");
+}
+var ADMIN_SECRET = process.env.ADMIN_JWT_SECRET ?? _adminSecretFallback;
+function signAdminToken(payload) {
+  const data = Buffer.from(
+    JSON.stringify({ ...payload, iat: Date.now() })
+  ).toString("base64url");
+  const sig = crypto8.createHmac("sha256", ADMIN_SECRET).update(data).digest("hex");
+  return `${data}.${sig}`;
+}
+function verifyAdminToken(token) {
+  const parts = token.split(".");
+  if (parts.length !== 2) throw new Error("Token invalide");
+  const [data, sig] = parts;
+  const expected = crypto8.createHmac("sha256", ADMIN_SECRET).update(data).digest("hex");
+  if (sig !== expected) throw new Error("Signature invalide");
+  const payload = JSON.parse(Buffer.from(data, "base64url").toString());
+  const AGE_HOURS = 24;
+  if (Date.now() - payload.iat > AGE_HOURS * 3600 * 1e3) throw new Error("Token expir\xE9");
+  return payload;
+}
+function requireAdmin(req, res, next) {
+  const auth = req.headers.authorization ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Authentification admin requise" });
+    return;
+  }
+  try {
+    req.admin = verifyAdminToken(token);
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Token admin invalide ou expir\xE9" });
+  }
+}
+
+// src/routes/paydunya-diagnose.ts
+var router8 = (0, import_express8.Router)();
+router8.get("/paydunya/diagnose", requireAdmin, async (req, res) => {
+  const report = {
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    steps: [],
+    conclusion: "",
+    failedAt: null
+  };
+  const cfg = checkConfiguration();
+  report.steps.push({
+    step: 1,
+    name: "V\xE9rification des cl\xE9s API",
+    status: cfg.ok ? "ok" : "failed",
+    detail: {
+      baseUrl: cfg.baseUrl,
+      mode: cfg.mode,
+      keys: cfg.keys,
+      missingKeys: cfg.missingKeys
+    }
+  });
+  if (!cfg.ok) {
+    report.conclusion = `\xC9CHEC \xE9tape 1 \u2014 Cl\xE9s manquantes : ${cfg.missingKeys.join(", ")}. Configurez ces secrets dans l'environnement.`;
+    report.failedAt = "V\xE9rification des cl\xE9s API";
+    res.json(report);
+    return;
+  }
+  let invoiceToken = null;
+  try {
+    invoiceToken = await createInvoice(
+      500,
+      "Test diagnostic Bloum Cash \u2014 checkout-invoice/create",
+      ["t-money-togo"],
+      req.log
+    );
+    report.steps.push({
+      step: 2,
+      name: "POST /checkout-invoice/create (canal t-money-togo, 500 FCFA)",
+      status: "ok",
+      detail: {
+        tokenObtained: true,
+        tokenPrefix: invoiceToken.slice(0, 8) + "\u2026",
+        note: "Token PayDunya valide re\xE7u. La cl\xE9 API et le canal TMoney sont correctement configur\xE9s."
+      }
+    });
+  } catch (err) {
+    const isPdu = err instanceof PaydunyaError;
+    report.steps.push({
+      step: 2,
+      name: "POST /checkout-invoice/create (canal t-money-togo, 500 FCFA)",
+      status: "failed",
+      detail: {
+        errorCode: isPdu ? err.code : "UNKNOWN",
+        errorMessage: isPdu ? err.message : String(err),
+        rawPaydunyaResponse: isPdu ? err.rawResponse : null,
+        hint: hintForCode(isPdu ? err.code : "UNKNOWN")
+      }
+    });
+    report.steps.push({
+      step: 3,
+      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
+      status: "skipped",
+      detail: "Ignor\xE9 car l'\xE9tape TMoney a d\xE9j\xE0 \xE9chou\xE9."
+    });
+    report.steps.push({
+      step: 4,
+      name: "POST /softpay/t-money-togo",
+      status: "skipped",
+      detail: "Non ex\xE9cut\xE9 (pas de token d'invoice valide)."
+    });
+    const code = isPdu ? err.code : "UNKNOWN";
+    report.conclusion = `\xC9CHEC \xE9tape 2 (TMoney) \u2014 ${err.message}`;
+    report.failedAt = "checkout-invoice/create (t-money-togo)";
+    res.json(report);
+    return;
+  }
+  try {
+    const moovToken = await createInvoice(
+      500,
+      "Test diagnostic Bloum Cash \u2014 checkout-invoice/create",
+      ["moov-togo"],
+      req.log
+    );
+    report.steps.push({
+      step: 3,
+      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
+      status: "ok",
+      detail: {
+        tokenObtained: true,
+        tokenPrefix: moovToken.slice(0, 8) + "\u2026",
+        note: "Token PayDunya valide re\xE7u. Le canal Moov est correctement configur\xE9."
+      }
+    });
+  } catch (err) {
+    const isPdu = err instanceof PaydunyaError;
+    report.steps.push({
+      step: 3,
+      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
+      status: "failed",
+      detail: {
+        errorCode: isPdu ? err.code : "UNKNOWN",
+        errorMessage: isPdu ? err.message : String(err),
+        rawPaydunyaResponse: isPdu ? err.rawResponse : null,
+        hint: hintForCode(isPdu ? err.code : "UNKNOWN")
+      }
+    });
+  }
+  report.steps.push({
+    step: 4,
+    name: "POST /softpay/t-money-togo (non ex\xE9cut\xE9 \u2014 diagnostic uniquement)",
+    status: "skipped",
+    detail: {
+      reason: "SoftPay non appel\xE9 pour ne pas d\xE9clencher de paiement r\xE9el sur un num\xE9ro de test.",
+      invoiceToken: invoiceToken.slice(0, 8) + "\u2026",
+      payloadPreview: {
+        name_t_money: "Client Test",
+        email_t_money: "test@bloumcash.tg",
+        phone_t_money: "90000000",
+        payment_token: invoiceToken.slice(0, 8) + "\u2026"
+      },
+      note: "Pour tester SoftPay, lancez un vrai transfert depuis l'application avec un vrai num\xE9ro de t\xE9l\xE9phone."
+    }
+  });
+  const allOk = report.steps.every((s) => s.status === "ok" || s.status === "skipped");
+  if (allOk) {
+    report.conclusion = "\u2705 Configuration PayDunya OK. Les cl\xE9s sont valides et les canaux TMoney / Moov Togo sont actifs. Lancez un vrai transfert avec un vrai num\xE9ro pour valider la notification USSD.";
+  }
+  res.json(report);
+});
+function hintForCode(code) {
+  switch (code) {
+    case "PAYIN_NOT_ENABLED":
+      return "Le canal mobile money n'est pas activ\xE9 sur votre compte PayDunya. Contactez paydunya@paydunya.com pour activer Payin TMoney Togo / Moov Togo.";
+    case "AUTH_FAILED":
+      return "Vos cl\xE9s API sont invalides ou r\xE9voqu\xE9es. V\xE9rifiez PAYDUNYA_MASTER_KEY, PAYDUNYA_PRIVATE_KEY et PAYDUNYA_TOKEN dans votre dashboard PayDunya.";
+    case "HTML_RESPONSE":
+      return "PayDunya retourne du HTML. L'URL de base est peut-\xEAtre incorrecte (sandbox vs. live). V\xE9rifiez PAYDUNYA_BASE_URL ou PAYDUNYA_SANDBOX.";
+    case "NOT_CONFIGURED":
+      return "Des cl\xE9s API sont manquantes dans les secrets d'environnement.";
+    case "NETWORK_ERROR":
+      return "Impossible de joindre l'API PayDunya. V\xE9rifiez la connectivit\xE9 r\xE9seau.";
+    default:
+      return "Consultez les logs de l'API pour la r\xE9ponse compl\xE8te de PayDunya.";
+  }
+}
+var paydunya_diagnose_default = router8;
+
+// src/routes/gomboplus-webhook.ts
+var import_express9 = __toESM(require_express2(), 1);
+var router9 = (0, import_express9.Router)();
+router9.post("/gomboplus/webhook", requireWebhookSecret, async (req, res) => {
+  try {
+    const payload = req.body;
+    req.log.info({ payload }, "GomboPlus webhook re\xE7u");
+    const gpReference = String(payload.transaction_reference ?? "").trim();
+    const transactionType = String(payload.transaction_type ?? "").toLowerCase();
+    const statusMsg = String(payload.status_message ?? "").toLowerCase();
+    if (!gpReference) {
+      req.log.warn({ payload }, "GomboPlus webhook: transaction_reference manquant");
+      res.json({ received: true });
+      return;
+    }
+    const storedToken = `gp:${gpReference}`;
+    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, storedToken)).limit(1);
+    if (!rows.length) {
+      req.log.warn({ gpReference, storedToken }, "GomboPlus webhook: aucune transaction trouv\xE9e pour cette r\xE9f\xE9rence");
+      res.json({ received: true, matched: false });
+      return;
+    }
+    const tx = rows[0];
+    req.log.info(
+      { reference: tx.reference, currentStatus: tx.status, transactionType, statusMsg },
+      "GomboPlus webhook \u2014 transaction trouv\xE9e"
+    );
+    const isCompleted = statusMsg.includes("completed") || statusMsg === "success" || statusMsg === "successful";
+    const isFailed = statusMsg.includes("failed") || statusMsg.includes("cancel");
+    if (transactionType === "cashin" && isCompleted) {
+      const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(
+        and(
+          eq(transactionsTable.paydunyaToken, storedToken),
+          eq(transactionsTable.payoutSent, false)
+        )
+      ).returning({ id: transactionsTable.id });
+      if (updated.length === 0) {
+        req.log.info({ reference: tx.reference }, "GomboPlus webhook: payout d\xE9j\xE0 d\xE9clench\xE9 \u2014 skip");
+        res.json({ received: true, reference: tx.reference, skipped: true });
+        return;
+      }
+      if (!tx.toPhone || !tx.toOperator || tx.amount <= 0) {
+        req.log.error(
+          { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
+          "GomboPlus webhook: infos destinataire manquantes \u2014 INTERVENTION MANUELLE REQUISE"
+        );
+        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+        res.json({ received: true, reference: tx.reference });
+        return;
+      }
+      req.log.info({ reference: tx.reference }, "GomboPlus webhook: CASHIN confirm\xE9 \u2014 d\xE9clenchement CASHOUT");
+      try {
+        const payoutResult = await cashout(
+          {
+            phone: tx.toPhone,
+            amount: tx.amount,
+            operator: tx.toOperator,
+            reference: tx.reference
+          },
+          req.log
+        );
+        if (payoutResult.success) {
+          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.info({ reference: tx.reference, gpRef: payoutResult.gpReference }, "GomboPlus webhook: CASHOUT OK \u2192 success");
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null
+          });
+          if (tx.userId) {
+            const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+            if (userRows[0]?.email) {
+              sendPushNotification(
+                {
+                  externalUserId: userRows[0].email,
+                  title: "Transfert confirm\xE9 \u2705",
+                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`,
+                  data: { type: "transfer_confirmed", reference: tx.reference }
+                },
+                req.log
+              );
+            }
+          }
+        } else {
+          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+          req.log.error(
+            { reference: tx.reference, msg: payoutResult.message },
+            "GomboPlus webhook: CASHOUT refus\xE9 apr\xE8s CASHIN confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
+          );
+        }
+      } catch (payoutErr) {
+        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+        req.log.error({ err: payoutErr, reference: tx.reference }, "GomboPlus webhook: erreur CASHOUT \u2014 INTERVENTION MANUELLE REQUISE");
+      }
+    } else if (transactionType === "cashout" && isCompleted) {
+      await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
+      req.log.info({ reference: tx.reference }, "GomboPlus webhook: CASHOUT direct confirm\xE9 \u2192 success");
+    } else if (isFailed) {
+      await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
+      req.log.warn({ reference: tx.reference, statusMsg }, "GomboPlus webhook: transaction \xE9chou\xE9e/annul\xE9e");
+      if (tx.userId) {
+        const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
+        if (userRows[0]?.email) {
+          sendPushNotification(
+            {
+              externalUserId: userRows[0].email,
+              title: "Transfert annul\xE9 \u274C",
+              message: `Votre transfert de ${formatAmount(tx.amount)} a \xE9t\xE9 annul\xE9 ou a \xE9chou\xE9.`,
+              data: { type: "transfer_failed", reference: tx.reference }
+            },
+            req.log
+          );
+        }
+      }
+    } else {
+      req.log.info({ transactionType, statusMsg, reference: tx.reference }, "GomboPlus webhook: statut non g\xE9r\xE9 \u2014 aucune action");
+    }
+    res.json({ received: true, reference: tx.reference });
+  } catch (err) {
+    req.log.error({ err }, "GomboPlus webhook \u2014 erreur serveur");
+    res.status(500).json({ error: "Erreur serveur webhook GomboPlus" });
+  }
+});
+var gomboplus_webhook_default = router9;
+
+// src/routes/admin.ts
+var import_express10 = __toESM(require_express2(), 1);
+import { createHmac, randomBytes as randomBytes2 } from "crypto";
+import fs from "fs";
+import path from "path";
 
 // ../../node_modules/.pnpm/postal-mime@2.7.4/node_modules/postal-mime/src/decode-strings.js
 var textEncoder = new TextEncoder();
@@ -66850,43 +69770,6 @@ function baseTemplate(content) {
 </body>
 </html>`;
 }
-async function sendPinResetEmail(opts) {
-  const html = baseTemplate(`
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="font-size:48px;margin-bottom:8px;">\u{1F510}</div>
-      <h1 style="margin:0;font-size:24px;font-weight:800;color:#1a2a6c;">R\xE9initialisation de votre PIN</h1>
-      <p style="margin:10px 0 0;color:#667299;font-size:15px;">Bonjour ${opts.fullName}</p>
-    </div>
-    <p style="font-size:15px;color:#445;line-height:1.7;margin-bottom:24px;">
-      Vous avez demand\xE9 la r\xE9initialisation de votre code PIN.<br/>
-      Utilisez le code ci-dessous pour continuer :
-    </p>
-    <div style="text-align:center;margin-bottom:28px;">
-      <div style="display:inline-block;background:linear-gradient(135deg,#1a3fc4,#2b50e8);border-radius:16px;padding:4px;">
-        <div style="background:#fff;border-radius:13px;padding:20px 48px;">
-          <div style="font-size:42px;font-weight:900;letter-spacing:14px;color:#1a3fc4;font-family:monospace;">${opts.code}</div>
-        </div>
-      </div>
-    </div>
-    <div style="background:#fff8e8;border:1px solid #ffd970;border-radius:12px;padding:16px;margin-bottom:20px;text-align:center;">
-      <p style="margin:0;font-size:13px;color:#8a6500;">
-        \u23F1\uFE0F Ce code expire dans <strong>15 minutes</strong><br/>
-        Si vous n'avez pas fait cette demande, ignorez cet email.
-      </p>
-    </div>
-  `);
-  const resend = getResend();
-  if (!resend) {
-    console.warn("RESEND_API_KEY not set \u2014 pin reset email skipped");
-    return;
-  }
-  return resend.emails.send({
-    from: FROM,
-    to: opts.to,
-    subject: "\u{1F510} Code de r\xE9initialisation \u2014 Bloum Cash",
-    html
-  });
-}
 async function sendMassEmail(opts) {
   const button = opts.buttonText ? `<div style="text-align:center;margin-top:28px;">
         <a href="${opts.buttonUrl ?? "#"}" style="display:inline-block;background:linear-gradient(135deg,#1a3fc4,#2b50e8);color:#fff;font-weight:700;font-size:15px;padding:14px 36px;border-radius:12px;text-decoration:none;">
@@ -66916,2859 +69799,7 @@ async function sendMassEmail(opts) {
   });
 }
 
-// src/lib/logger.ts
-var import_pino = __toESM(require_pino(), 1);
-var isProduction = process.env.NODE_ENV === "production";
-var logger = (0, import_pino.default)({
-  level: process.env.LOG_LEVEL ?? "info",
-  redact: [
-    "req.headers.authorization",
-    "req.headers.cookie",
-    "res.headers['set-cookie']"
-  ],
-  ...isProduction ? {} : {
-    transport: {
-      target: "pino-pretty",
-      options: { colorize: true }
-    }
-  }
-});
-
-// src/lib/telegram.ts
-var TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-var TG_API = TOKEN ? `https://api.telegram.org/bot${TOKEN}` : null;
-var groupChatId = null;
-function esc2(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-function fmt(n) {
-  return Number(n ?? 0).toLocaleString("fr-FR");
-}
-function togoDt() {
-  return (/* @__PURE__ */ new Date()).toLocaleString("fr-FR", {
-    timeZone: "Africa/Lome",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-async function tgFetch(method, body) {
-  if (!TG_API) return null;
-  try {
-    const res = await fetch(`${TG_API}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(1e4)
-    });
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-async function loadGroupChatId() {
-  try {
-    const rows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, "telegram_group_chat_id")).limit(1);
-    if (rows[0]?.value) {
-      groupChatId = rows[0].value;
-      logger.info({ groupChatId }, "\u{1F916} Telegram group chat ID charg\xE9");
-    }
-  } catch {
-  }
-}
-async function saveGroupChatId(chatId) {
-  groupChatId = chatId;
-  try {
-    await db.insert(adminSettingsTable).values({ key: "telegram_group_chat_id", value: chatId }).onConflictDoUpdate({
-      target: adminSettingsTable.key,
-      set: { value: chatId, updatedAt: /* @__PURE__ */ new Date() }
-    });
-  } catch {
-  }
-}
-async function sendMessage(chatId, text2, extra = {}) {
-  await tgFetch("sendMessage", {
-    chat_id: chatId,
-    text: text2,
-    parse_mode: "HTML",
-    ...extra
-  });
-}
-async function sendToGroup(text2, extra = {}) {
-  if (!groupChatId) return;
-  await sendMessage(groupChatId, text2, extra);
-}
-function notifyNewUser(user) {
-  sendToGroup(
-    `\u{1F195} <b>NOUVEL UTILISATEUR</b>
-
-\u{1F464} Nom : ${esc2(user.fullName)}
-\u{1F4F1} T\xE9l\xE9phone : <code>${esc2(user.phone)}</code>
-\u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
-}
-function notifyPayment(tx) {
-  sendToGroup(
-    `\u{1F4B8} <b>TRANSFERT R\xC9USSI</b>
-
-\u{1F4CB} R\xE9f : <code>${esc2(tx.reference)}</code>
-\u{1F4B0} Montant : <b>${fmt(tx.amount)} FCFA</b>
-\u{1F4B3} Commission : ${fmt(tx.fees ?? 0)} FCFA
-\u{1F4E4} De : ${esc2(tx.fromPhone ?? "?")} (${esc2(tx.fromOperator ?? "?")})
-\u{1F4E5} Vers : ${esc2(tx.toPhone ?? "?")} (${esc2(tx.toOperator ?? "?")})
-\u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
-}
-function notifyFeedback(fb) {
-  const typeIcon = fb.type === "bug" ? "\u{1F41B}" : fb.type === "suggestion" ? "\u{1F4A1}" : "\u{1F4AC}";
-  const typeLabel = fb.type === "bug" ? "Signalement de bug" : fb.type === "suggestion" ? "Suggestion" : "Retour utilisateur";
-  sendToGroup(
-    `${typeIcon} <b>${typeLabel.toUpperCase()}</b>
-
-\u{1F4CC} <b>${esc2(fb.title)}</b>
-\u{1F4DD} ${esc2(fb.message)}
-
-\u{1F464} ${esc2(fb.userName ?? "Inconnu")} \u2014 ${esc2(fb.userPhone ?? "?")}
-\u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
-}
-function notifyAdminLoginFail(email3, ip) {
-  sendToGroup(
-    `\u26A0\uFE0F <b>TENTATIVE DE CONNEXION ADMIN \xC9CHOU\xC9E</b>
-
-\u{1F4E7} Email : <code>${esc2(email3)}</code>
-\u{1F310} IP : <code>${esc2(ip)}</code>
-\u{1F550} ${togoDt()}`,
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
-        ]
-      }
-    }
-  ).catch(() => {
-  });
-}
-function notifyAdminTotpFail(email3, ip) {
-  sendToGroup(
-    `\u{1F510} <b>CODE TOTP INVALIDE \u2014 ADMIN</b>
-
-\u{1F4E7} Email : <code>${esc2(email3)}</code>
-\u{1F310} IP : <code>${esc2(ip)}</code>
-\u{1F550} ${togoDt()}`,
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
-        ]
-      }
-    }
-  ).catch(() => {
-  });
-}
-function notifyIpBlocked(opts) {
-  const title = opts.auto ? "\u{1F50D} VPN/PROXY BLOQU\xC9 AUTOMATIQUEMENT" : "\u{1F6AB} IP BLOQU\xC9E";
-  sendToGroup(
-    `${title}
-
-\u{1F310} IP : <code>${esc2(opts.ip)}</code>
-` + (opts.country ? `\u{1F3F3}\uFE0F Pays : ${esc2(opts.country)}
-` : "") + (opts.type ? `\u{1F4E1} Type : ${esc2(opts.type)}
-` : "") + `\u{1F4DD} Raison : ${esc2(opts.reason)}
-` + (opts.path ? `\u{1F517} Chemin : ${esc2(opts.path)}
-` : "") + `\u{1F4C5} ${togoDt()}
-
-L'IP a \xE9t\xE9 bloqu\xE9e d\xE9finitivement en base de donn\xE9es.`
-  ).catch(() => {
-  });
-}
-async function sendDailyReport() {
-  if (!groupChatId) return;
-  try {
-    const todayStart = /* @__PURE__ */ new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const [totalUsers] = await db.select({ c: count() }).from(usersTable);
-    const [todayUsers] = await db.select({ c: count() }).from(usersTable).where(gte(usersTable.createdAt, todayStart));
-    const [todayTx] = await db.select({
-      c: count(),
-      vol: sql`coalesce(sum(${transactionsTable.amount}), 0)`,
-      fees: sql`coalesce(sum(${transactionsTable.fees}), 0)`
-    }).from(transactionsTable).where(gte(transactionsTable.createdAt, todayStart));
-    const [successTx] = await db.select({ c: count() }).from(transactionsTable).where(
-      and(
-        gte(transactionsTable.createdAt, todayStart),
-        eq(transactionsTable.status, "success")
-      )
-    );
-    const [failedTx] = await db.select({ c: count() }).from(transactionsTable).where(
-      and(
-        gte(transactionsTable.createdAt, todayStart),
-        eq(transactionsTable.status, "failed")
-      )
-    );
-    const [pendingTx] = await db.select({ c: count() }).from(transactionsTable).where(
-      and(
-        gte(transactionsTable.createdAt, todayStart),
-        eq(transactionsTable.status, "pending")
-      )
-    );
-    const now = /* @__PURE__ */ new Date();
-    const hLabel = now.getUTCHours() === 0 ? "00h00" : "12h00";
-    await sendMessage(
-      groupChatId,
-      `\u{1F4CA} <b>BILAN ${hLabel} \u2014 BLOUM CASH</b>
-\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
-
-\u{1F465} <b>Utilisateurs</b>
-\u2022 Total : <b>${fmt(totalUsers.c)}</b>
-\u2022 Aujourd'hui : +${todayUsers.c} nouveaux
-
-\u{1F4B8} <b>Transactions du jour</b>
-\u2022 Total : ${todayTx.c} op\xE9rations
-\u2022 Volume : <b>${fmt(todayTx.vol)} FCFA</b>
-\u2022 Commissions : ${fmt(todayTx.fees)} FCFA
-\u2022 \u2705 R\xE9ussies : ${successTx.c}
-\u2022 \u274C \xC9chou\xE9es : ${failedTx.c}
-\u2022 \u23F3 En attente : ${pendingTx.c}
-
-\u{1F4C5} ${togoDt()} (Togo UTC+0)
-<i>Rapport automatique Bloum Cash Admin</i>`
-    );
-  } catch (err) {
-    logger.error({ err }, "Telegram daily report error");
-  }
-}
-async function handleUpdate(update) {
-  const message = update.message;
-  const callbackQuery = update.callback_query;
-  if (message) {
-    const text2 = String(message.text ?? "");
-    const chat = message.chat;
-    const chatId = String(chat?.id ?? "");
-    const normalized = text2.toLowerCase().replace(/[''`]/g, "'").replace(/\s+/g, " ").trim();
-    if (normalized.includes("salut c'est toi le bot") || normalized.includes("salut c est toi le bot") || normalized.includes("salut cest toi le bot")) {
-      await saveGroupChatId(chatId);
-      await sendMessage(
-        chatId,
-        `\u2705 <b>Groupe d\xE9tect\xE9 et enregistr\xE9 !</b>
-
-Je vais maintenant envoyer toutes les notifications ici :
-\u2022 \u{1F195} Nouveaux utilisateurs inscrits
-\u2022 \u{1F4B8} Paiements et transferts r\xE9ussis
-\u2022 \u{1F4AC} Retours &amp; suggestions utilisateurs
-\u2022 \u26A0\uFE0F Tentatives de connexion admin \xE9chou\xE9es
-\u2022 \u{1F6AB} IP bloqu\xE9es (avec bouton blocage rapide)
-\u2022 \u{1F4CA} Bilans quotidiens \xE0 00h et 12h (Togo)
-
-<i>Bloum Cash Admin Bot actif \u2713</i>`
-      );
-      logger.info({ chatId }, "\u{1F916} Telegram group chat ID enregistr\xE9");
-    }
-  }
-  if (callbackQuery) {
-    const data = String(callbackQuery.data ?? "");
-    const callbackId = String(callbackQuery.id ?? "");
-    const cbMsg = callbackQuery.message;
-    if (data.startsWith("block_ip:")) {
-      const ip = data.slice(9).trim();
-      if (!ip) return;
-      try {
-        await db.insert(blockedIpsTable).values({ ip, reason: "Bloqu\xE9 via bouton Telegram" });
-        await db.insert(securityEventsTable).values({
-          type: "ip_blocked",
-          ip,
-          details: "Bloqu\xE9 via bouton Telegram par l'admin"
-        });
-        await tgFetch("answerCallbackQuery", {
-          callback_query_id: callbackId,
-          text: `\u2705 IP ${ip} bloqu\xE9e d\xE9finitivement !`,
-          show_alert: true
-        });
-        if (cbMsg) {
-          const cbChat = cbMsg.chat;
-          const cbMsgId = cbMsg.message_id;
-          const originalText = String(cbMsg.text ?? "");
-          await tgFetch("editMessageText", {
-            chat_id: cbChat?.id,
-            message_id: cbMsgId,
-            text: originalText + `
-
-\u{1F6AB} <b>IP bloqu\xE9e d\xE9finitivement par l'admin.</b>`,
-            parse_mode: "HTML"
-          });
-        }
-        logger.info({ ip }, "\u{1F6AB} IP bloqu\xE9e via bouton Telegram");
-      } catch (err) {
-        const e = err;
-        const alreadyBlocked = e?.code === "23505" || e?.message?.includes("unique");
-        await tgFetch("answerCallbackQuery", {
-          callback_query_id: callbackId,
-          text: alreadyBlocked ? `\u26A0\uFE0F IP ${ip} d\xE9j\xE0 bloqu\xE9e` : `\u274C Erreur lors du blocage`,
-          show_alert: true
-        });
-      }
-    }
-  }
-}
-async function pollForever() {
-  let offset = 0;
-  logger.info("\u{1F916} Telegram long polling d\xE9marr\xE9");
-  while (true) {
-    try {
-      const res = await fetch(
-        `${TG_API}/getUpdates?offset=${offset}&timeout=25&allowed_updates=message,callback_query`,
-        { signal: AbortSignal.timeout(35e3) }
-      );
-      if (!res.ok) {
-        await new Promise((r) => setTimeout(r, 5e3));
-        continue;
-      }
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.result)) {
-        for (const update of data.result) {
-          offset = update.update_id + 1;
-          handleUpdate(update).catch(
-            (err) => logger.error({ err }, "Telegram handleUpdate error")
-          );
-        }
-      }
-    } catch {
-      await new Promise((r) => setTimeout(r, 5e3));
-    }
-  }
-}
-var lastReportHour = -1;
-function startScheduler() {
-  setInterval(async () => {
-    const now = /* @__PURE__ */ new Date();
-    const h = now.getUTCHours();
-    const m = now.getUTCMinutes();
-    if (m === 0 && (h === 0 || h === 12) && h !== lastReportHour) {
-      lastReportHour = h;
-      sendDailyReport().catch(
-        (err) => logger.error({ err }, "Telegram scheduled report error")
-      );
-    }
-  }, 6e4);
-}
-async function startTelegram() {
-  if (!TOKEN) {
-    logger.warn("\u26A0\uFE0F TELEGRAM_BOT_TOKEN non configur\xE9 \u2014 bot Telegram d\xE9sactiv\xE9");
-    return;
-  }
-  await loadGroupChatId();
-  pollForever().catch(
-    (err) => logger.error({ err }, "Telegram polling fatal error")
-  );
-  startScheduler();
-  logger.info("\u{1F916} Telegram bot pr\xEAt (polling + scheduler quotidien)");
-}
-
-// src/routes/auth.ts
-var router2 = (0, import_express2.Router)();
-var loginLimiter = rate_limit_default({
-  windowMs: 15 * 60 * 1e3,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Trop de tentatives de connexion. R\xE9essayez dans 15 minutes." },
-  skipSuccessfulRequests: true
-});
-var registerLimiter = rate_limit_default({
-  windowMs: 60 * 60 * 1e3,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Trop de cr\xE9ations de compte depuis cette adresse IP. R\xE9essayez dans 1 heure." }
-});
-var forgotPinLimiter = rate_limit_default({
-  windowMs: 60 * 60 * 1e3,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Trop de demandes de r\xE9initialisation. R\xE9essayez dans 1 heure." },
-  skipSuccessfulRequests: false
-});
-function sanitizeStr(v, maxLen = 255) {
-  return String(v ?? "").trim().slice(0, maxLen);
-}
-function normalizeTogoPhone(raw) {
-  let digits = raw.replace(/[\s\-]/g, "");
-  if (digits.startsWith("+228")) digits = digits.slice(4);
-  else if (digits.startsWith("228")) digits = digits.slice(3);
-  if (!/^\d{8}$/.test(digits)) return null;
-  const prefix = parseInt(digits.slice(0, 2));
-  if (prefix >= 90 && prefix <= 93 || prefix >= 96 && prefix <= 99) return digits;
-  return null;
-}
-function phoneToEmail(phone) {
-  return `${phone}@users.bloumcash.app`;
-}
-async function isBlacklisted(phone) {
-  if (!phone) return false;
-  const rows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, phone)).limit(1);
-  return rows.length > 0;
-}
-function generateCode() {
-  return String(Math.floor(1e5 + crypto3.randomInt(9e5))).padStart(6, "0");
-}
-router2.post("/auth/login", loginLimiter, async (req, res) => {
-  try {
-    const rawPhone = sanitizeStr(req.body.phone, 30);
-    const pin = sanitizeStr(req.body.pin, 20);
-    const phone = normalizeTogoPhone(rawPhone);
-    if (!phone || !pin) {
-      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone et mot de passe requis" });
-      return;
-    }
-    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
-    if (!users.length) {
-      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
-      return;
-    }
-    const user = users[0];
-    if (user.status === "banned") {
-      res.status(403).json({ error: "Votre compte a \xE9t\xE9 d\xE9sactiv\xE9. Contactez le support.", code: "ACCOUNT_BANNED" });
-      return;
-    }
-    if (user.status === "suspended") {
-      res.status(403).json({ error: "Votre compte est temporairement suspendu. Contactez le support.", code: "ACCOUNT_SUSPENDED" });
-      return;
-    }
-    if (await isBlacklisted(user.phone)) {
-      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Acc\xE8s refus\xE9.", code: "PHONE_BLACKLISTED" });
-      return;
-    }
-    const pinMatches = await bcryptjs_default.compare(pin, user.pin);
-    if (!pinMatches) {
-      res.status(401).json({ error: "Num\xE9ro ou mot de passe incorrect" });
-      return;
-    }
-    const token = signUserToken({ id: user.id, email: user.email });
-    await db.update(usersTable).set({ lastLoginAt: /* @__PURE__ */ new Date() }).where(eq(usersTable.id, user.id));
-    sendPushNotification({
-      externalUserId: user.email,
-      title: "Bloum Cash",
-      message: `Bienvenue, ${user.fullName} ! Vous \xEAtes maintenant connect\xE9.`,
-      data: { type: "login" }
-    }, req.log);
-    res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
-  } catch (err) {
-    req.log.error({ err }, "Login error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router2.post("/auth/register", registerLimiter, async (req, res) => {
-  try {
-    const fullName = sanitizeStr(req.body.fullName, 100);
-    const rawPhone = sanitizeStr(req.body.phone, 30);
-    const pin = sanitizeStr(req.body.pin, 20);
-    const village = req.body.village ? sanitizeStr(req.body.village, 100) : null;
-    const city = req.body.city ? sanitizeStr(req.body.city, 100) : null;
-    const region = req.body.region ? sanitizeStr(req.body.region, 100) : null;
-    const country = req.body.country ? sanitizeStr(req.body.country, 100) : "Togo";
-    const phone = normalizeTogoPhone(rawPhone);
-    if (!fullName || !phone) {
-      res.status(400).json({ error: "Nom complet et num\xE9ro de t\xE9l\xE9phone Togo requis" });
-      return;
-    }
-    if (!pin || pin.length < 4) {
-      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
-      return;
-    }
-    if (await isBlacklisted(phone)) {
-      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Inscription refus\xE9e.", code: "PHONE_BLACKLISTED" });
-      return;
-    }
-    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
-    if (existing.length) {
-      res.status(400).json({ error: "Ce num\xE9ro de t\xE9l\xE9phone est d\xE9j\xE0 utilis\xE9" });
-      return;
-    }
-    const email3 = phoneToEmail(phone);
-    const hashedPin = await bcryptjs_default.hash(pin, 12);
-    const [user] = await db.insert(usersTable).values({ fullName, email: email3, pin: hashedPin, phone, onesignalExternalUserId: email3, village, city, region, country }).returning();
-    const token = signUserToken({ id: user.id, email: user.email });
-    sendPushNotification({
-      externalUserId: user.email,
-      title: "Bienvenue sur Bloum Cash !",
-      message: `Bonjour ${user.fullName}, votre compte est cr\xE9\xE9 !`,
-      data: { type: "register" }
-    }, req.log);
-    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
-    res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
-  } catch (err) {
-    req.log.error({ err }, "Register error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router2.post("/auth/forgot-pin", forgotPinLimiter, async (req, res) => {
-  try {
-    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
-    const phone = normalizeTogoPhone(rawPhone);
-    if (!phone) {
-      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone requis" });
-      return;
-    }
-    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
-    if (!users.length) {
-      res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
-      return;
-    }
-    const user = users[0];
-    const code = generateCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1e3);
-    await db.delete(verificationCodesTable).where(
-      and(eq(verificationCodesTable.email, user.email), eq(verificationCodesTable.type, "pin_reset"))
-    );
-    await db.insert(verificationCodesTable).values({ email: user.email, code, type: "pin_reset", expiresAt });
-    sendPinResetEmail({ to: user.email, fullName: user.fullName, code }).catch((e) => {
-      req.log.error({ e }, "Erreur envoi email reset PIN");
-    });
-    res.json({ message: "Si ce num\xE9ro existe, un code de r\xE9initialisation a \xE9t\xE9 envoy\xE9." });
-  } catch (err) {
-    req.log.error({ err }, "Forgot PIN error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router2.post("/auth/reset-pin", async (req, res) => {
-  try {
-    const rawPhone = sanitizeStr(req.body.phone ?? req.body.email, 30);
-    const code = sanitizeStr(req.body.code, 10);
-    const newPin = sanitizeStr(req.body.newPin, 20);
-    const phone = normalizeTogoPhone(rawPhone);
-    if (!phone || !code || !newPin) {
-      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone, code et nouveau mot de passe requis" });
-      return;
-    }
-    if (newPin.length < 4) {
-      res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
-      return;
-    }
-    const users = await db.select().from(usersTable).where(eq(usersTable.phone, phone)).limit(1);
-    if (!users.length) {
-      res.status(400).json({ error: "Num\xE9ro introuvable" });
-      return;
-    }
-    const user = users[0];
-    const now = /* @__PURE__ */ new Date();
-    const codes = await db.select().from(verificationCodesTable).where(
-      and(
-        eq(verificationCodesTable.email, user.email),
-        eq(verificationCodesTable.code, code),
-        eq(verificationCodesTable.type, "pin_reset"),
-        gt(verificationCodesTable.expiresAt, now)
-      )
-    ).limit(1);
-    if (!codes.length || codes[0].usedAt) {
-      res.status(400).json({ error: "Code invalide ou expir\xE9" });
-      return;
-    }
-    const hashedPin = await bcryptjs_default.hash(newPin, 12);
-    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
-    await db.update(verificationCodesTable).set({ usedAt: now }).where(eq(verificationCodesTable.id, codes[0].id));
-    res.json({ success: true, message: "Mot de passe r\xE9initialis\xE9 avec succ\xE8s" });
-  } catch (err) {
-    req.log.error({ err }, "Reset PIN error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router2.post("/auth/change-pin", async (req, res) => {
-  try {
-    const token = sanitizeStr(req.body.token, 500);
-    const currentPin = sanitizeStr(req.body.currentPin, 20);
-    const newPin = sanitizeStr(req.body.newPin, 20);
-    if (!token || !currentPin || !newPin) {
-      res.status(400).json({ error: "Token, mot de passe actuel et nouveau mot de passe requis" });
-      return;
-    }
-    if (newPin.length < 4) {
-      res.status(400).json({ error: "Le nouveau mot de passe doit avoir au moins 4 caract\xE8res" });
-      return;
-    }
-    const { verifyUserToken: verifyUserToken2 } = await Promise.resolve().then(() => (init_user_auth(), user_auth_exports));
-    let payload;
-    try {
-      payload = verifyUserToken2(token);
-    } catch {
-      res.status(401).json({ error: "Token invalide ou expir\xE9" });
-      return;
-    }
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, payload.id)).limit(1);
-    if (!users.length) {
-      res.status(404).json({ error: "Utilisateur introuvable" });
-      return;
-    }
-    const user = users[0];
-    const pinMatches = await bcryptjs_default.compare(currentPin, user.pin);
-    if (!pinMatches) {
-      res.status(401).json({ error: "Mot de passe actuel incorrect" });
-      return;
-    }
-    if (currentPin === newPin) {
-      res.status(400).json({ error: "Le nouveau mot de passe doit \xEAtre diff\xE9rent de l'ancien" });
-      return;
-    }
-    const hashedPin = await bcryptjs_default.hash(newPin, 12);
-    await db.update(usersTable).set({ pin: hashedPin }).where(eq(usersTable.id, user.id));
-    res.json({ success: true, message: "Mot de passe modifi\xE9 avec succ\xE8s" });
-  } catch (err) {
-    req.log.error({ err }, "Change PIN error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router2.patch("/profile/location", requireUser, async (req, res) => {
-  try {
-    const userId = req.currentUser.id;
-    const { city, region, country } = req.body;
-    await db.update(usersTable).set({ city: city ?? null, region: region ?? null, country: country ?? null }).where(eq(usersTable.id, userId));
-    res.json({ success: true });
-  } catch (err) {
-    req.log.error({ err }, "Update location error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var auth_default = router2;
-
-// src/routes/transactions.ts
-var import_express3 = __toESM(require_express2(), 1);
-init_user_auth();
-import crypto4 from "crypto";
-var router3 = (0, import_express3.Router)();
-function formatTransaction(t) {
-  const date6 = new Date(t.createdAt);
-  const today = /* @__PURE__ */ new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  let dateLabel;
-  if (date6.toDateString() === today.toDateString()) {
-    dateLabel = "Aujourd'hui";
-  } else if (date6.toDateString() === yesterday.toDateString()) {
-    dateLabel = "Hier";
-  } else {
-    dateLabel = date6.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  }
-  const timeLabel = date6.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  return {
-    id: String(t.id),
-    type: t.type,
-    title: t.title,
-    amount: t.amount,
-    date: dateLabel,
-    time: timeLabel,
-    status: t.status,
-    operator: t.operator,
-    reference: t.reference,
-    fromPhone: t.fromPhone ?? null,
-    toPhone: t.toPhone ?? null,
-    fees: t.fees ?? null,
-    description: t.description ?? null
-  };
-}
-router3.get("/transactions", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const { search, filter, period } = req.query;
-    let conditions = eq(transactionsTable.userId, userId);
-    let rows = await db.select().from(transactionsTable).where(conditions).orderBy(desc(transactionsTable.createdAt));
-    let result = rows.map(formatTransaction);
-    if (filter === "incoming") result = result.filter((t) => t.type === "incoming");
-    if (filter === "outgoing") result = result.filter((t) => t.type === "outgoing");
-    if (search) {
-      const s = search.toLowerCase();
-      result = result.filter(
-        (t) => t.title.toLowerCase().includes(s) || (t.fromPhone ?? "").includes(s) || (t.toPhone ?? "").includes(s) || t.reference.toLowerCase().includes(s)
-      );
-    }
-    if (period === "today") {
-      result = result.filter((t) => t.date === "Aujourd'hui");
-    } else if (period === "week") {
-      const weekAgo = /* @__PURE__ */ new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      result = result.filter((t) => new Date(t.date) >= weekAgo);
-    }
-    res.json(result);
-  } catch (err) {
-    req.log.error({ err }, "List transactions error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router3.get("/transactions/recent", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId)).orderBy(desc(transactionsTable.createdAt)).limit(5);
-    res.json(rows.map(formatTransaction));
-  } catch (err) {
-    req.log.error({ err }, "Recent transactions error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router3.get("/transactions/:id", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const id = parseInt(req.params.id);
-    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.id, id), eq(transactionsTable.userId, userId))).limit(1);
-    if (!rows.length) {
-      res.status(404).json({ error: "Transaction introuvable" });
-      return;
-    }
-    res.json(formatTransaction(rows[0]));
-  } catch (err) {
-    req.log.error({ err }, "Get transaction error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router3.post("/transactions", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;
-    const reference = "BC" + Date.now() + crypto4.randomBytes(3).toString("hex").toUpperCase();
-    const [t] = await db.insert(transactionsTable).values({
-      reference,
-      type,
-      title,
-      amount,
-      operator,
-      fromPhone: fromPhone ?? null,
-      toPhone: toPhone ?? null,
-      description: description ?? null,
-      status: "success",
-      userId
-    }).returning();
-    res.status(201).json(formatTransaction(t));
-  } catch (err) {
-    req.log.error({ err }, "Create transaction error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var transactions_default = router3;
-
-// src/routes/stats.ts
-var import_express4 = __toESM(require_express2(), 1);
-init_user_auth();
-var router4 = (0, import_express4.Router)();
-function getPeriodStart(period) {
-  const now = /* @__PURE__ */ new Date();
-  switch (period) {
-    case "today": {
-      const d = new Date(now);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-    case "week": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 7);
-      return d;
-    }
-    case "year": {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - 1);
-      return d;
-    }
-    default: {
-      const d = new Date(now);
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-  }
-}
-router4.get("/stats/summary", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const period = req.query.period || "month";
-    const since = getPeriodStart(period);
-    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, since)));
-    let incoming = 0;
-    let outgoing = 0;
-    for (const row of rows) {
-      if (row.type === "incoming") incoming += row.amount;
-      else outgoing += row.amount;
-    }
-    res.json({
-      totalAmount: incoming,
-      incoming,
-      outgoing,
-      transactionCount: rows.length,
-      period
-    });
-  } catch (err) {
-    req.log.error({ err }, "Stats summary error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router4.get("/stats/chart", requireUser, async (req, res) => {
-  try {
-    const userId = extractUser(req).id;
-    const period = req.query.period || "month";
-    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, getPeriodStart(period)))).orderBy(transactionsTable.createdAt);
-    const grouped = {};
-    for (const row of rows) {
-      const d = new Date(row.createdAt);
-      let key;
-      if (period === "today") {
-        key = d.toLocaleTimeString("fr-FR", { hour: "2-digit" }) + "h";
-      } else if (period === "year") {
-        key = d.toLocaleDateString("fr-FR", { month: "short" });
-      } else {
-        key = d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
-      }
-      grouped[key] = (grouped[key] || 0) + (row.type === "incoming" ? row.amount : 0);
-    }
-    const points = Object.entries(grouped).map(([label, value]) => ({
-      label,
-      value: Math.round(value / 1e3)
-    }));
-    if (!points.length) {
-      res.json([
-        { label: "01/06", value: 0 },
-        { label: "02/06", value: 0 },
-        { label: "03/06", value: 0 },
-        { label: "04/06", value: 0 },
-        { label: "05/06", value: 0 },
-        { label: "06/06", value: 0 },
-        { label: "07/06", value: 0 }
-      ]);
-      return;
-    }
-    res.json(points);
-  } catch (err) {
-    req.log.error({ err }, "Stats chart error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var stats_default = router4;
-
-// src/routes/qrcodes.ts
-var import_express5 = __toESM(require_express2(), 1);
-import crypto5 from "crypto";
-
-// src/lib/paydunya-softpay-map.ts
-var OPERATOR_MAP = {
-  // ─── Togo ─────────────────────────────────────────────────────────────────
-  "tmoney-togo": {
-    label: "T-Money Togo",
-    country: "TG",
-    endpoint: "t-money-togo",
-    channels: ["t-money-togo"],
-    isPending: true,
-    requiredFields: ["name_t_money", "email_t_money", "phone_t_money", "payment_token"],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      name_t_money: name,
-      email_t_money: email3,
-      phone_t_money: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "t-money-togo",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      name_t_money: name,
-      phone_t_money: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "moov-togo": {
-    label: "Moov Money Togo",
-    country: "TG",
-    endpoint: "moov-togo",
-    channels: ["moov-togo"],
-    isPending: false,
-    requiredFields: [
-      "moov_togo_customer_fullname",
-      "moov_togo_email",
-      "moov_togo_customer_address",
-      "moov_togo_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken, address }) => ({
-      moov_togo_customer_fullname: name,
-      moov_togo_email: email3,
-      moov_togo_customer_address: address ?? "Lom\xE9, Togo",
-      moov_togo_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "moov-togo",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      moov_togo_customer_fullname: name,
-      moov_togo_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  // ─── Bénin ────────────────────────────────────────────────────────────────
-  "moov-benin": {
-    label: "Moov Money B\xE9nin",
-    country: "BJ",
-    endpoint: "moov-benin",
-    channels: ["moov-benin"],
-    isPending: false,
-    requiredFields: [
-      "moov_benin_customer_fullname",
-      "moov_benin_email",
-      "moov_benin_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      moov_benin_customer_fullname: name,
-      moov_benin_email: email3,
-      moov_benin_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "moov-benin",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      moov_benin_customer_fullname: name,
-      moov_benin_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "mtn-benin": {
-    label: "MTN MoMo B\xE9nin",
-    country: "BJ",
-    endpoint: "mtn-benin",
-    channels: ["mtn-benin"],
-    isPending: false,
-    requiredFields: [
-      "mtn_benin_customer_fullname",
-      "mtn_benin_email",
-      "mtn_benin_phone_number",
-      "mtn_benin_wallet_provider",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      mtn_benin_customer_fullname: name,
-      mtn_benin_email: email3,
-      mtn_benin_phone_number: phone,
-      mtn_benin_wallet_provider: "MTNBENIN",
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "mtn-benin",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      mtn_benin_customer_fullname: name,
-      mtn_benin_phone_number: phone,
-      mtn_benin_wallet_provider: "MTNBENIN",
-      amount,
-      ref: reference
-    })
-  },
-  // ─── Burkina Faso ─────────────────────────────────────────────────────────
-  "moov-burkina": {
-    label: "Moov Money Burkina Faso",
-    country: "BF",
-    endpoint: "moov-burkina",
-    channels: ["moov-burkina"],
-    isPending: false,
-    requiredFields: [
-      "moov_burkina_faso_fullName",
-      "moov_burkina_faso_email",
-      "moov_burkina_faso_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      moov_burkina_faso_fullName: name,
-      moov_burkina_faso_email: email3,
-      moov_burkina_faso_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "moov-burkina",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      moov_burkina_faso_fullName: name,
-      moov_burkina_faso_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "orange-burkina": {
-    label: "Orange Money Burkina Faso",
-    country: "BF",
-    endpoint: "orange-money-burkina",
-    channels: ["orange-money-burkina"],
-    isPending: false,
-    requiredFields: [
-      "orange_burkina_faso_customer_fullname",
-      "orange_burkina_faso_email",
-      "orange_burkina_faso_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      orange_burkina_faso_customer_fullname: name,
-      orange_burkina_faso_email: email3,
-      orange_burkina_faso_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "orange-money-burkina",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      orange_burkina_faso_customer_fullname: name,
-      orange_burkina_faso_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  // ─── Côte d'Ivoire ────────────────────────────────────────────────────────
-  "moov-ci": {
-    label: "Moov Money C\xF4te d'Ivoire",
-    country: "CI",
-    endpoint: "moov-ci",
-    channels: ["moov-ci"],
-    isPending: false,
-    requiredFields: [
-      "moov_ci_customer_fullname",
-      "moov_ci_email",
-      "moov_ci_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      moov_ci_customer_fullname: name,
-      moov_ci_email: email3,
-      moov_ci_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "moov-ci",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      moov_ci_customer_fullname: name,
-      moov_ci_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "mtn-ci": {
-    label: "MTN MoMo C\xF4te d'Ivoire",
-    country: "CI",
-    endpoint: "mtn-ci",
-    channels: ["mtn-ci"],
-    isPending: false,
-    requiredFields: [
-      "mtn_ci_customer_fullname",
-      "mtn_ci_email",
-      "mtn_ci_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      mtn_ci_customer_fullname: name,
-      mtn_ci_email: email3,
-      mtn_ci_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "mtn-ci",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      mtn_ci_customer_fullname: name,
-      mtn_ci_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "orange-ci": {
-    label: "Orange Money C\xF4te d'Ivoire",
-    country: "CI",
-    endpoint: "orange-money-ci",
-    channels: ["orange-money-ci"],
-    isPending: false,
-    requiredFields: [
-      "orange_ci_customer_fullname",
-      "orange_ci_email",
-      "orange_ci_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      orange_ci_customer_fullname: name,
-      orange_ci_email: email3,
-      orange_ci_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "orange-money-ci",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      orange_ci_customer_fullname: name,
-      orange_ci_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  },
-  "wave-ci": {
-    label: "Wave C\xF4te d'Ivoire",
-    country: "CI",
-    endpoint: "wave-ci",
-    channels: ["wave-ci"],
-    isPending: false,
-    requiredFields: [
-      "wave_ci_customer_fullname",
-      "wave_ci_email",
-      "wave_ci_phone_number",
-      "payment_token"
-    ],
-    payloadBuilder: ({ name, email: email3, phone, paymentToken }) => ({
-      wave_ci_customer_fullname: name,
-      wave_ci_email: email3,
-      wave_ci_phone_number: phone,
-      payment_token: paymentToken
-    }),
-    disburseEndpoint: "wave-ci",
-    disbursePayloadBuilder: ({ name, phone, amount, reference }) => ({
-      wave_ci_customer_fullname: name,
-      wave_ci_phone_number: phone,
-      amount,
-      ref: reference
-    })
-  }
-};
-var TOGO_OPERATOR_MAP = {
-  tmoney: "tmoney-togo",
-  moov: "moov-togo"
-};
-
-// src/lib/paydunya.ts
-function getAppBaseUrl() {
-  if (process.env.PAYDUNYA_CALLBACK_URL) {
-    return process.env.PAYDUNYA_CALLBACK_URL.replace(/\/$/, "");
-  }
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    const firstDomain = replitDomains.split(",")[0].trim();
-    return `https://${firstDomain}`;
-  }
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-  return "https://bloumcash.com";
-}
-function getBaseUrl() {
-  if (process.env.PAYDUNYA_BASE_URL) {
-    return process.env.PAYDUNYA_BASE_URL.replace(/\/$/, "");
-  }
-  if (process.env.PAYDUNYA_SANDBOX === "true") {
-    return "https://app.paydunya.com/sandbox-api/v1";
-  }
-  return "https://app.paydunya.com/api/v1";
-}
-function getHeaders() {
-  return {
-    "Accept": "application/json",
-    "Content-Type": "application/json",
-    "PAYDUNYA-MASTER-KEY": process.env.PAYDUNYA_MASTER_KEY ?? "",
-    "PAYDUNYA-PRIVATE-KEY": process.env.PAYDUNYA_PRIVATE_KEY ?? "",
-    "PAYDUNYA-PUBLIC-KEY": process.env.PAYDUNYA_PUBLIC_KEY ?? "",
-    "PAYDUNYA-TOKEN": process.env.PAYDUNYA_TOKEN ?? ""
-  };
-}
-var PaydunyaError = class extends Error {
-  constructor(message, code, retryable = false, rawResponse) {
-    super(message);
-    this.code = code;
-    this.retryable = retryable;
-    this.rawResponse = rawResponse;
-    this.name = "PaydunyaError";
-  }
-};
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-function classifyProviderError(msg, status, raw) {
-  const lower = msg.toLowerCase();
-  if (status === 401) return "AUTH_FAILED";
-  if (status === 404) return "ENDPOINT_NOT_FOUND";
-  if (status === 503 || status === 502 || status === 504) return "SERVICE_UNAVAILABLE";
-  if (lower.includes("payin is not enabled") || lower.includes("payin n'est pas activ\xE9") || lower.includes("not enabled") || lower.includes("1001")) return "PAYIN_NOT_ENABLED";
-  if (lower.includes("num\xE9ro") && (lower.includes("invalide") || lower.includes("inexistant")) || lower.includes("phone") && (lower.includes("invalid") || lower.includes("not found")) || lower.includes("subscriber not found") || lower.includes("abonn\xE9 introuvable")) return "INVALID_PHONE";
-  const rc = String(raw.response_code ?? "");
-  if (rc === "1001") return "PAYIN_NOT_ENABLED";
-  return "PROVIDER_ERROR";
-}
-async function paydunyaFetch(url2, options, logger2) {
-  const startMs = Date.now();
-  const safeHeaders = { ...options.headers };
-  for (const k of ["PAYDUNYA-MASTER-KEY", "PAYDUNYA-PRIVATE-KEY", "PAYDUNYA-PUBLIC-KEY", "PAYDUNYA-TOKEN"]) {
-    safeHeaders[k] = safeHeaders[k] ? "***set***" : "***MISSING***";
-  }
-  logger2.info(
-    { url: url2, method: options.method, headers: safeHeaders, body: options.body },
-    "PayDunya \u25B6 requ\xEAte"
-  );
-  let response;
-  try {
-    response = await fetch(url2, options);
-  } catch (netErr) {
-    logger2.error({ url: url2, elapsed: Date.now() - startMs, err: netErr }, "PayDunya \u2716 erreur r\xE9seau");
-    throw new PaydunyaError(
-      "Erreur r\xE9seau lors de la connexion \xE0 PayDunya.",
-      "NETWORK_ERROR",
-      true
-    );
-  }
-  const elapsed = Date.now() - startMs;
-  const rawText = await response.text();
-  const contentType = response.headers.get("content-type") ?? "";
-  logger2.info(
-    { url: url2, httpStatus: response.status, contentType, elapsed, body: rawText },
-    "PayDunya \u25C0 r\xE9ponse"
-  );
-  if (contentType.includes("text/html") || rawText.trimStart().startsWith("<!")) {
-    logger2.error(
-      { url: url2, httpStatus: response.status, contentType, body: rawText.slice(0, 500) },
-      "PayDunya \u2716 HTML re\xE7u (endpoint invalide ou cl\xE9s incorrectes)"
-    );
-    throw new PaydunyaError(
-      `PayDunya a retourn\xE9 du HTML (HTTP ${response.status}). V\xE9rifiez l'URL de base et vos cl\xE9s API.`,
-      "HTML_RESPONSE",
-      false
-    );
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    logger2.error({ url: url2, rawText }, "PayDunya \u2716 corps non-JSON");
-    throw new PaydunyaError(
-      `PayDunya a retourn\xE9 un corps non-JSON (HTTP ${response.status}).`,
-      "INVALID_JSON",
-      false
-    );
-  }
-  return { data: parsed, status: response.status, rawText };
-}
-async function paydunyaFetchWithRetry(url2, options, logger2) {
-  const MAX = 2;
-  let lastErr;
-  for (let attempt = 0; attempt <= MAX; attempt++) {
-    try {
-      const result = await paydunyaFetch(url2, options, logger2);
-      if ((result.status === 502 || result.status === 503 || result.status === 504) && attempt < MAX) {
-        const delay = 1e3 * (attempt + 1);
-        logger2.warn({ url: url2, httpStatus: result.status, attempt, nextRetryMs: delay }, "PayDunya \u26A0 retryable \u2014 retry\u2026");
-        await sleep(delay);
-        continue;
-      }
-      return result;
-    } catch (err) {
-      if (err instanceof PaydunyaError && err.retryable && attempt < MAX) {
-        await sleep(1e3 * (attempt + 1));
-        lastErr = err;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastErr;
-}
-function checkConfiguration() {
-  const keys = {
-    PAYDUNYA_MASTER_KEY: process.env.PAYDUNYA_MASTER_KEY ? "set" : "missing",
-    PAYDUNYA_PRIVATE_KEY: process.env.PAYDUNYA_PRIVATE_KEY ? "set" : "missing",
-    PAYDUNYA_PUBLIC_KEY: process.env.PAYDUNYA_PUBLIC_KEY ? "set" : "missing",
-    PAYDUNYA_TOKEN: process.env.PAYDUNYA_TOKEN ? "set" : "missing"
-  };
-  const missingKeys = Object.entries(keys).filter(([, v]) => v === "missing").map(([k]) => k);
-  const baseUrl = getBaseUrl();
-  const mode = process.env.PAYDUNYA_BASE_URL ? "custom" : process.env.PAYDUNYA_SANDBOX === "true" ? "sandbox" : "live";
-  return { ok: missingKeys.length === 0, baseUrl, mode, keys, missingKeys };
-}
-function isConfigured() {
-  return checkConfiguration().ok;
-}
-async function createInvoice(amount, description, channels, logger2) {
-  if (!amount || amount <= 0) {
-    throw new PaydunyaError("Le montant doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
-  }
-  const cfg = checkConfiguration();
-  if (!cfg.ok) {
-    throw new PaydunyaError(
-      `Cl\xE9s PayDunya manquantes : ${cfg.missingKeys.join(", ")}. Configurez ces secrets.`,
-      "NOT_CONFIGURED"
-    );
-  }
-  const url2 = `${getBaseUrl()}/checkout-invoice/create`;
-  const invoiceBody = {
-    invoice: {
-      total_amount: amount,
-      description,
-      channels
-    },
-    store: {
-      name: process.env.PAYDUNYA_STORE_NAME || "Bloum Cash",
-      tagline: "Transferts TMoney & Moov Money au Togo",
-      postal_address: "Lom\xE9, Togo",
-      phone: process.env.PAYDUNYA_STORE_PHONE || "",
-      website_url: ""
-    },
-    actions: {
-      cancel_url: `${getAppBaseUrl()}/api/paydunya/webhook`,
-      return_url: `${getAppBaseUrl()}/api/paydunya/webhook`,
-      callback_url: `${getAppBaseUrl()}/api/paydunya/webhook`
-    }
-  };
-  const { data, status } = await paydunyaFetchWithRetry(
-    url2,
-    { method: "POST", headers: getHeaders(), body: JSON.stringify(invoiceBody) },
-    logger2
-  );
-  if (data.response_code !== "00" || !data.token) {
-    const rawMsg = String(data.response_text ?? data.message ?? JSON.stringify(data));
-    const code = classifyProviderError(rawMsg, status, data);
-    logger2.error(
-      { url: url2, httpStatus: status, responseCode: data.response_code, paydunya_raw: data },
-      `PayDunya \u2716 checkout-invoice/create \xE9chou\xE9 \u2014 ${rawMsg}`
-    );
-    throw new PaydunyaError(
-      `[checkout-invoice/create] PayDunya response_code=${data.response_code} : "${rawMsg}"`,
-      code,
-      false,
-      data
-    );
-  }
-  const token = String(data.token);
-  logger2.info(
-    { mode: cfg.mode, baseUrl: cfg.baseUrl, tokenPrefix: token.slice(0, 8) + "\u2026", channels },
-    "PayDunya \u2714 invoice cr\xE9\xE9e \u2014 token obtenu"
-  );
-  return token;
-}
-async function chargeOperator(operatorKey, params, logger2) {
-  const config2 = OPERATOR_MAP[operatorKey];
-  if (!config2) {
-    throw new PaydunyaError(`Op\xE9rateur non support\xE9 : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
-  }
-  if (!params.paymentToken?.trim()) {
-    throw new PaydunyaError(
-      "payment_token absent. Il doit provenir de checkout-invoice/create \u2014 jamais g\xE9n\xE9r\xE9 localement.",
-      "EMPTY_TOKEN"
-    );
-  }
-  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
-  if (cleanPhone.length < 8) {
-    throw new PaydunyaError(`Num\xE9ro de t\xE9l\xE9phone invalide : "${params.phone}"`, "INVALID_PHONE");
-  }
-  const payload = config2.payloadBuilder({
-    name: params.name || "Client Bloum Cash",
-    email: params.email || `${cleanPhone}@bloumcash.tg`,
-    phone: cleanPhone,
-    paymentToken: params.paymentToken,
-    address: params.address
-  });
-  for (const field of config2.requiredFields) {
-    const val = payload[field];
-    if (val === void 0 || val === null || String(val).trim() === "") {
-      throw new PaydunyaError(
-        `Champ requis manquant dans le payload SoftPay pour ${config2.label} : "${field}"`,
-        "MISSING_FIELD"
-      );
-    }
-  }
-  const url2 = `${getBaseUrl()}/softpay/${config2.endpoint}`;
-  logger2.info(
-    {
-      operator: operatorKey,
-      label: config2.label,
-      endpoint: url2,
-      mode: checkConfiguration().mode,
-      payloadKeys: Object.keys(payload),
-      paymentTokenPrefix: params.paymentToken.slice(0, 8) + "\u2026"
-    },
-    "PayDunya \u25B6 SoftPay charge"
-  );
-  const { data, status } = await paydunyaFetchWithRetry(
-    url2,
-    { method: "POST", headers: getHeaders(), body: JSON.stringify(payload) },
-    logger2
-  );
-  if (status === 401) {
-    throw new PaydunyaError(
-      `[/softpay/${config2.endpoint}] HTTP 401 \u2014 Authentification refus\xE9e. V\xE9rifiez PAYDUNYA-MASTER-KEY, PAYDUNYA-PRIVATE-KEY et PAYDUNYA-TOKEN.`,
-      "AUTH_FAILED",
-      false,
-      data
-    );
-  }
-  if (status === 404) {
-    throw new PaydunyaError(
-      `[/softpay/${config2.endpoint}] HTTP 404 \u2014 Endpoint introuvable. L'op\xE9rateur "${operatorKey}" est peut-\xEAtre indisponible sur votre compte.`,
-      "ENDPOINT_NOT_FOUND",
-      false,
-      data
-    );
-  }
-  if (status === 503 || status === 502 || status === 504) {
-    throw new PaydunyaError(
-      `[/softpay/${config2.endpoint}] HTTP ${status} \u2014 Service PayDunya temporairement indisponible.`,
-      "SERVICE_UNAVAILABLE",
-      true,
-      data
-    );
-  }
-  const success2 = data.success === true;
-  const rawMsg = String(data.message ?? data.response_text ?? data.error ?? "");
-  const displayMsg = rawMsg || (success2 ? "Paiement mobile money initi\xE9 avec succ\xE8s." : "Paiement refus\xE9 (aucun message PayDunya).");
-  if (!success2) {
-    const errorCode = classifyProviderError(rawMsg, status, data);
-    logger2.warn(
-      { operator: operatorKey, httpStatus: status, errorCode, paydunya_raw: data },
-      `PayDunya \u2716 SoftPay refus\xE9 \u2014 ${rawMsg}`
-    );
-    return {
-      success: false,
-      message: `[/softpay/${config2.endpoint}] ${displayMsg}`,
-      isPending: false,
-      invoiceToken: params.paymentToken,
-      rawPaydunyaResponse: data
-    };
-  }
-  logger2.info(
-    { operator: operatorKey, isPending: config2.isPending, fees: data.fees, currency: data.currency },
-    "PayDunya \u2714 SoftPay charge accept\xE9e"
-  );
-  return {
-    success: true,
-    message: displayMsg,
-    fees: typeof data.fees === "number" ? data.fees : void 0,
-    currency: typeof data.currency === "string" ? data.currency : "XOF",
-    isPending: config2.isPending,
-    invoiceToken: params.paymentToken,
-    rawPaydunyaResponse: data
-  };
-}
-async function chargeTogoWallet(operator, params, logger2) {
-  return chargeOperator(TOGO_OPERATOR_MAP[operator], params, logger2);
-}
-async function confirmInvoice(invoiceToken, logger2) {
-  const url2 = `${getBaseUrl()}/checkout-invoice/confirm/${invoiceToken}`;
-  const { data } = await paydunyaFetchWithRetry(
-    url2,
-    { method: "GET", headers: getHeaders() },
-    logger2
-  );
-  const status = String(data.status ?? data.invoice_status ?? "pending").toLowerCase();
-  return { status, completed: status === "completed", rawPaydunyaResponse: data };
-}
-function getBaseUrlV2() {
-  if (process.env.PAYDUNYA_SANDBOX === "true") {
-    return "https://app.paydunya.com/sandbox-api/v2";
-  }
-  return "https://app.paydunya.com/api/v2";
-}
-var WITHDRAW_MODE = {
-  "tmoney-togo": "t-money-togo",
-  "moov-togo": "moov-togo"
-};
-async function disburseWallet(operatorKey, params, logger2) {
-  if (!OPERATOR_MAP[operatorKey]) {
-    throw new PaydunyaError(`Op\xE9rateur de payout non support\xE9 : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
-  }
-  const withdrawMode = WITHDRAW_MODE[operatorKey];
-  if (!withdrawMode) {
-    throw new PaydunyaError(`Aucun withdraw_mode v2 pour l'op\xE9rateur : ${operatorKey}`, "UNSUPPORTED_OPERATOR");
-  }
-  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
-  if (cleanPhone.length < 8) {
-    throw new PaydunyaError(`Num\xE9ro destinataire invalide : "${params.phone}"`, "INVALID_PHONE");
-  }
-  if (params.amount <= 0) {
-    throw new PaydunyaError("Montant de payout invalide (doit \xEAtre > 0).", "INVALID_AMOUNT");
-  }
-  const callbackUrl = process.env.PAYDUNYA_DISBURSE_CALLBACK_URL || `${getAppBaseUrl()}/api/paydunya/disburse-webhook`;
-  const baseV2 = getBaseUrlV2();
-  logger2.info(
-    { operator: operatorKey, withdrawMode, phone: cleanPhone, amount: params.amount, ref: params.reference },
-    "PayDunya \u25B6 disburse/get-invoice (v2)"
-  );
-  const { data: inv, status: invStatus } = await paydunyaFetchWithRetry(
-    `${baseV2}/disburse/get-invoice`,
-    {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({
-        account_alias: cleanPhone,
-        amount: params.amount,
-        withdraw_mode: withdrawMode,
-        callback_url: callbackUrl
-      })
-    },
-    logger2
-  );
-  const disburseToken = inv.disburse_token ?? inv.token;
-  if (inv.response_code !== "00" || !disburseToken) {
-    const rawMsg2 = String(inv.response_text ?? inv.message ?? JSON.stringify(inv));
-    logger2.error(
-      { httpStatus: invStatus, responseCode: inv.response_code, paydunya_raw: inv },
-      `PayDunya \u2716 disburse/get-invoice \xE9chou\xE9 \u2014 ${rawMsg2}`
-    );
-    return {
-      success: false,
-      message: `[disburse/get-invoice] ${rawMsg2}`,
-      rawPaydunyaResponse: inv
-    };
-  }
-  logger2.info(
-    { disburseTokenPrefix: disburseToken.slice(0, 8) + "\u2026" },
-    "PayDunya \u2714 disburse_token obtenu \u2014 soumission en cours"
-  );
-  const { data: sub, status: subStatus } = await paydunyaFetchWithRetry(
-    `${baseV2}/disburse/submit-invoice`,
-    {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({
-        disburse_invoice: disburseToken,
-        disburse_id: params.reference
-      })
-    },
-    logger2
-  );
-  const success2 = sub.response_code === "00" || sub.success === true;
-  const rawMsg = String(sub.response_text ?? sub.message ?? "");
-  const message = rawMsg || (success2 ? "Payout initi\xE9 avec succ\xE8s." : "Payout refus\xE9 (aucun message PayDunya).");
-  if (!success2) {
-    logger2.warn(
-      { operator: operatorKey, httpStatus: subStatus, paydunya_raw: sub },
-      `PayDunya \u2716 disburse/submit-invoice refus\xE9 \u2014 ${rawMsg}`
-    );
-  } else {
-    logger2.info(
-      { operator: operatorKey, disburseToken: disburseToken.slice(0, 8) + "\u2026", ref: params.reference },
-      "PayDunya \u2714 disburse soumis"
-    );
-  }
-  return {
-    success: success2,
-    message,
-    transactionId: disburseToken,
-    rawPaydunyaResponse: sub
-  };
-}
-async function disburseTogoWallet(operator, params, logger2) {
-  return disburseWallet(TOGO_OPERATOR_MAP[operator], params, logger2);
-}
-
-// src/routes/qrcodes.ts
-init_user_auth();
-var router5 = (0, import_express5.Router)();
-function generateRef() {
-  return "QR" + Date.now() + crypto5.randomBytes(3).toString("hex").toUpperCase();
-}
-router5.post("/qr/generate", requireUser, async (req, res) => {
-  try {
-    const { businessName, phone, operator, amount, description } = req.body;
-    if (!businessName || !phone || !operator || !amount) {
-      res.status(400).json({ error: "Champs requis manquants" });
-      return;
-    }
-    const reference = generateRef();
-    const qrData = JSON.stringify({ reference, businessName, phone, operator, amount });
-    const [qr] = await db.insert(qrCodesTable).values({
-      reference,
-      businessName,
-      phone,
-      operator,
-      amount: parseInt(String(amount)),
-      qrData,
-      description: description ?? null,
-      status: "active"
-    }).returning();
-    res.status(201).json({
-      reference: qr.reference,
-      businessName: qr.businessName,
-      phone: qr.phone,
-      operator: qr.operator,
-      amount: qr.amount,
-      qrData: qr.qrData,
-      description: qr.description ?? null,
-      createdAt: qr.createdAt.toISOString()
-    });
-  } catch (err) {
-    req.log.error({ err }, "Generate QR error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router5.get("/qr/:reference", async (req, res) => {
-  try {
-    const rows = await db.select().from(qrCodesTable).where(eq(qrCodesTable.reference, req.params.reference)).limit(1);
-    if (!rows.length) {
-      res.status(404).json({ error: "QR Code introuvable" });
-      return;
-    }
-    const qr = rows[0];
-    res.json({
-      reference: qr.reference,
-      businessName: qr.businessName,
-      phone: qr.phone,
-      operator: qr.operator,
-      amount: qr.amount,
-      qrData: qr.qrData,
-      description: qr.description ?? null,
-      createdAt: qr.createdAt.toISOString()
-    });
-  } catch (err) {
-    req.log.error({ err }, "Get QR error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router5.post("/qr/:reference/pay", requireUser, async (req, res) => {
-  try {
-    const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
-    if (!payerPhone || !payerOperator) {
-      res.status(400).json({ error: "Num\xE9ro et op\xE9rateur du payeur requis" });
-      return;
-    }
-    const rows = await db.select().from(qrCodesTable).where(eq(qrCodesTable.reference, req.params.reference)).limit(1);
-    if (!rows.length) {
-      res.status(404).json({ error: "QR Code introuvable" });
-      return;
-    }
-    const qr = rows[0];
-    const txRef = "BC" + Date.now() + crypto5.randomBytes(3).toString("hex").toUpperCase();
-    const name = payerName ?? "Client Bloum Cash";
-    const email3 = payerEmail ?? `${payerPhone.replace(/\D/g, "")}@bloumcash.tg`;
-    if (!isConfigured()) {
-      req.log.warn("PayDunya not configured \u2014 QR payment in demo mode");
-      const [tx2] = await db.insert(transactionsTable).values({
-        reference: txRef,
-        type: "incoming",
-        title: `Paiement QR - ${qr.businessName}`,
-        amount: qr.amount,
-        operator: qr.operator,
-        fromPhone: payerPhone ?? null,
-        toPhone: qr.phone,
-        description: `Paiement via QR Code ${qr.reference}`,
-        status: "success"
-      }).returning();
-      res.json({
-        success: true,
-        message: "Paiement effectu\xE9 avec succ\xE8s (mode d\xE9mo)",
-        reference: txRef,
-        transactionId: String(tx2.id),
-        isPending: false
-      });
-      return;
-    }
-    const operatorKey = TOGO_OPERATOR_MAP[payerOperator];
-    const operatorConfig = OPERATOR_MAP[operatorKey];
-    const channels = operatorConfig?.channels ?? [operatorKey];
-    let paymentToken;
-    try {
-      paymentToken = await createInvoice(
-        qr.amount,
-        `Paiement QR Bloum Cash \u2014 ${qr.businessName} \u2014 ref ${txRef}`,
-        channels,
-        req.log
-      );
-    } catch (err) {
-      const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors de la cr\xE9ation de l'invoice PayDunya.";
-      const code = isPduErr ? err.code : "INVOICE_ERROR";
-      req.log.error({ err, code }, "QR invoice creation failed");
-      res.status(502).json({ error: msg, code });
-      return;
-    }
-    let chargeResult;
-    try {
-      chargeResult = await chargeTogoWallet(
-        payerOperator,
-        { name, email: email3, phone: payerPhone, paymentToken },
-        req.log
-      );
-    } catch (err) {
-      const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors du d\xE9bit mobile money.";
-      const code = isPduErr ? err.code : "CHARGE_ERROR";
-      req.log.error({ err, code }, "QR charge failed");
-      res.status(502).json({ error: msg, code });
-      return;
-    }
-    if (!chargeResult.success) {
-      res.status(402).json({
-        error: chargeResult.message,
-        code: "PAYMENT_REFUSED"
-      });
-      return;
-    }
-    const isPending = chargeResult.isPending ?? false;
-    const [tx] = await db.insert(transactionsTable).values({
-      reference: txRef,
-      type: "incoming",
-      title: `Paiement QR - ${qr.businessName}`,
-      amount: qr.amount,
-      operator: qr.operator,
-      fromPhone: payerPhone ?? null,
-      toPhone: qr.phone,
-      toOperator: qr.operator,
-      /* requis pour le payout webhook */
-      paydunyaToken: paymentToken,
-      /* requis pour retrouver la tx dans le webhook */
-      description: `Paiement via QR Code ${qr.reference}`,
-      status: isPending ? "pending" : "success"
-    }).returning();
-    if (!isPending && qr.phone && qr.operator) {
-      req.log.info(
-        { reference: txRef, toOperator: qr.operator, toPhone: qr.phone, amount: qr.amount },
-        "QR pay: payin imm\xE9diat \u2014 d\xE9clenchement payout b\xE9n\xE9ficiaire"
-      );
-      try {
-        const payoutResult = await disburseTogoWallet(
-          qr.operator,
-          { name: qr.businessName, phone: qr.phone, amount: qr.amount, reference: txRef },
-          req.log
-        );
-        if (payoutResult.success) {
-          req.log.info({ reference: txRef, transactionId: payoutResult.transactionId }, "QR payout b\xE9n\xE9ficiaire OK");
-        } else {
-          req.log.error({ reference: txRef, message: payoutResult.message }, "QR payout b\xE9n\xE9ficiaire REFUS\xC9");
-          await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
-        }
-      } catch (payoutErr) {
-        req.log.error({ err: payoutErr, reference: txRef }, "Erreur payout QR \u2014 payin OK mais retrait \xE9chou\xE9");
-        await db.update(transactionsTable).set({ status: "pending" }).where(eq(transactionsTable.reference, txRef));
-      }
-    }
-    res.json({
-      success: true,
-      message: chargeResult.message,
-      reference: txRef,
-      transactionId: String(tx.id),
-      isPending
-    });
-  } catch (err) {
-    req.log.error({ err }, "Pay QR error");
-    res.status(500).json({ error: "Erreur serveur interne" });
-  }
-});
-var qrcodes_default = router5;
-
-// src/routes/transfer.ts
-var import_express6 = __toESM(require_express2(), 1);
-import crypto6 from "crypto";
-
-// src/lib/gomboplus.ts
-var BASE_URL = "https://api.gomboplus.com";
-function getAppBaseUrl2() {
-  if (process.env.GOMBOPLUS_CALLBACK_URL) {
-    return process.env.GOMBOPLUS_CALLBACK_URL.replace(/\/$/, "");
-  }
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    return `https://${replitDomains.split(",")[0].trim()}`;
-  }
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-  return "https://bloumcash.com";
-}
-function getHeaders2() {
-  return {
-    "Content-Type": "application/json",
-    "X-Public-Key": process.env.GOMBOPLUS_PUBLIC_KEY ?? "",
-    "X-Private-Key": process.env.GOMBOPLUS_PRIVATE_KEY ?? ""
-  };
-}
-function isConfigured2() {
-  return !!(process.env.GOMBOPLUS_PUBLIC_KEY && process.env.GOMBOPLUS_PRIVATE_KEY);
-}
-function getWebhookUrl() {
-  return `${getAppBaseUrl2()}/api/gomboplus/webhook`;
-}
-var GomboPlusError = class extends Error {
-  constructor(message, code, rawResponse) {
-    super(message);
-    this.code = code;
-    this.rawResponse = rawResponse;
-    this.name = "GomboPlusError";
-  }
-};
-var OPERATOR_GP_MAP = {
-  tmoney: { operator: "yas", country: "TG", label: "YAS/T-Money Togo" },
-  moov: { operator: "moov", country: "TG", label: "Moov Money Togo" }
-};
-async function gombofetch(endpoint, options, logger2) {
-  const url2 = `${BASE_URL}${endpoint}`;
-  const headers = getHeaders2();
-  const safeHeaders = { ...headers, "X-Public-Key": "***", "X-Private-Key": "***" };
-  logger2.info({ url: url2, method: options.method, headers: safeHeaders, body: options.body }, "GomboPlus \u25B6 requ\xEAte");
-  let response;
-  try {
-    response = await fetch(url2, { ...options, headers });
-  } catch (err) {
-    logger2.error({ url: url2, err }, "GomboPlus \u2716 erreur r\xE9seau");
-    throw new GomboPlusError("Erreur r\xE9seau lors de la connexion \xE0 GomboPlus.", "NETWORK_ERROR");
-  }
-  const rawText = await response.text();
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    logger2.error({ url: url2, httpStatus: response.status, rawText: rawText.slice(0, 300) }, "GomboPlus \u2716 corps non-JSON");
-    throw new GomboPlusError(
-      `GomboPlus a retourn\xE9 un corps non-JSON (HTTP ${response.status}).`,
-      "INVALID_JSON"
-    );
-  }
-  logger2.info({ url: url2, httpStatus: response.status, body: parsed }, "GomboPlus \u25C0 r\xE9ponse");
-  return parsed;
-}
-async function cashin(params, logger2) {
-  const opMap = OPERATOR_GP_MAP[params.operator];
-  if (!opMap) {
-    throw new GomboPlusError(`Op\xE9rateur non support\xE9 par GomboPlus : ${params.operator}`, "UNSUPPORTED_OPERATOR");
-  }
-  if (params.amount <= 0) {
-    throw new GomboPlusError("Le montant doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
-  }
-  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
-  const data = await gombofetch(
-    "/api/mobile-services/mobile-deposit/",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        amount: params.amount,
-        recipient_number: cleanPhone,
-        country: opMap.country,
-        operator: opMap.operator,
-        callback_url: getWebhookUrl()
-      })
-    },
-    logger2
-  );
-  const content = data.content;
-  const gpRef = content?.reference ?? "";
-  const statusStr = String(data.status ?? "");
-  const code = Number(data.code ?? 0);
-  if (statusStr !== "succes" || code !== 202 && code !== 200) {
-    const msg = String(data.message ?? JSON.stringify(data));
-    logger2.error({ data, params: { ...params, phone: "***" } }, `GomboPlus \u2716 CASHIN \xE9chou\xE9 \u2014 ${msg}`);
-    return { success: false, gpReference: gpRef, message: msg, rawResponse: data };
-  }
-  logger2.info({ gpReference: gpRef, amount: params.amount, operator: opMap.label }, "GomboPlus \u2714 CASHIN initi\xE9");
-  return {
-    success: true,
-    gpReference: gpRef,
-    message: String(data.message ?? "Demande de paiement envoy\xE9e."),
-    rawResponse: data
-  };
-}
-async function cashout(params, logger2) {
-  const opMap = OPERATOR_GP_MAP[params.operator];
-  if (!opMap) {
-    throw new GomboPlusError(`Op\xE9rateur non support\xE9 par GomboPlus : ${params.operator}`, "UNSUPPORTED_OPERATOR");
-  }
-  if (params.amount <= 0) {
-    throw new GomboPlusError("Le montant de payout doit \xEAtre sup\xE9rieur \xE0 0.", "INVALID_AMOUNT");
-  }
-  const cleanPhone = params.phone.replace(/[\s\-().+]/g, "");
-  const data = await gombofetch(
-    "/api/mobile-services/mobile-withdrawal/",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        amount: params.amount,
-        recipient_number: cleanPhone,
-        country: opMap.country,
-        operator: opMap.operator,
-        callback_url: getWebhookUrl()
-      })
-    },
-    logger2
-  );
-  const content = data.content;
-  const gpRef = content?.reference ?? "";
-  const statusStr = String(data.status ?? "");
-  const code = Number(data.code ?? 0);
-  if (statusStr !== "succes" || code !== 202 && code !== 200) {
-    const msg = String(data.message ?? JSON.stringify(data));
-    logger2.error({ data, params: { ...params, phone: "***" } }, `GomboPlus \u2716 CASHOUT \xE9chou\xE9 \u2014 ${msg}`);
-    return { success: false, gpReference: gpRef, message: msg, rawResponse: data };
-  }
-  logger2.info({ gpReference: gpRef, amount: params.amount, operator: opMap.label }, "GomboPlus \u2714 CASHOUT initi\xE9");
-  return {
-    success: true,
-    gpReference: gpRef,
-    message: String(data.message ?? "Paiement envoy\xE9 au destinataire."),
-    rawResponse: data
-  };
-}
-async function checkStatus(gpReference, logger2) {
-  const data = await gombofetch(
-    "/api/mobile-services/check-transaction-status/",
-    {
-      method: "POST",
-      body: JSON.stringify({ transaction_reference: gpReference })
-    },
-    logger2
-  );
-  const content = data.content;
-  const rawStatus = String(content?.status ?? data.status ?? "pending").toLowerCase();
-  const STATUS_MAP = {
-    pending: "pending",
-    completed: "completed",
-    success: "completed",
-    failed: "failed",
-    cancelled: "cancelled",
-    canceled: "cancelled"
-  };
-  return { status: STATUS_MAP[rawStatus] ?? "pending", raw: data };
-}
-
-// src/routes/transfer.ts
-init_user_auth();
-
-// src/lib/format.ts
-function formatAmount(amount) {
-  return amount.toLocaleString("fr-FR").replace(/\u202f/g, "\xA0") + " FCFA";
-}
-
-// src/routes/transfer.ts
-var router6 = (0, import_express6.Router)();
-var OPERATOR_DB_NAME = {
-  tmoney: "TMoney",
-  moov: "Moov Money"
-};
-async function getOperatorGateway(operator) {
-  const name = OPERATOR_DB_NAME[operator.toLowerCase()];
-  if (!name) return "PayDunya";
-  try {
-    const rows = await db.select({ gateway: operatorsConfigTable.gateway }).from(operatorsConfigTable).where(
-      and(
-        ilike(operatorsConfigTable.name, name),
-        eq(operatorsConfigTable.countryCode, "TG")
-      )
-    ).limit(1);
-    const gw = rows[0]?.gateway ?? "PayDunya";
-    return gw === "GomboPlus" ? "GomboPlus" : "PayDunya";
-  } catch {
-    return "PayDunya";
-  }
-}
-async function getFeePercent() {
-  try {
-    const rows = await db.select({ value: adminSettingsTable.value }).from(adminSettingsTable).where(eq(adminSettingsTable.key, "fee_deposit_percent")).limit(1);
-    if (rows.length && rows[0].value) {
-      const v = parseFloat(rows[0].value);
-      if (!isNaN(v) && v >= 0) return v / 100;
-    }
-  } catch {
-  }
-  return 0.05;
-}
-async function calculateFees(_fromOperator, _toOperator, amount) {
-  const rate = await getFeePercent();
-  return Math.ceil(amount * rate);
-}
-router6.post("/transfer/fees", requireUser, async (req, res) => {
-  try {
-    const { fromOperator, toOperator, amount } = req.body;
-    if (!fromOperator || !toOperator || !amount) {
-      res.status(400).json({ error: "Champs requis manquants" });
-      return;
-    }
-    const amt = parseInt(String(amount));
-    const rate = await getFeePercent();
-    const fees = Math.ceil(amt * rate);
-    res.json({ amount: amt, fees, total: amt + fees, feePercent: +(rate * 100).toFixed(2), estimatedTime: "Instantan\xE9" });
-  } catch (err) {
-    req.log.error({ err }, "Calculate fees error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-router6.post("/transfer", requireUser, async (req, res) => {
-  try {
-    const {
-      fromOperator,
-      fromPhone,
-      toOperator,
-      toPhone,
-      amount,
-      payerName,
-      payerEmail
-    } = req.body;
-    if (!fromOperator || !fromPhone || !toOperator || !toPhone || !amount) {
-      res.status(400).json({ error: "Champs requis manquants" });
-      return;
-    }
-    const amt = parseInt(String(amount));
-    if (isNaN(amt) || amt <= 0) {
-      res.status(400).json({ error: "Montant invalide" });
-      return;
-    }
-    const fees = await calculateFees(fromOperator, toOperator, amt);
-    const total = amt + fees;
-    const reference = "TR" + Date.now() + crypto6.randomBytes(3).toString("hex").toUpperCase();
-    const name = payerName ?? "Client Bloum Cash";
-    const email3 = payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
-    const currentUser = extractUser(req);
-    const userId = currentUser?.id ?? null;
-    if (userId) {
-      const [userRow] = await db.select({ status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-      if (userRow?.status === "banned") {
-        res.status(403).json({ error: "Votre compte est banni. Contactez le support.", code: "ACCOUNT_BANNED" });
-        return;
-      }
-      if (userRow?.status === "suspended") {
-        res.status(403).json({ error: "Votre compte est temporairement suspendu.", code: "ACCOUNT_SUSPENDED" });
-        return;
-      }
-    }
-    const blRows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, fromPhone)).limit(1);
-    if (blRows.length) {
-      res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Acc\xE8s refus\xE9. Bye.", code: "PHONE_BLACKLISTED" });
-      return;
-    }
-    const gateway = await getOperatorGateway(fromOperator);
-    req.log.info({ fromOperator, gateway, reference }, "Transfer \u2014 gateway s\xE9lectionn\xE9e");
-    if (gateway === "GomboPlus") {
-      if (!isConfigured2()) {
-        req.log.warn("GomboPlus non configur\xE9 \u2014 mode d\xE9mo");
-        await db.insert(transactionsTable).values({
-          reference,
-          type: "outgoing",
-          title: `Transfert vers ${toPhone}`,
-          amount: amt,
-          operator: fromOperator,
-          fromPhone,
-          toPhone,
-          toOperator,
-          fees,
-          description: `Transfert ${fromOperator} \u2192 ${toOperator} (GomboPlus d\xE9mo)`,
-          status: "success",
-          payoutSent: true,
-          userId
-        });
-        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
-        res.status(201).json({
-          success: true,
-          message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 GomboPlus non configur\xE9)",
-          reference,
-          fees,
-          total,
-          isPending: false,
-          gateway: "GomboPlus"
-        });
-        return;
-      }
-      let cashinResult;
-      try {
-        cashinResult = await cashin(
-          { phone: fromPhone, amount: total, operator: fromOperator, reference },
-          req.log
-        );
-      } catch (err) {
-        const isGpErr = err instanceof GomboPlusError;
-        const msg = isGpErr ? err.message : "Erreur lors de la demande de paiement GomboPlus.";
-        const code = isGpErr ? err.code : "GP_CASHIN_ERROR";
-        req.log.error({ err, code }, "GomboPlus cashin \u2014 \xE9chec");
-        res.status(502).json({ error: msg, code });
-        return;
-      }
-      if (!cashinResult.success) {
-        res.status(402).json({ error: cashinResult.message, code: "GP_PAYMENT_REFUSED" });
-        return;
-      }
-      const storedToken = `gp:${cashinResult.gpReference}`;
-      try {
-        await db.insert(transactionsTable).values({
-          reference,
-          type: "outgoing",
-          title: `Transfert vers ${toPhone}`,
-          amount: amt,
-          operator: fromOperator,
-          fromPhone,
-          toPhone,
-          toOperator,
-          fees,
-          description: `Transfert ${fromOperator} \u2192 ${toOperator} via GomboPlus`,
-          status: "pending",
-          payoutSent: false,
-          userId,
-          paydunyaToken: storedToken
-        });
-      } catch (dbErr) {
-        req.log.error({
-          err: dbErr,
-          CRITICAL: "GOMBOPLUS_CASHIN_SENT_BUT_DB_INSERT_FAILED",
-          reference,
-          gpReference: cashinResult.gpReference,
-          fromPhone,
-          toPhone,
-          fromOperator,
-          toOperator,
-          amount: amt,
-          fees
-        }, "\u26A0\uFE0F CRITIQUE \u2014 CASHIN GomboPlus envoy\xE9 mais \xE9chec insertion DB. R\xE9cup\xE9ration manuelle requise.");
-      }
-      req.log.info(
-        { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt, gpRef: cashinResult.gpReference },
-        "GomboPlus CASHIN initi\xE9 \u2014 en attente validation payeur"
-      );
-      res.status(201).json({
-        success: true,
-        message: "Demande de paiement envoy\xE9e. Veuillez valider sur votre t\xE9l\xE9phone mobile.",
-        reference,
-        fees,
-        total,
-        isPending: true,
-        gateway: "GomboPlus"
-      });
-      return;
-    }
-    if (!isConfigured()) {
-      req.log.warn("PayDunya not configured \u2014 saving transaction in demo mode");
-      await db.insert(transactionsTable).values({
-        reference,
-        type: "outgoing",
-        title: `Transfert vers ${toPhone}`,
-        amount: amt,
-        operator: fromOperator,
-        fromPhone,
-        toPhone,
-        toOperator,
-        fees,
-        description: `Transfert ${fromOperator} \u2192 ${toOperator}`,
-        status: "success",
-        payoutSent: true,
-        userId
-      });
-      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
-      res.status(201).json({
-        success: true,
-        message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 PayDunya non configur\xE9)",
-        reference,
-        fees,
-        total,
-        isPending: false,
-        paydunhaConfigured: false,
-        gateway: "PayDunya"
-      });
-      return;
-    }
-    const operatorKey = TOGO_OPERATOR_MAP[fromOperator];
-    const operatorConfig = OPERATOR_MAP[operatorKey];
-    const channels = operatorConfig?.channels ?? [operatorKey];
-    let paymentToken;
-    try {
-      paymentToken = await createInvoice(
-        total,
-        `Transfert Bloum Cash ${fromOperator} \u2192 ${toOperator} \u2014 ref ${reference}`,
-        channels,
-        req.log
-      );
-    } catch (err) {
-      const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors de la cr\xE9ation de l'invoice PayDunya.";
-      const code = isPduErr ? err.code : "INVOICE_ERROR";
-      req.log.error({ err, code }, "Invoice creation failed");
-      res.status(502).json({ error: msg, code });
-      return;
-    }
-    let chargeResult;
-    try {
-      chargeResult = await chargeTogoWallet(
-        fromOperator,
-        { name, email: email3, phone: fromPhone, paymentToken },
-        req.log
-      );
-    } catch (err) {
-      const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors de la demande de paiement mobile money.";
-      const code = isPduErr ? err.code : "CHARGE_ERROR";
-      req.log.error({ err, code }, "Charge failed");
-      res.status(502).json({ error: msg, code });
-      return;
-    }
-    if (!chargeResult.success) {
-      res.status(402).json({ error: chargeResult.message, code: "PAYMENT_REFUSED" });
-      return;
-    }
-    try {
-      await db.insert(transactionsTable).values({
-        reference,
-        type: "outgoing",
-        title: `Transfert vers ${toPhone}`,
-        amount: amt,
-        operator: fromOperator,
-        fromPhone,
-        toPhone,
-        toOperator,
-        fees,
-        description: `Transfert ${fromOperator} \u2192 ${toOperator}`,
-        status: "pending",
-        payoutSent: false,
-        userId,
-        paydunyaToken: paymentToken
-      });
-    } catch (dbErr) {
-      req.log.error({
-        err: dbErr,
-        CRITICAL: "PAYDUNYA_CHARGE_SENT_BUT_DB_INSERT_FAILED",
-        reference,
-        paydunyaToken: paymentToken,
-        fromPhone,
-        toPhone,
-        fromOperator,
-        toOperator,
-        amount: amt,
-        fees
-      }, "\u26A0\uFE0F CRITIQUE \u2014 Push PayDunya envoy\xE9 mais \xE9chec insertion DB. R\xE9cup\xE9ration manuelle requise.");
-    }
-    req.log.info(
-      { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt },
-      "Demande de paiement PayDunya envoy\xE9e \u2014 en attente de validation"
-    );
-    res.status(201).json({
-      success: true,
-      message: "Demande de paiement envoy\xE9e. Veuillez valider sur votre t\xE9l\xE9phone mobile.",
-      reference,
-      fees,
-      total,
-      isPending: true,
-      paydunhaConfigured: true,
-      gateway: "PayDunya"
-    });
-  } catch (err) {
-    req.log.error({ err }, "Transfer error");
-    res.status(500).json({ error: "Erreur serveur interne" });
-  }
-});
-router6.get("/transfer/:reference/status", requireUser, async (req, res) => {
-  try {
-    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.reference, req.params.reference)).limit(1);
-    if (!rows.length) {
-      res.status(404).json({ error: "Transaction introuvable" });
-      return;
-    }
-    const tx = rows[0];
-    if (tx.status === "pending" && tx.paydunyaToken) {
-      const isGomboPlus = tx.paydunyaToken.startsWith("gp:");
-      if (isGomboPlus && isConfigured2()) {
-        try {
-          const gpReference = tx.paydunyaToken.slice(3);
-          const { status: gpStatus } = await checkStatus(gpReference, req.log);
-          if (gpStatus === "completed") {
-            const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, tx.reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
-            if (updated.length > 0) {
-              req.log.info({ reference: tx.reference }, "Polling GomboPlus: CASHIN confirm\xE9 \u2014 d\xE9clenchement CASHOUT");
-              try {
-                const payoutResult = await cashout(
-                  { phone: tx.toPhone, amount: tx.amount, operator: tx.toOperator, reference: tx.reference },
-                  req.log
-                );
-                if (payoutResult.success) {
-                  await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-                  tx.status = "success";
-                  if (tx.userId) {
-                    const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-                    if (userRows[0]?.email) {
-                      sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
-                    }
-                  }
-                } else {
-                  await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-                  tx.status = "payout_failed";
-                }
-              } catch {
-                await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-                tx.status = "payout_failed";
-              }
-            } else {
-              const fresh = await db.select({ status: transactionsTable.status }).from(transactionsTable).where(eq(transactionsTable.reference, tx.reference)).limit(1);
-              if (fresh.length) tx.status = fresh[0].status;
-            }
-          } else if (gpStatus === "failed" || gpStatus === "cancelled") {
-            await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
-            tx.status = "failed";
-            if (tx.userId) {
-              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-              if (userRows[0]?.email) {
-                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert \xE9chou\xE9 \u274C", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu \xEAtre effectu\xE9.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
-              }
-            }
-          }
-        } catch {
-        }
-      } else if (!isGomboPlus && isConfigured()) {
-        try {
-          const confirmed = await confirmInvoice(tx.paydunyaToken, req.log);
-          if (confirmed.completed) {
-            const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, tx.reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
-            if (updated.length > 0) {
-              req.log.info({ reference: tx.reference }, "Polling: payin PayDunya confirm\xE9 \u2014 d\xE9clenchement payout");
-              try {
-                const payoutResult = await disburseTogoWallet(
-                  tx.toOperator,
-                  { name: "B\xE9n\xE9ficiaire Bloum Cash", phone: tx.toPhone, amount: tx.amount, reference: tx.reference },
-                  req.log
-                );
-                if (payoutResult.success) {
-                  await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-                  tx.status = "success";
-                  if (tx.userId) {
-                    const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-                    if (userRows[0]?.email) {
-                      sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
-                    }
-                  }
-                } else {
-                  await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-                  tx.status = "payout_failed";
-                }
-              } catch (payoutErr) {
-                await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-                tx.status = "payout_failed";
-                req.log.error({ err: payoutErr, reference: tx.reference }, "Polling: erreur payout PayDunya \u2014 INTERVENTION MANUELLE REQUISE");
-              }
-            } else {
-              const fresh = await db.select({ status: transactionsTable.status }).from(transactionsTable).where(eq(transactionsTable.reference, tx.reference)).limit(1);
-              if (fresh.length) tx.status = fresh[0].status;
-            }
-          } else if (confirmed.status === "failed" || confirmed.status === "cancelled") {
-            await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
-            tx.status = "failed";
-            if (tx.userId) {
-              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-              if (userRows[0]?.email) {
-                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert \xE9chou\xE9 \u274C", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu \xEAtre effectu\xE9.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
-              }
-            }
-          }
-        } catch {
-        }
-      }
-    }
-    res.json({ reference: tx.reference, status: tx.status, amount: tx.amount, fees: tx.fees });
-  } catch (err) {
-    req.log.error({ err }, "Transfer status error");
-    res.status(500).json({ error: "Erreur serveur" });
-  }
-});
-var transfer_default = router6;
-
-// src/routes/paydunya-webhook.ts
-var import_express7 = __toESM(require_express2(), 1);
-
-// src/middleware/webhook-auth.ts
-import crypto7 from "crypto";
-var WEBHOOK_SECRET = process.env.WEBHOOK_SECRET ?? "";
-function requireWebhookSecret(req, res, next) {
-  if (!WEBHOOK_SECRET) {
-    req.log.warn(
-      { path: req.path },
-      "WEBHOOK_SECRET non d\xE9fini \u2014 webhook accept\xE9 sans v\xE9rification. Configurez la variable WEBHOOK_SECRET pour s\xE9curiser les callbacks."
-    );
-    next();
-    return;
-  }
-  const provided = req.headers["x-webhook-secret"] ?? "";
-  const expected = Buffer.from(WEBHOOK_SECRET);
-  const actual = Buffer.from(provided);
-  if (actual.length !== expected.length || !crypto7.timingSafeEqual(actual, expected)) {
-    req.log.warn(
-      { path: req.path, ip: req.ip },
-      "Webhook refus\xE9 \u2014 X-Webhook-Secret invalide"
-    );
-    res.status(401).json({ error: "Webhook non autoris\xE9" });
-    return;
-  }
-  next();
-}
-
-// src/routes/paydunya-webhook.ts
-var router7 = (0, import_express7.Router)();
-router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
-  try {
-    const payload = req.body;
-    req.log.info({ payload }, "PayDunya webhook re\xE7u");
-    const dataNode = payload?.data;
-    const invoiceData = dataNode?.invoice;
-    const token = invoiceData?.token ?? dataNode?.token ?? payload?.token;
-    const status = dataNode?.status ?? invoiceData?.status ?? payload?.status;
-    if (!token) {
-      req.log.warn({ payload }, "PayDunya webhook: token manquant dans le payload");
-      res.status(400).json({ error: "Token manquant dans le payload webhook" });
-      return;
-    }
-    req.log.info(
-      { token: token.slice(0, 8) + "\u2026", status },
-      "PayDunya webhook \u2014 traitement"
-    );
-    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, token)).limit(1);
-    if (!rows.length) {
-      req.log.warn(
-        { token: token.slice(0, 8) + "\u2026" },
-        "PayDunya webhook: aucune transaction trouv\xE9e pour ce token"
-      );
-      res.json({ received: true, status, matched: false });
-      return;
-    }
-    const tx = rows[0];
-    req.log.info(
-      { reference: tx.reference, currentStatus: tx.status, webhookStatus: status },
-      "PayDunya webhook \u2014 transaction trouv\xE9e"
-    );
-    if (status === "completed") {
-      const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(
-        and(
-          eq(transactionsTable.paydunyaToken, token),
-          eq(transactionsTable.payoutSent, false)
-        )
-      ).returning({ id: transactionsTable.id, reference: transactionsTable.reference });
-      if (updated.length === 0) {
-        req.log.info(
-          { reference: tx.reference },
-          "PayDunya webhook: payout d\xE9j\xE0 d\xE9clench\xE9 (polling ou webhook pr\xE9c\xE9dent) \u2014 skip"
-        );
-        res.json({ received: true, status, reference: tx.reference, skipped: true });
-        return;
-      }
-      req.log.info(
-        { reference: tx.reference },
-        "PayDunya webhook: payin confirm\xE9 \u2014 d\xE9clenchement payout vers destinataire"
-      );
-      if (!tx.toPhone || !tx.toOperator || tx.amount <= 0) {
-        req.log.error(
-          { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
-          "PayDunya webhook: infos destinataire manquantes \u2014 payout impossible. INTERVENTION MANUELLE REQUISE."
-        );
-        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-        res.json({ received: true, status, reference: tx.reference });
-        return;
-      }
-      try {
-        const payoutResult = await disburseTogoWallet(
-          tx.toOperator,
-          {
-            name: "B\xE9n\xE9ficiaire Bloum Cash",
-            phone: tx.toPhone,
-            amount: tx.amount,
-            reference: tx.reference
-          },
-          req.log
-        );
-        if (payoutResult.success) {
-          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.info(
-            { reference: tx.reference, transactionId: payoutResult.transactionId },
-            "PayDunya webhook: payout destinataire OK \u2192 transaction SUCCESS"
-          );
-          notifyPayment({
-            reference: tx.reference,
-            amount: tx.amount,
-            fees: tx.fees ?? 0,
-            fromPhone: tx.fromPhone ?? null,
-            toPhone: tx.toPhone ?? null,
-            fromOperator: tx.operator ?? null,
-            toOperator: tx.toOperator ?? null
-          });
-          if (tx.userId) {
-            const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-            if (userRows.length && userRows[0].email) {
-              sendPushNotification(
-                {
-                  externalUserId: userRows[0].email,
-                  title: "Transfert confirm\xE9 \u2705",
-                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone} a \xE9t\xE9 confirm\xE9 avec succ\xE8s.`,
-                  data: { type: "transfer_confirmed", reference: tx.reference }
-                },
-                req.log
-              );
-            }
-          }
-        } else {
-          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.error(
-            { reference: tx.reference, message: payoutResult.message },
-            "PayDunya webhook: payout refus\xE9 apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
-          );
-        }
-      } catch (payoutErr) {
-        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-        req.log.error(
-          { err: payoutErr, reference: tx.reference },
-          "PayDunya webhook: erreur payout apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
-        );
-      }
-    } else if (status === "cancelled" || status === "failed") {
-      await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.paydunyaToken, token));
-      req.log.warn(
-        { reference: tx.reference, status },
-        "PayDunya webhook: paiement annul\xE9/\xE9chou\xE9 \u2014 aucun payout effectu\xE9"
-      );
-      if (tx.userId) {
-        const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-        if (userRows.length && userRows[0].email) {
-          sendPushNotification(
-            {
-              externalUserId: userRows[0].email,
-              title: "Transfert annul\xE9 \u274C",
-              message: `Votre transfert de ${formatAmount(tx.amount)} a \xE9t\xE9 annul\xE9 ou a \xE9chou\xE9.`,
-              data: { type: "transfer_failed", reference: tx.reference }
-            },
-            req.log
-          );
-        }
-      }
-    } else {
-      req.log.info(
-        { status, reference: tx.reference },
-        "PayDunya webhook: statut non g\xE9r\xE9 \u2014 aucune mise \xE0 jour DB"
-      );
-    }
-    res.json({ received: true, status, reference: tx.reference });
-  } catch (err) {
-    req.log.error({ err }, "PayDunya webhook \u2014 erreur serveur");
-    res.status(500).json({ error: "Erreur serveur webhook" });
-  }
-});
-router7.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
-  try {
-    const payload = req.body;
-    req.log.info({ payload }, "PayDunya disburse webhook re\xE7u");
-    const disburseToken = payload?.disburse_invoice ?? payload?.token;
-    const status = payload?.status?.toLowerCase();
-    req.log.info(
-      { disburseTokenPrefix: disburseToken ? disburseToken.slice(0, 8) + "\u2026" : "?", status },
-      "PayDunya disburse webhook \u2014 traitement"
-    );
-    if (disburseToken) {
-      const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, disburseToken)).limit(1);
-      if (rows.length) {
-        const tx = rows[0];
-        if (status === "success") {
-          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.info({ reference: tx.reference }, "PayDunya disburse webhook: payout confirm\xE9 \u2714");
-        } else if (status === "failed") {
-          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.warn({ reference: tx.reference }, "PayDunya disburse webhook: payout \xE9chou\xE9 \u2014 INTERVENTION MANUELLE REQUISE \u2716");
-        }
-      }
-    }
-    res.json({ received: true, status });
-  } catch (err) {
-    req.log.error({ err }, "PayDunya disburse webhook \u2014 erreur serveur");
-    res.status(500).json({ error: "Erreur serveur webhook disburse" });
-  }
-});
-var paydunya_webhook_default = router7;
-
-// src/routes/paydunya-diagnose.ts
-var import_express8 = __toESM(require_express2(), 1);
-
-// src/middleware/admin-auth.ts
-import crypto8 from "crypto";
-var _adminSecretFallback = "bloum-cash-admin-secret-2026-xK9mP";
-if (!process.env.ADMIN_JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("ADMIN_JWT_SECRET env var must be set in production");
-}
-var ADMIN_SECRET = process.env.ADMIN_JWT_SECRET ?? _adminSecretFallback;
-function signAdminToken(payload) {
-  const data = Buffer.from(
-    JSON.stringify({ ...payload, iat: Date.now() })
-  ).toString("base64url");
-  const sig = crypto8.createHmac("sha256", ADMIN_SECRET).update(data).digest("hex");
-  return `${data}.${sig}`;
-}
-function verifyAdminToken(token) {
-  const parts = token.split(".");
-  if (parts.length !== 2) throw new Error("Token invalide");
-  const [data, sig] = parts;
-  const expected = crypto8.createHmac("sha256", ADMIN_SECRET).update(data).digest("hex");
-  if (sig !== expected) throw new Error("Signature invalide");
-  const payload = JSON.parse(Buffer.from(data, "base64url").toString());
-  const AGE_HOURS = 24;
-  if (Date.now() - payload.iat > AGE_HOURS * 3600 * 1e3) throw new Error("Token expir\xE9");
-  return payload;
-}
-function requireAdmin(req, res, next) {
-  const auth = req.headers.authorization ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) {
-    res.status(401).json({ error: "Authentification admin requise" });
-    return;
-  }
-  try {
-    req.admin = verifyAdminToken(token);
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Token admin invalide ou expir\xE9" });
-  }
-}
-
-// src/routes/paydunya-diagnose.ts
-var router8 = (0, import_express8.Router)();
-router8.get("/paydunya/diagnose", requireAdmin, async (req, res) => {
-  const report = {
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    steps: [],
-    conclusion: "",
-    failedAt: null
-  };
-  const cfg = checkConfiguration();
-  report.steps.push({
-    step: 1,
-    name: "V\xE9rification des cl\xE9s API",
-    status: cfg.ok ? "ok" : "failed",
-    detail: {
-      baseUrl: cfg.baseUrl,
-      mode: cfg.mode,
-      keys: cfg.keys,
-      missingKeys: cfg.missingKeys
-    }
-  });
-  if (!cfg.ok) {
-    report.conclusion = `\xC9CHEC \xE9tape 1 \u2014 Cl\xE9s manquantes : ${cfg.missingKeys.join(", ")}. Configurez ces secrets dans l'environnement.`;
-    report.failedAt = "V\xE9rification des cl\xE9s API";
-    res.json(report);
-    return;
-  }
-  let invoiceToken = null;
-  try {
-    invoiceToken = await createInvoice(
-      500,
-      "Test diagnostic Bloum Cash \u2014 checkout-invoice/create",
-      ["t-money-togo"],
-      req.log
-    );
-    report.steps.push({
-      step: 2,
-      name: "POST /checkout-invoice/create (canal t-money-togo, 500 FCFA)",
-      status: "ok",
-      detail: {
-        tokenObtained: true,
-        tokenPrefix: invoiceToken.slice(0, 8) + "\u2026",
-        note: "Token PayDunya valide re\xE7u. La cl\xE9 API et le canal TMoney sont correctement configur\xE9s."
-      }
-    });
-  } catch (err) {
-    const isPdu = err instanceof PaydunyaError;
-    report.steps.push({
-      step: 2,
-      name: "POST /checkout-invoice/create (canal t-money-togo, 500 FCFA)",
-      status: "failed",
-      detail: {
-        errorCode: isPdu ? err.code : "UNKNOWN",
-        errorMessage: isPdu ? err.message : String(err),
-        rawPaydunyaResponse: isPdu ? err.rawResponse : null,
-        hint: hintForCode(isPdu ? err.code : "UNKNOWN")
-      }
-    });
-    report.steps.push({
-      step: 3,
-      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
-      status: "skipped",
-      detail: "Ignor\xE9 car l'\xE9tape TMoney a d\xE9j\xE0 \xE9chou\xE9."
-    });
-    report.steps.push({
-      step: 4,
-      name: "POST /softpay/t-money-togo",
-      status: "skipped",
-      detail: "Non ex\xE9cut\xE9 (pas de token d'invoice valide)."
-    });
-    const code = isPdu ? err.code : "UNKNOWN";
-    report.conclusion = `\xC9CHEC \xE9tape 2 (TMoney) \u2014 ${err.message}`;
-    report.failedAt = "checkout-invoice/create (t-money-togo)";
-    res.json(report);
-    return;
-  }
-  try {
-    const moovToken = await createInvoice(
-      500,
-      "Test diagnostic Bloum Cash \u2014 checkout-invoice/create",
-      ["moov-togo"],
-      req.log
-    );
-    report.steps.push({
-      step: 3,
-      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
-      status: "ok",
-      detail: {
-        tokenObtained: true,
-        tokenPrefix: moovToken.slice(0, 8) + "\u2026",
-        note: "Token PayDunya valide re\xE7u. Le canal Moov est correctement configur\xE9."
-      }
-    });
-  } catch (err) {
-    const isPdu = err instanceof PaydunyaError;
-    report.steps.push({
-      step: 3,
-      name: "POST /checkout-invoice/create (canal moov-togo, 500 FCFA)",
-      status: "failed",
-      detail: {
-        errorCode: isPdu ? err.code : "UNKNOWN",
-        errorMessage: isPdu ? err.message : String(err),
-        rawPaydunyaResponse: isPdu ? err.rawResponse : null,
-        hint: hintForCode(isPdu ? err.code : "UNKNOWN")
-      }
-    });
-  }
-  report.steps.push({
-    step: 4,
-    name: "POST /softpay/t-money-togo (non ex\xE9cut\xE9 \u2014 diagnostic uniquement)",
-    status: "skipped",
-    detail: {
-      reason: "SoftPay non appel\xE9 pour ne pas d\xE9clencher de paiement r\xE9el sur un num\xE9ro de test.",
-      invoiceToken: invoiceToken.slice(0, 8) + "\u2026",
-      payloadPreview: {
-        name_t_money: "Client Test",
-        email_t_money: "test@bloumcash.tg",
-        phone_t_money: "90000000",
-        payment_token: invoiceToken.slice(0, 8) + "\u2026"
-      },
-      note: "Pour tester SoftPay, lancez un vrai transfert depuis l'application avec un vrai num\xE9ro de t\xE9l\xE9phone."
-    }
-  });
-  const allOk = report.steps.every((s) => s.status === "ok" || s.status === "skipped");
-  if (allOk) {
-    report.conclusion = "\u2705 Configuration PayDunya OK. Les cl\xE9s sont valides et les canaux TMoney / Moov Togo sont actifs. Lancez un vrai transfert avec un vrai num\xE9ro pour valider la notification USSD.";
-  }
-  res.json(report);
-});
-function hintForCode(code) {
-  switch (code) {
-    case "PAYIN_NOT_ENABLED":
-      return "Le canal mobile money n'est pas activ\xE9 sur votre compte PayDunya. Contactez paydunya@paydunya.com pour activer Payin TMoney Togo / Moov Togo.";
-    case "AUTH_FAILED":
-      return "Vos cl\xE9s API sont invalides ou r\xE9voqu\xE9es. V\xE9rifiez PAYDUNYA_MASTER_KEY, PAYDUNYA_PRIVATE_KEY et PAYDUNYA_TOKEN dans votre dashboard PayDunya.";
-    case "HTML_RESPONSE":
-      return "PayDunya retourne du HTML. L'URL de base est peut-\xEAtre incorrecte (sandbox vs. live). V\xE9rifiez PAYDUNYA_BASE_URL ou PAYDUNYA_SANDBOX.";
-    case "NOT_CONFIGURED":
-      return "Des cl\xE9s API sont manquantes dans les secrets d'environnement.";
-    case "NETWORK_ERROR":
-      return "Impossible de joindre l'API PayDunya. V\xE9rifiez la connectivit\xE9 r\xE9seau.";
-    default:
-      return "Consultez les logs de l'API pour la r\xE9ponse compl\xE8te de PayDunya.";
-  }
-}
-var paydunya_diagnose_default = router8;
-
-// src/routes/gomboplus-webhook.ts
-var import_express9 = __toESM(require_express2(), 1);
-var router9 = (0, import_express9.Router)();
-router9.post("/gomboplus/webhook", requireWebhookSecret, async (req, res) => {
-  try {
-    const payload = req.body;
-    req.log.info({ payload }, "GomboPlus webhook re\xE7u");
-    const gpReference = String(payload.transaction_reference ?? "").trim();
-    const transactionType = String(payload.transaction_type ?? "").toLowerCase();
-    const statusMsg = String(payload.status_message ?? "").toLowerCase();
-    if (!gpReference) {
-      req.log.warn({ payload }, "GomboPlus webhook: transaction_reference manquant");
-      res.json({ received: true });
-      return;
-    }
-    const storedToken = `gp:${gpReference}`;
-    const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.paydunyaToken, storedToken)).limit(1);
-    if (!rows.length) {
-      req.log.warn({ gpReference, storedToken }, "GomboPlus webhook: aucune transaction trouv\xE9e pour cette r\xE9f\xE9rence");
-      res.json({ received: true, matched: false });
-      return;
-    }
-    const tx = rows[0];
-    req.log.info(
-      { reference: tx.reference, currentStatus: tx.status, transactionType, statusMsg },
-      "GomboPlus webhook \u2014 transaction trouv\xE9e"
-    );
-    const isCompleted = statusMsg.includes("completed") || statusMsg === "success" || statusMsg === "successful";
-    const isFailed = statusMsg.includes("failed") || statusMsg.includes("cancel");
-    if (transactionType === "cashin" && isCompleted) {
-      const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(
-        and(
-          eq(transactionsTable.paydunyaToken, storedToken),
-          eq(transactionsTable.payoutSent, false)
-        )
-      ).returning({ id: transactionsTable.id });
-      if (updated.length === 0) {
-        req.log.info({ reference: tx.reference }, "GomboPlus webhook: payout d\xE9j\xE0 d\xE9clench\xE9 \u2014 skip");
-        res.json({ received: true, reference: tx.reference, skipped: true });
-        return;
-      }
-      if (!tx.toPhone || !tx.toOperator || tx.amount <= 0) {
-        req.log.error(
-          { reference: tx.reference, toPhone: tx.toPhone, toOperator: tx.toOperator },
-          "GomboPlus webhook: infos destinataire manquantes \u2014 INTERVENTION MANUELLE REQUISE"
-        );
-        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-        res.json({ received: true, reference: tx.reference });
-        return;
-      }
-      req.log.info({ reference: tx.reference }, "GomboPlus webhook: CASHIN confirm\xE9 \u2014 d\xE9clenchement CASHOUT");
-      try {
-        const payoutResult = await cashout(
-          {
-            phone: tx.toPhone,
-            amount: tx.amount,
-            operator: tx.toOperator,
-            reference: tx.reference
-          },
-          req.log
-        );
-        if (payoutResult.success) {
-          await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.info({ reference: tx.reference, gpRef: payoutResult.gpReference }, "GomboPlus webhook: CASHOUT OK \u2192 success");
-          notifyPayment({
-            reference: tx.reference,
-            amount: tx.amount,
-            fees: tx.fees ?? 0,
-            fromPhone: tx.fromPhone ?? null,
-            toPhone: tx.toPhone ?? null,
-            fromOperator: tx.operator ?? null,
-            toOperator: tx.toOperator ?? null
-          });
-          if (tx.userId) {
-            const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-            if (userRows[0]?.email) {
-              sendPushNotification(
-                {
-                  externalUserId: userRows[0].email,
-                  title: "Transfert confirm\xE9 \u2705",
-                  message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a \xE9t\xE9 confirm\xE9.`,
-                  data: { type: "transfer_confirmed", reference: tx.reference }
-                },
-                req.log
-              );
-            }
-          }
-        } else {
-          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-          req.log.error(
-            { reference: tx.reference, msg: payoutResult.message },
-            "GomboPlus webhook: CASHOUT refus\xE9 apr\xE8s CASHIN confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
-          );
-        }
-      } catch (payoutErr) {
-        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
-        req.log.error({ err: payoutErr, reference: tx.reference }, "GomboPlus webhook: erreur CASHOUT \u2014 INTERVENTION MANUELLE REQUISE");
-      }
-    } else if (transactionType === "cashout" && isCompleted) {
-      await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
-      req.log.info({ reference: tx.reference }, "GomboPlus webhook: CASHOUT direct confirm\xE9 \u2192 success");
-    } else if (isFailed) {
-      await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.reference, tx.reference));
-      req.log.warn({ reference: tx.reference, statusMsg }, "GomboPlus webhook: transaction \xE9chou\xE9e/annul\xE9e");
-      if (tx.userId) {
-        const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
-        if (userRows[0]?.email) {
-          sendPushNotification(
-            {
-              externalUserId: userRows[0].email,
-              title: "Transfert annul\xE9 \u274C",
-              message: `Votre transfert de ${formatAmount(tx.amount)} a \xE9t\xE9 annul\xE9 ou a \xE9chou\xE9.`,
-              data: { type: "transfer_failed", reference: tx.reference }
-            },
-            req.log
-          );
-        }
-      }
-    } else {
-      req.log.info({ transactionType, statusMsg, reference: tx.reference }, "GomboPlus webhook: statut non g\xE9r\xE9 \u2014 aucune action");
-    }
-    res.json({ received: true, reference: tx.reference });
-  } catch (err) {
-    req.log.error({ err }, "GomboPlus webhook \u2014 erreur serveur");
-    res.status(500).json({ error: "Erreur serveur webhook GomboPlus" });
-  }
-});
-var gomboplus_webhook_default = router9;
-
 // src/routes/admin.ts
-var import_express10 = __toESM(require_express2(), 1);
-import { createHmac, randomBytes as randomBytes2 } from "crypto";
-import fs from "fs";
-import path from "path";
 function getReqIp(req) {
   const fwd = req.headers["x-forwarded-for"];
   return String(Array.isArray(fwd) ? fwd[0] : fwd ?? req.ip ?? "inconnue").split(",")[0].trim();
