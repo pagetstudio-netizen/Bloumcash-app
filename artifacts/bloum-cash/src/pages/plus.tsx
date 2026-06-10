@@ -9,14 +9,6 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
-function formatTogoPhone(raw: string | undefined | null): string {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("228") && digits.length === 11) return `+${digits}`;
-  if (digits.length === 8) return `+228${digits}`;
-  return `+${digits}`;
-}
-
 interface MenuItem {
   icon: React.ReactNode;
   label: string;
@@ -98,22 +90,6 @@ export default function Plus() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-6">
-        {/* Profile summary */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-card rounded-2xl p-4 border border-border shadow-sm flex items-center gap-4"
-        >
-          <img
-            src="/icon-avatar.png"
-            alt="avatar"
-            className="w-16 h-16 rounded-full flex-shrink-0 object-cover"
-          />
-          <div className="flex-1">
-            <p className="font-bold text-lg text-foreground">{formatTogoPhone(user?.phone)}</p>
-          </div>
-        </motion.div>
-
         {menuGroups.map((group, groupIdx) => (
           <motion.div 
             key={group.title}
