@@ -98,7 +98,7 @@ export default function Register() {
 
             {/* ── Numéro de téléphone ── */}
             <div>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>Numéro de téléphone</label>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#111827" }}>Numéro de téléphone</label>
               <div style={{ display: "flex", alignItems: "center", height: 50, borderRadius: 12, border: errors.phone ? "1.5px solid #f87171" : "1.5px solid #e5e7eb", background: errors.phone ? "#fef2f2" : "#f9fafb", overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 11px", height: "100%", background: errors.phone ? "#fee2e2" : "#f1f3f7", borderRight: "1.5px solid #e5e7eb", flexShrink: 0, whiteSpace: "nowrap" }}>
                   <span style={{ fontSize: 17, lineHeight: 1 }}>🇹🇬</span>
@@ -111,10 +111,10 @@ export default function Register() {
 
             {/* ── Mot de passe ── */}
             <div>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>Mot de passe</label>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#111827" }}>Mot de passe</label>
               <div style={{ position: "relative" }}>
                 <input placeholder="Créer votre mot de passe" type={showPin ? "text" : "password"} autoComplete="new-password" data-form-type="other" {...form.register("pin")} style={fieldBase(!!errors.pin)} />
-                <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", lineHeight: 0, padding: 0 }}>
+                <button type="button" onClick={() => setShowPin(!showPin)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#4b5563", lineHeight: 0, padding: 0 }}>
                   {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
@@ -123,10 +123,10 @@ export default function Register() {
 
             {/* ── Confirmer mot de passe ── */}
             <div>
-              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>Confirmer le mot de passe</label>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#111827" }}>Confirmer le mot de passe</label>
               <div style={{ position: "relative" }}>
                 <input placeholder="Confirmer votre mot de passe" type={showConfirm ? "text" : "password"} autoComplete="new-password" data-form-type="other" {...form.register("confirmPin")} style={fieldBase(!!errors.confirmPin)} />
-                <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", lineHeight: 0, padding: 0 }}>
+                <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#4b5563", lineHeight: 0, padding: 0 }}>
                   {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
@@ -139,7 +139,7 @@ export default function Register() {
             </button>
 
             {/* ── Lien connexion ── */}
-            <p style={{ textAlign: "center", fontSize: 14, color: "#6b7280", marginTop: 2 }}>
+            <p style={{ textAlign: "center", fontSize: 14, color: "#1f2937", marginTop: 2 }}>
               Vous avez déjà un compte ?{" "}
               <Link href="/login" style={{ color: BLUE, fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </p>
