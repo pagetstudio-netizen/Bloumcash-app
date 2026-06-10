@@ -17,6 +17,7 @@ const loginSchema = z.object({
 });
 
 const BLUE = "#2d52e8";
+const PAGE_BG = "#eff2f7";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -36,109 +37,245 @@ export default function Login() {
       const result = await loginMutation.mutateAsync({ data: { phone: normalized, pin: values.pin } });
       login(result.user, result.token);
       setLocation("/dashboard");
-    } catch {
+    } catch (err: unknown) {
+      const apiMsg = (err as { data?: { error?: string } })?.data?.error;
       showModal({
         type: "error",
         title: "Erreur de connexion",
-        message: "Numéro ou mot de passe incorrect. Vérifiez vos identifiants.",
+        message: apiMsg ?? "Numéro ou mot de passe incorrect. Vérifiez vos identifiants.",
       });
     }
   }
 
   const errors = form.formState.errors;
 
-  const fieldStyle = (hasError: boolean): React.CSSProperties => ({
-    width: "100%",
-    height: 52,
-    borderRadius: 12,
-    border: hasError ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
-    background: hasError ? "#fef2f2" : "#f9fafb",
-    padding: "0 16px",
-    fontSize: 15,
-    color: "#111827",
-    outline: "none",
-    boxSizing: "border-box",
-  });
-
   return (
     <div
-      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto overflow-hidden"
-      style={{ background: BLUE }}
+      className="min-h-[100dvh] w-full flex flex-col"
+      style={{ background: PAGE_BG }}
     >
-      <div className="flex-shrink-0 flex flex-col items-center pt-12 pb-16 px-6">
+      <div className="md:max-w-md md:mx-auto w-full flex flex-col min-h-[100dvh]">
+
+        {/* ── En-tête bleue ── */}
         <div
-          className="flex items-center justify-center mb-4 overflow-hidden"
-          style={{ width: 72, height: 72, background: "#fff", borderRadius: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.18)" }}
+          className="flex flex-col items-center"
+          style={{
+            background: BLUE,
+            paddingTop: 56,
+            paddingBottom: 64,
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+          }}
         >
-          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 72, height: 72, objectFit: "contain" }} />
-        </div>
-        <h1 className="text-[22px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
-      </div>
-
-      <div
-        className="flex-1 flex flex-col overflow-hidden"
-        style={{ background: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, marginTop: -28, padding: "32px 24px 28px", boxShadow: "0 -6px 30px rgba(0,0,0,0.10)" }}
-      >
-        <h2 className="text-center font-extrabold mb-8" style={{ fontSize: 24, color: BLUE }}>
-          Connexion
-        </h2>
-
-        <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" data-form-type="other" className="flex flex-col gap-5">
-          <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
-          <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
-
-          {/* Téléphone */}
-          <div>
-            <label className="block mb-2 font-semibold text-gray-700" style={{ fontSize: 14 }}>Numéro de téléphone</label>
-            <input
-              placeholder="Ex: 90 12 34 56"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="off"
-              data-form-type="other"
-              {...form.register("phone")}
-              style={fieldStyle(!!errors.phone)}
-            />
-            {errors.phone && <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.phone.message}</p>}
-          </div>
-
-          {/* Mot de passe */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="font-semibold text-gray-700" style={{ fontSize: 14 }}>Mot de passe</label>
-              <Link href="/forgot-pin" className="font-semibold" style={{ fontSize: 13, color: BLUE }}>
-                Mot de passe oublié ?
-              </Link>
-            </div>
-            <div className="relative">
-              <input
-                placeholder="Votre mot de passe"
-                type={showPin ? "text" : "password"}
-                autoComplete="new-password"
-                data-form-type="other"
-                {...form.register("pin")}
-                style={{ ...fieldStyle(!!errors.pin), padding: "0 48px 0 16px" }}
-              />
-              <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ lineHeight: 0 }}>
-                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.pin && <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.pin.message}</p>}
-          </div>
-
-          <button
-            type="submit"
-            disabled={loginMutation.isPending}
-            style={{ width: "100%", height: 54, borderRadius: 14, background: BLUE, color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer", marginTop: 8, opacity: loginMutation.isPending ? 0.65 : 1 }}
+          {/* Logo */}
+          <div
+            style={{
+              width: 76,
+              height: 76,
+              background: "#fff",
+              borderRadius: 22,
+              boxShadow: "0 6px 24px rgba(0,0,0,0.22)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 14,
+              overflow: "hidden",
+            }}
           >
-            {loginMutation.isPending ? "Connexion en cours..." : "Connexion"}
-          </button>
+            <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 76, height: 76, objectFit: "contain" }} />
+          </div>
 
-          <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
-            Nouveau sur Bloum Cash ?{" "}
-            <Link href="/register" style={{ color: BLUE, fontWeight: 700 }}>S'inscrire</Link>
+          <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 800, marginBottom: 6, letterSpacing: -0.3 }}>
+            Bloum Cash
+          </h1>
+          <p style={{ color: "rgba(255,255,255,0.82)", fontSize: 14, fontWeight: 400 }}>
+            Connexion à votre compte
           </p>
-        </form>
+        </div>
+
+        {/* ── Carte formulaire ── */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 24,
+            margin: "0 16px",
+            marginTop: -32,
+            padding: "28px 24px 24px",
+            boxShadow: "0 4px 32px rgba(0,0,0,0.11)",
+          }}
+        >
+          <h2
+            style={{
+              textAlign: "center",
+              fontWeight: 800,
+              fontSize: 22,
+              color: "#111827",
+              marginBottom: 24,
+            }}
+          >
+            Connexion
+          </h2>
+
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            autoComplete="off"
+            data-form-type="other"
+            style={{ display: "flex", flexDirection: "column", gap: 18 }}
+          >
+            <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
+            <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
+
+            {/* ── Numéro de téléphone ── */}
+            <div>
+              <label
+                style={{ display: "block", marginBottom: 8, fontWeight: 600, fontSize: 14, color: "#374151" }}
+              >
+                Numéro de téléphone
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  height: 52,
+                  borderRadius: 12,
+                  border: errors.phone ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+                  background: errors.phone ? "#fef2f2" : "#f9fafb",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Préfixe pays */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "0 12px",
+                    height: "100%",
+                    background: errors.phone ? "#fee2e2" : "#f1f3f7",
+                    borderRight: "1.5px solid #e5e7eb",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>🇹🇬</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>+228</span>
+                </div>
+                {/* Saisie des 8 chiffres */}
+                <input
+                  placeholder="XX XX XX XX"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  data-form-type="other"
+                  {...form.register("phone")}
+                  style={{
+                    flex: 1,
+                    height: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    padding: "0 14px",
+                    fontSize: 15,
+                    color: "#111827",
+                    letterSpacing: 1,
+                  }}
+                />
+              </div>
+              {errors.phone && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>
+                  {errors.phone.message}
+                </p>
+              )}
+            </div>
+
+            {/* ── Mot de passe ── */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <label style={{ fontWeight: 600, fontSize: 14, color: "#374151" }}>Mot de passe</label>
+                <Link href="/forgot-pin" style={{ fontSize: 13, fontWeight: 600, color: BLUE, textDecoration: "none" }}>
+                  Code PIN oublié ?
+                </Link>
+              </div>
+              <div style={{ position: "relative" }}>
+                <input
+                  placeholder="Votre mot de passe"
+                  type={showPin ? "text" : "password"}
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  {...form.register("pin")}
+                  style={{
+                    width: "100%",
+                    height: 52,
+                    borderRadius: 12,
+                    border: errors.pin ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+                    background: errors.pin ? "#fef2f2" : "#f9fafb",
+                    padding: "0 48px 0 16px",
+                    fontSize: 15,
+                    color: "#111827",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  style={{
+                    position: "absolute",
+                    right: 14,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#9ca3af",
+                    lineHeight: 0,
+                    padding: 0,
+                  }}
+                >
+                  {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {errors.pin && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>
+                  {errors.pin.message}
+                </p>
+              )}
+            </div>
+
+            {/* ── Bouton connexion ── */}
+            <button
+              type="submit"
+              disabled={loginMutation.isPending}
+              style={{
+                width: "100%",
+                height: 54,
+                borderRadius: 14,
+                background: loginMutation.isPending ? "#7a90f0" : BLUE,
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 700,
+                border: "none",
+                cursor: loginMutation.isPending ? "not-allowed" : "pointer",
+                marginTop: 4,
+                transition: "opacity 0.2s",
+                letterSpacing: 0.2,
+              }}
+            >
+              {loginMutation.isPending ? "Connexion en cours…" : "Connexion"}
+            </button>
+
+            {/* ── Lien inscription ── */}
+            <p style={{ textAlign: "center", fontSize: 14, color: "#6b7280", marginTop: 2 }}>
+              Nouveau sur Bloum Cash ?{" "}
+              <Link href="/register" style={{ color: BLUE, fontWeight: 700, textDecoration: "none" }}>
+                S'inscrire
+              </Link>
+            </p>
+          </form>
+        </div>
+
+        {/* Espace bas */}
+        <div style={{ flex: 1, minHeight: 24 }} />
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ const registerSchema = z.object({
 });
 
 const BLUE = "#2d52e8";
+const PAGE_BG = "#eff2f7";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -55,18 +56,17 @@ export default function Register() {
       });
     } catch (err: unknown) {
       const apiMsg = (err as { data?: { error?: string } })?.data?.error;
-      const message = apiMsg ?? "Erreur de connexion au serveur. Vérifiez votre réseau et réessayez.";
       showModal({
         type: "error",
         title: "Erreur d'inscription",
-        message,
+        message: apiMsg ?? "Erreur de connexion au serveur. Vérifiez votre réseau et réessayez.",
       });
     }
   }
 
   const errors = form.formState.errors;
 
-  const fieldStyle = (hasError: boolean): React.CSSProperties => ({
+  const fieldBase = (hasError: boolean): React.CSSProperties => ({
     width: "100%",
     height: 50,
     borderRadius: 12,
@@ -81,114 +81,270 @@ export default function Register() {
 
   return (
     <div
-      className="h-[100dvh] w-full flex flex-col md:max-w-md md:mx-auto overflow-hidden"
-      style={{ background: BLUE }}
+      className="min-h-[100dvh] w-full"
+      style={{ background: PAGE_BG }}
     >
-      <div className="flex-shrink-0 flex flex-col items-center pt-8 pb-14 px-6">
+      <div className="md:max-w-md md:mx-auto w-full flex flex-col min-h-[100dvh]">
+
+        {/* ── En-tête bleue ── */}
         <div
-          className="flex items-center justify-center mb-3 overflow-hidden"
-          style={{ width: 64, height: 64, background: "#fff", borderRadius: 18, boxShadow: "0 4px 20px rgba(0,0,0,0.18)" }}
+          className="flex flex-col items-center"
+          style={{
+            background: BLUE,
+            paddingTop: 44,
+            paddingBottom: 56,
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+          }}
         >
-          <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 64, height: 64, objectFit: "contain" }} />
-        </div>
-        <h1 className="text-[20px] font-extrabold text-white tracking-tight">Bloum Cash</h1>
-      </div>
-
-      <div
-        className="flex-1 flex flex-col overflow-hidden"
-        style={{ background: "#fff", borderTopLeftRadius: 32, borderTopRightRadius: 32, marginTop: -24, padding: "26px 24px 20px", boxShadow: "0 -6px 30px rgba(0,0,0,0.10)" }}
-      >
-        <h2 className="text-center font-extrabold mb-5" style={{ fontSize: 22, color: BLUE }}>
-          Inscription
-        </h2>
-
-        <form onSubmit={form.handleSubmit(onSubmit)} autoComplete="off" data-form-type="other" className="flex flex-col gap-4">
-          <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
-          <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
-
-          {/* Nom complet */}
-          <div>
-            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>Nom Complet</label>
-            <input
-              placeholder="Nom Complet"
-              type="text"
-              autoComplete="off"
-              data-form-type="other"
-              {...form.register("fullName")}
-              style={fieldStyle(!!errors.fullName)}
-            />
-            {errors.fullName && <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.fullName.message}</p>}
-          </div>
-
-          {/* Numéro de téléphone */}
-          <div>
-            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>Numéro de téléphone</label>
-            <input
-              placeholder="Ex: 90 12 34 56"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="off"
-              data-form-type="other"
-              {...form.register("phone")}
-              style={fieldStyle(!!errors.phone)}
-            />
-            {errors.phone
-              ? <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.phone.message}</p>
-              : <p className="text-[11px] text-gray-400 mt-1 ml-1">TMoney: 90-93 · Moov Money: 96-99</p>
-            }
-          </div>
-
-          {/* Mot de passe */}
-          <div>
-            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>Mot de passe</label>
-            <div className="relative">
-              <input
-                placeholder="Créer votre mot de passe"
-                type={showPin ? "text" : "password"}
-                autoComplete="new-password"
-                data-form-type="other"
-                {...form.register("pin")}
-                style={{ ...fieldStyle(!!errors.pin), padding: "0 48px 0 16px" }}
-              />
-              <button type="button" onClick={() => setShowPin(!showPin)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ lineHeight: 0 }}>
-                {showPin ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.pin && <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.pin.message}</p>}
-          </div>
-
-          {/* Confirmer mot de passe */}
-          <div>
-            <label className="block mb-1.5 font-semibold text-gray-700" style={{ fontSize: 13 }}>Confirmer le mot de passe</label>
-            <div className="relative">
-              <input
-                placeholder="Confirmer votre mot de passe"
-                type={showConfirm ? "text" : "password"}
-                autoComplete="new-password"
-                data-form-type="other"
-                {...form.register("confirmPin")}
-                style={{ ...fieldStyle(!!errors.confirmPin), padding: "0 48px 0 16px" }}
-              />
-              <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" style={{ lineHeight: 0 }}>
-                {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-            {errors.confirmPin && <p className="text-[11px] text-red-500 mt-1 ml-1">{errors.confirmPin.message}</p>}
-          </div>
-
-          <button
-            type="submit"
-            disabled={registerMutation.isPending}
-            style={{ width: "100%", height: 52, borderRadius: 14, background: BLUE, color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer", marginTop: 6, opacity: registerMutation.isPending ? 0.65 : 1 }}
+          {/* Logo */}
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              background: "#fff",
+              borderRadius: 20,
+              boxShadow: "0 6px 24px rgba(0,0,0,0.22)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 12,
+              overflow: "hidden",
+            }}
           >
-            {registerMutation.isPending ? "Création du compte..." : "S'Inscrire"}
-          </button>
+            <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 72, height: 72, objectFit: "contain" }} />
+          </div>
 
-          <p className="text-center text-gray-500" style={{ fontSize: 14 }}>
-            Vous avez déjà un compte ?{" "}
-            <Link href="/login" style={{ color: BLUE, fontWeight: 700 }}>Se connecter</Link>
-          </p>
-        </form>
+          <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 800, letterSpacing: -0.3 }}>
+            Bloum Cash
+          </h1>
+        </div>
+
+        {/* ── Carte formulaire ── */}
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: 24,
+            margin: "0 16px",
+            marginTop: -28,
+            padding: "24px 24px 20px",
+            boxShadow: "0 4px 32px rgba(0,0,0,0.11)",
+          }}
+        >
+          <h2
+            style={{
+              textAlign: "center",
+              fontWeight: 800,
+              fontSize: 22,
+              color: "#111827",
+              marginBottom: 20,
+            }}
+          >
+            Inscription
+          </h2>
+
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            autoComplete="off"
+            data-form-type="other"
+            style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          >
+            <input type="text" name="prevent_autofill" style={{ display: "none" }} readOnly tabIndex={-1} />
+            <input type="password" name="prevent_autofill_pw" style={{ display: "none" }} readOnly tabIndex={-1} />
+
+            {/* ── Nom Complet ── */}
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>
+                Nom Complet
+              </label>
+              <input
+                placeholder="Nom Complet"
+                type="text"
+                autoComplete="off"
+                data-form-type="other"
+                {...form.register("fullName")}
+                style={fieldBase(!!errors.fullName)}
+              />
+              {errors.fullName && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>
+                  {errors.fullName.message}
+                </p>
+              )}
+            </div>
+
+            {/* ── Numéro de téléphone ── */}
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>
+                Numéro de téléphone
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  height: 50,
+                  borderRadius: 12,
+                  border: errors.phone ? "1.5px solid #f87171" : "1.5px solid #e5e7eb",
+                  background: errors.phone ? "#fef2f2" : "#f9fafb",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Préfixe pays */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "0 11px",
+                    height: "100%",
+                    background: errors.phone ? "#fee2e2" : "#f1f3f7",
+                    borderRight: "1.5px solid #e5e7eb",
+                    flexShrink: 0,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  <span style={{ fontSize: 17, lineHeight: 1 }}>🇹🇬</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>+228</span>
+                </div>
+                {/* Saisie des 8 chiffres */}
+                <input
+                  placeholder="XX XX XX XX"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  data-form-type="other"
+                  {...form.register("phone")}
+                  style={{
+                    flex: 1,
+                    height: "100%",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    padding: "0 12px",
+                    fontSize: 15,
+                    color: "#111827",
+                    letterSpacing: 1,
+                  }}
+                />
+              </div>
+              {errors.phone
+                ? <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>{errors.phone.message}</p>
+                : <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, marginLeft: 2 }}>TMoney: 90-93 · Moov Money: 96-99</p>
+              }
+            </div>
+
+            {/* ── Mot de passe ── */}
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>
+                Mot de passe
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  placeholder="Créer votre mot de passe"
+                  type={showPin ? "text" : "password"}
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  {...form.register("pin")}
+                  style={{ ...fieldBase(!!errors.pin), padding: "0 48px 0 16px" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  style={{
+                    position: "absolute",
+                    right: 14,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#9ca3af",
+                    lineHeight: 0,
+                    padding: 0,
+                  }}
+                >
+                  {showPin ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {errors.pin && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>
+                  {errors.pin.message}
+                </p>
+              )}
+            </div>
+
+            {/* ── Confirmer le mot de passe ── */}
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14, color: "#374151" }}>
+                Confirmer le mot de passe
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  placeholder="Confirmer votre mot de passe"
+                  type={showConfirm ? "text" : "password"}
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  {...form.register("confirmPin")}
+                  style={{ ...fieldBase(!!errors.confirmPin), padding: "0 48px 0 16px" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  style={{
+                    position: "absolute",
+                    right: 14,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "#9ca3af",
+                    lineHeight: 0,
+                    padding: 0,
+                  }}
+                >
+                  {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {errors.confirmPin && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>
+                  {errors.confirmPin.message}
+                </p>
+              )}
+            </div>
+
+            {/* ── Bouton S'inscrire ── */}
+            <button
+              type="submit"
+              disabled={registerMutation.isPending}
+              style={{
+                width: "100%",
+                height: 52,
+                borderRadius: 14,
+                background: registerMutation.isPending ? "#7a90f0" : BLUE,
+                color: "#fff",
+                fontSize: 16,
+                fontWeight: 700,
+                border: "none",
+                cursor: registerMutation.isPending ? "not-allowed" : "pointer",
+                marginTop: 4,
+                letterSpacing: 0.2,
+              }}
+            >
+              {registerMutation.isPending ? "Création du compte…" : "S'Inscrire"}
+            </button>
+
+            {/* ── Lien connexion ── */}
+            <p style={{ textAlign: "center", fontSize: 14, color: "#6b7280", marginTop: 2 }}>
+              Vous avez déjà un compte ?{" "}
+              <Link href="/login" style={{ color: BLUE, fontWeight: 700, textDecoration: "none" }}>
+                Se connecter
+              </Link>
+            </p>
+          </form>
+        </div>
+
+        {/* Espace bas */}
+        <div style={{ flex: 1, minHeight: 24 }} />
       </div>
     </div>
   );
