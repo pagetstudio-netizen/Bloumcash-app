@@ -76,7 +76,7 @@ app.use("/api", router);
 const _serverDir = typeof __dirname !== "undefined"
   ? __dirname
   : path.dirname(new URL(import.meta.url).pathname);
-const FRONTEND_DIST = path.resolve(_serverDir, "..", "..", "..", "artifacts", "bloum-cash", "dist", "public");
+const FRONTEND_DIST = path.resolve(_serverDir, "..", "public");
 if (fs.existsSync(FRONTEND_DIST)) {
   app.use(express.static(FRONTEND_DIST, { index: false }));
   app.get("/{*path}", (_req, res) => {

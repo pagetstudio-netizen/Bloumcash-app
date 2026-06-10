@@ -1,12 +1,13 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
 # compiled output — on ignore uniquement les packages internes (lib) et mockup-sandbox
-# Les builds de déploiement artifacts/bloum-cash/dist et artifacts/api-server/dist sont INCLUS dans git
+# Les builds de déploiement artifacts/api-server/dist et artifacts/api-server/public sont INCLUS dans git
 lib/*/dist/
 artifacts/mockup-sandbox/dist/
+artifacts/bloum-cash/dist/
 # Sourcemaps volumineux — inutiles en production
-artifacts/bloum-cash/dist/**/*.map
 artifacts/api-server/dist/**/*.map
+artifacts/api-server/public/**/*.map
 
 # env secrets (ne jamais committer)
 .env

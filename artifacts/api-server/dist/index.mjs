@@ -71493,7 +71493,7 @@ app.use("/uploads", import_express16.default.static(UPLOADS_DIR2, {
 }));
 app.use("/api", routes_default);
 var _serverDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
-var FRONTEND_DIST = path2.resolve(_serverDir, "..", "..", "..", "artifacts", "bloum-cash", "dist", "public");
+var FRONTEND_DIST = path2.resolve(_serverDir, "..", "public");
 if (fs2.existsSync(FRONTEND_DIST)) {
   app.use(import_express16.default.static(FRONTEND_DIST, { index: false }));
   app.get("/{*path}", (_req, res) => {
