@@ -3,6 +3,11 @@
 #  Bloum Cash — Script de déploiement production (Plesk)
 #  Exécuté par Plesk après un git pull, ou manuellement :
 #    bash deploy.sh
+#
+#  NOTE : les fichiers dist/ et public/ sont déjà buildés et
+#  committés dans git. Ce script n'est nécessaire QUE si vous
+#  voulez rebuilder depuis Plesk (rare).
+#  Dans la plupart des cas : git pull → restart suffit.
 # ============================================================
 set -e
 
@@ -27,7 +32,6 @@ mkdir -p artifacts/api-server/uploads
 # ── Installation des dépendances ────────────────────────────
 echo ""
 echo "→ Installation des dépendances..."
-# --no-frozen-lockfile pour éviter les conflits de plateforme sur Plesk
 pnpm install --no-frozen-lockfile
 
 # ── Build du frontend React/Vite ────────────────────────────
@@ -40,16 +44,11 @@ echo ""
 echo "→ Build API serveur..."
 pnpm --filter @workspace/api-server run build
 
-# ── Migration base de données (seulement si DATABASE_URL défini) ──
-echo ""
-if [ -n "$DATABASE_URL" ] || [ -n "$SUPABASE_DATABASE_URL" ]; then
-  echo "→ Migration base de données..."
-  pnpm --filter @workspace/db run push
-  echo "✓ Migration terminée"
-else
-  echo "⚠️  DATABASE_URL non défini — migration ignorée."
-  echo "   Configurez DATABASE_URL dans les variables d'environnement Plesk."
-fi
+# ── NE PAS exécuter drizzle-kit push ────────────────────────
+# Les migrations sont gérées automatiquement au démarrage du
+# serveur via startup-migrate.ts (CREATE TABLE IF NOT EXISTS).
+# drizzle-kit push est incompatible avec Supabase pgbouncer
+# (port 6543, transaction mode) et peut planter le déploiement.
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
