@@ -125,9 +125,9 @@ router.post("/auth/login", loginLimiter, async (req, res) => {
     }, req.log);
 
     res.json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
-  } catch (err) {
-    req.log.error({ err }, "Login error");
-    res.status(500).json({ error: "Erreur serveur" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Login error");
+    res.status(500).json({ error: "Erreur serveur", detail: process.env.NODE_ENV !== "production" ? err.message : undefined });
   }
 });
 
@@ -182,9 +182,14 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
     notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
 
     res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
-  } catch (err) {
-    req.log.error({ err }, "Register error");
-    res.status(500).json({ error: "Erreur serveur" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Register error");
+    const isDuplicate = err.message?.includes("unique") || err.message?.includes("duplicate") || err.code === "23505";
+    if (isDuplicate) {
+      res.status(400).json({ error: "Ce numéro de téléphone est déjà utilisé" });
+      return;
+    }
+    res.status(500).json({ error: "Erreur serveur", detail: process.env.NODE_ENV !== "production" ? err.message : undefined });
   }
 });
 

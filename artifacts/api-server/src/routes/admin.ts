@@ -156,7 +156,10 @@ router.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
     /* Secret déjà configuré : demander le code TOTP */
     req.log.info({ adminId: admin.id }, "Admin TOTP verification required");
     res.json({ requiresTotp: true });
-  } catch (err) { req.log.error({ err }, "Admin login error"); res.status(500).json({ error: "Erreur serveur" }); }
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Admin login error");
+    res.status(500).json({ error: "Erreur serveur", detail: process.env.NODE_ENV !== "production" ? err.message : undefined });
+  }
 });
 
 /* Étape 2a : confirmation de la configuration TOTP (première fois) */

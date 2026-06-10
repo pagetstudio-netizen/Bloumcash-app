@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
@@ -14,10 +14,7 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app: Express = express();
 
-/* ── Proxy trust : requis derrière Replit / Plesk / Nginx (X-Forwarded-For) ── */
 app.set("trust proxy", 1);
-
-/* ── Sécurité : headers HTTP ── */
 app.disable("x-powered-by");
 
 /* ── Logging ── */
@@ -35,12 +32,11 @@ app.use(
   }),
 );
 
-/* ── CORS : restreint aux origines connues ── */
+/* ── CORS ── */
 const ALLOWED_ORIGINS = [
   "http://localhost:5000",
   "http://localhost:3001",
   ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
-  // Domaines de prod
   "https://bloumcash.com",
   "https://www.bloumcash.com",
   "https://app.wendysapp.sbs",
@@ -50,9 +46,7 @@ const ALLOWED_ORIGINS = [
 app.use(
   cors({
     origin(origin, callback) {
-      // Requêtes sans origine (mobile webview, Postman, même serveur)
       if (!origin) return callback(null, true);
-      // Sous-domaines Replit (développement)
       if (origin.endsWith(".replit.dev") || origin.endsWith(".repl.co") || origin.endsWith(".replit.app")) {
         return callback(null, true);
       }
@@ -65,11 +59,11 @@ app.use(
   }),
 );
 
-/* ── Body parsing : limite réduite (2 Mo suffisent pour images base64 ≤ 1,5 Mo) ── */
+/* ── Body parsing ── */
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 
-/* ── Uploads statiques (images uniquement) ── */
+/* ── Uploads statiques ── */
 app.use("/uploads", express.static(UPLOADS_DIR, {
   index: false,
   dotfiles: "deny",
@@ -93,5 +87,15 @@ if (fs.existsSync(FRONTEND_DIST)) {
     }
   });
 }
+
+/* ── Middleware d'erreur global (DOIT être après toutes les routes) ── */
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const status = (err as any).status ?? (err as any).statusCode ?? 500;
+  const message = err.message || "Erreur serveur interne";
+  logger.error({ err: message, stack: err.stack, url: req.url, method: req.method }, "Erreur Express non gérée");
+  if (!res.headersSent) {
+    res.status(status).json({ success: false, message });
+  }
+});
 
 export default app;

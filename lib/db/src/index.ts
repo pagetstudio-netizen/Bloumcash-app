@@ -10,19 +10,39 @@ const connectionString =
 
 if (!connectionString) {
   throw new Error(
-    "DATABASE_URL ou SUPABASE_DATABASE_URL doit être défini.",
+    "❌ DATABASE_URL ou SUPABASE_DATABASE_URL doit être défini.",
   );
+}
+
+const isSupabase =
+  connectionString.includes("supabase.com") ||
+  connectionString.includes("supabase.co");
+
+const isPooler = connectionString.includes(":6543/");
+
+if (isSupabase) {
+  console.log("[DB] 🔌 Connexion Supabase détectée" + (isPooler ? " (pgbouncer pooler)" : " (direct)"));
 }
 
 export const pool = new Pool({
   connectionString,
-  ssl: connectionString.includes("supabase.com") || connectionString.includes("supabase.co")
-    ? { rejectUnauthorized: false }
-    : undefined,
-  max: 10,
+  ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
+  max: isPooler ? 5 : 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
 });
+
+pool.on("error", (err) => {
+  console.error("[DB] ❌ Erreur pool PostgreSQL:", err.message, err.stack);
+});
+
+pool.on("connect", () => {
+  console.log("[DB] ✅ Nouvelle connexion PostgreSQL établie");
+});
+
+pool.query("SELECT 1 AS ping")
+  .then(() => console.log("[DB] ✅ Connexion PostgreSQL vérifiée OK"))
+  .catch((err) => console.error("[DB] ❌ Échec vérification connexion:", err.message));
 
 export const db = drizzle(pool, { schema });
 
