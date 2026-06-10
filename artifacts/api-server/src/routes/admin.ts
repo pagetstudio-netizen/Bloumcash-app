@@ -78,6 +78,7 @@ const adminLoginLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives. Réessayez dans 15 minutes." },
   skipSuccessfulRequests: true,
 });
@@ -87,6 +88,7 @@ const admin2FALimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives de vérification. Réessayez dans 10 minutes." },
 });
 

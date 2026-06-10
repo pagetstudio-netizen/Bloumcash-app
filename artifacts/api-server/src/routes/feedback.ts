@@ -27,6 +27,7 @@ const feedbackLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop d'envois. Réessayez dans 1 heure." },
 });
 

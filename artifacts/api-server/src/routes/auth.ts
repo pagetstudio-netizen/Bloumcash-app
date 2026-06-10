@@ -18,6 +18,7 @@ const loginLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives de connexion. Réessayez dans 15 minutes." },
   skipSuccessfulRequests: true,
 });
@@ -27,6 +28,7 @@ const registerLimiter = rateLimit({
   max: process.env.NODE_ENV === "production" ? 5 : 50,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de créations de compte depuis cette adresse IP. Réessayez dans 1 heure." },
   skip: () => process.env.NODE_ENV !== "production",
 });
@@ -36,6 +38,7 @@ const forgotPinLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de demandes de réinitialisation. Réessayez dans 1 heure." },
   skipSuccessfulRequests: false,
 });

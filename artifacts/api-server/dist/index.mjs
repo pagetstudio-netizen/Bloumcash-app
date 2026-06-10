@@ -62277,6 +62277,7 @@ var loginLimiter = rate_limit_default({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives de connexion. R\xE9essayez dans 15 minutes." },
   skipSuccessfulRequests: true
 });
@@ -62285,6 +62286,7 @@ var registerLimiter = rate_limit_default({
   max: process.env.NODE_ENV === "production" ? 5 : 50,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de cr\xE9ations de compte depuis cette adresse IP. R\xE9essayez dans 1 heure." },
   skip: () => process.env.NODE_ENV !== "production"
 });
@@ -62293,6 +62295,7 @@ var forgotPinLimiter = rate_limit_default({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de demandes de r\xE9initialisation. R\xE9essayez dans 1 heure." },
   skipSuccessfulRequests: false
 });
@@ -69856,6 +69859,7 @@ var adminLoginLimiter = rate_limit_default({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives. R\xE9essayez dans 15 minutes." },
   skipSuccessfulRequests: true
 });
@@ -69864,6 +69868,7 @@ var admin2FALimiter = rate_limit_default({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop de tentatives de v\xE9rification. R\xE9essayez dans 10 minutes." }
 });
 var ALLOWED_IMG_EXTS = /* @__PURE__ */ new Set(["jpg", "jpeg", "png", "gif", "webp"]);
@@ -71427,6 +71432,7 @@ var feedbackLimiter = rate_limit_default({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: "Trop d'envois. R\xE9essayez dans 1 heure." }
 });
 router15.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
