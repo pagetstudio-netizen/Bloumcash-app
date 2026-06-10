@@ -60065,10 +60065,10 @@ var userFeedbackTable = pgTable("user_feedback", {
 
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
-var connectionString = process.env.DATABASE_URL;
+var connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
 if (!connectionString) {
   throw new Error(
-    "DATABASE_URL doit \xEAtre d\xE9fini."
+    "DATABASE_URL ou SUPABASE_DATABASE_URL doit \xEAtre d\xE9fini."
   );
 }
 var isSupabase = connectionString.includes("supabase.com") || connectionString.includes("supabase.co");
