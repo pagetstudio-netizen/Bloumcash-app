@@ -14,6 +14,9 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const app: Express = express();
 
+/* ── Proxy trust : requis derrière Replit / Plesk / Nginx (X-Forwarded-For) ── */
+app.set("trust proxy", 1);
+
 /* ── Sécurité : headers HTTP ── */
 app.disable("x-powered-by");
 

@@ -71486,6 +71486,7 @@ var _appDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new U
 var UPLOADS_DIR2 = path2.resolve(_appDir, "..", "..", "..", "uploads");
 if (!fs2.existsSync(UPLOADS_DIR2)) fs2.mkdirSync(UPLOADS_DIR2, { recursive: true });
 var app = (0, import_express16.default)();
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(
   (0, import_pino_http.default)({
