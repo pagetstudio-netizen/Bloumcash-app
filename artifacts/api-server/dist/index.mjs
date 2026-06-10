@@ -60072,10 +60072,9 @@ if (!connectionString) {
     "DATABASE_URL ou SUPABASE_DATABASE_URL doit \xEAtre d\xE9fini."
   );
 }
-var isSupabase = connectionString.includes("supabase.com") || connectionString.includes("supabase.co");
 var pool = new Pool3({
   connectionString,
-  ssl: isSupabase ? { rejectUnauthorized: false } : void 0,
+  ssl: connectionString.includes("supabase.com") || connectionString.includes("supabase.co") ? { rejectUnauthorized: false } : void 0,
   max: 10,
   idleTimeoutMillis: 3e4,
   connectionTimeoutMillis: 1e4
