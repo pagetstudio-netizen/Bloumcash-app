@@ -1,11 +1,9 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
-# compiled output — ignoré partout sauf les builds de déploiement
-dist
-!artifacts/bloum-cash/dist/
-!artifacts/bloum-cash/dist/**
-!artifacts/api-server/dist/
-!artifacts/api-server/dist/**
+# compiled output — on ignore uniquement les packages internes (lib) et mockup-sandbox
+# Les builds de déploiement artifacts/bloum-cash/dist et artifacts/api-server/dist sont INCLUS dans git
+lib/*/dist/
+artifacts/mockup-sandbox/dist/
 # Sourcemaps volumineux — inutiles en production
 artifacts/bloum-cash/dist/**/*.map
 artifacts/api-server/dist/**/*.map
