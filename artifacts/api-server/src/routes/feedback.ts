@@ -5,6 +5,7 @@ import { userFeedbackTable, usersTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireUser } from "../middleware/user-auth";
 import { requireAdmin } from "../middleware/admin-auth";
+import { notifyFeedback } from "../lib/telegram";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,14 @@ router.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
       status: "nouveau",
       userPhone: user?.phone ?? null,
       userName: user?.fullName ?? null,
+    });
+
+    notifyFeedback({
+      type: String(type),
+      title: String(title).trim().slice(0, 100),
+      message: String(message).trim().slice(0, 500),
+      userName: user?.fullName ?? null,
+      userPhone: user?.phone ?? null,
     });
 
     res.status(201).json({ success: true, message: "Retour envoyé avec succès." });

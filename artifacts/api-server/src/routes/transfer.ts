@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { notifyPayment } from "../lib/telegram";
 import { db } from "@workspace/db";
 import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable, adminSettingsTable } from "@workspace/db";
 import { eq, and, ilike } from "drizzle-orm";
@@ -148,6 +149,7 @@ router.post("/transfer", requireUser, async (req, res) => {
           fees, description: `Transfert ${fromOperator} → ${toOperator} (GomboPlus démo)`,
           status: "success", payoutSent: true, userId,
         });
+        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
         res.status(201).json({
           success: true,
           message: "Transfert effectué (mode démo — GomboPlus non configuré)",
@@ -227,6 +229,7 @@ router.post("/transfer", requireUser, async (req, res) => {
         fees, description: `Transfert ${fromOperator} → ${toOperator}`,
         status: "success", payoutSent: true, userId,
       });
+      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
       res.status(201).json({
         success: true,
         message: "Transfert effectué (mode démo — PayDunya non configuré)",

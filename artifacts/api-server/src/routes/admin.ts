@@ -13,6 +13,16 @@ import bcrypt from "bcryptjs";
 import { createHmac, randomBytes } from "crypto";
 import fs from "fs";
 import path from "path";
+import {
+  notifyAdminLoginFail,
+  notifyAdminTotpFail,
+  notifyIpBlocked,
+} from "../lib/telegram";
+
+function getReqIp(req: { ip?: string; headers: Record<string, string | string[] | undefined> }): string {
+  const fwd = req.headers["x-forwarded-for"];
+  return String(Array.isArray(fwd) ? fwd[0] : fwd ?? req.ip ?? "inconnue").split(",")[0].trim();
+}
 
 function base32Decode(encoded: string): Buffer {
   const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -116,10 +126,16 @@ router.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
       res.status(400).json({ error: "Email et mot de passe requis" }); return;
     }
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email)).limit(1);
-    if (!admins.length) { res.status(401).json({ error: "Identifiants incorrects" }); return; }
+    if (!admins.length) {
+      notifyAdminLoginFail(email, getReqIp(req as any));
+      res.status(401).json({ error: "Identifiants incorrects" }); return;
+    }
     const admin = admins[0];
     const ok = await bcrypt.compare(String(password), admin.passwordHash);
-    if (!ok) { res.status(401).json({ error: "Identifiants incorrects" }); return; }
+    if (!ok) {
+      notifyAdminLoginFail(email, getReqIp(req as any));
+      res.status(401).json({ error: "Identifiants incorrects" }); return;
+    }
 
     if (!admin.totpSecret) {
       /* Première connexion : générer un secret TOTP et stocker en attente */
@@ -200,6 +216,7 @@ router.post("/admin/auth/verify-totp", admin2FALimiter, async (req, res) => {
     const isValid = authenticator.verify({ token: String(code), secret: admin.totpSecret });
     if (!isValid) {
       req.log.warn({ adminId: admin.id }, "Admin TOTP code invalide");
+      notifyAdminTotpFail(admin.email, getReqIp(req as any));
       res.status(400).json({ error: "Code invalide ou expiré. Réessayez." }); return;
     }
 
@@ -753,6 +770,7 @@ router.post("/admin/security/block-ip", requireAdmin, async (req, res) => {
     if (!ip) { res.status(400).json({ error: "IP requise" }); return; }
     const [row] = await db.insert(blockedIpsTable).values({ ip, reason: reason ?? null }).returning();
     await db.insert(securityEventsTable).values({ type: "ip_blocked", ip, details: reason ?? "Bloqué manuellement" });
+    notifyIpBlocked({ ip, reason: reason ?? "Bloqué manuellement par l'admin" });
     res.status(201).json(row);
   } catch (err: unknown) {
     const e = err as { code?: string };

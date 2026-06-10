@@ -66916,6 +66916,359 @@ async function sendMassEmail(opts) {
   });
 }
 
+// src/lib/logger.ts
+var import_pino = __toESM(require_pino(), 1);
+var isProduction = process.env.NODE_ENV === "production";
+var logger = (0, import_pino.default)({
+  level: process.env.LOG_LEVEL ?? "info",
+  redact: [
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "res.headers['set-cookie']"
+  ],
+  ...isProduction ? {} : {
+    transport: {
+      target: "pino-pretty",
+      options: { colorize: true }
+    }
+  }
+});
+
+// src/lib/telegram.ts
+var TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+var TG_API = TOKEN ? `https://api.telegram.org/bot${TOKEN}` : null;
+var groupChatId = null;
+function esc2(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function fmt(n) {
+  return Number(n ?? 0).toLocaleString("fr-FR");
+}
+function togoDt() {
+  return (/* @__PURE__ */ new Date()).toLocaleString("fr-FR", {
+    timeZone: "Africa/Lome",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+async function tgFetch(method, body) {
+  if (!TG_API) return null;
+  try {
+    const res = await fetch(`${TG_API}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(1e4)
+    });
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+async function loadGroupChatId() {
+  try {
+    const rows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, "telegram_group_chat_id")).limit(1);
+    if (rows[0]?.value) {
+      groupChatId = rows[0].value;
+      logger.info({ groupChatId }, "\u{1F916} Telegram group chat ID charg\xE9");
+    }
+  } catch {
+  }
+}
+async function saveGroupChatId(chatId) {
+  groupChatId = chatId;
+  try {
+    await db.insert(adminSettingsTable).values({ key: "telegram_group_chat_id", value: chatId }).onConflictDoUpdate({
+      target: adminSettingsTable.key,
+      set: { value: chatId, updatedAt: /* @__PURE__ */ new Date() }
+    });
+  } catch {
+  }
+}
+async function sendMessage(chatId, text2, extra = {}) {
+  await tgFetch("sendMessage", {
+    chat_id: chatId,
+    text: text2,
+    parse_mode: "HTML",
+    ...extra
+  });
+}
+async function sendToGroup(text2, extra = {}) {
+  if (!groupChatId) return;
+  await sendMessage(groupChatId, text2, extra);
+}
+function notifyNewUser(user) {
+  sendToGroup(
+    `\u{1F195} <b>NOUVEL UTILISATEUR</b>
+
+\u{1F464} Nom : ${esc2(user.fullName)}
+\u{1F4F1} T\xE9l\xE9phone : <code>${esc2(user.phone)}</code>
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyPayment(tx) {
+  sendToGroup(
+    `\u{1F4B8} <b>TRANSFERT R\xC9USSI</b>
+
+\u{1F4CB} R\xE9f : <code>${esc2(tx.reference)}</code>
+\u{1F4B0} Montant : <b>${fmt(tx.amount)} FCFA</b>
+\u{1F4B3} Commission : ${fmt(tx.fees ?? 0)} FCFA
+\u{1F4E4} De : ${esc2(tx.fromPhone ?? "?")} (${esc2(tx.fromOperator ?? "?")})
+\u{1F4E5} Vers : ${esc2(tx.toPhone ?? "?")} (${esc2(tx.toOperator ?? "?")})
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyFeedback(fb) {
+  const typeIcon = fb.type === "bug" ? "\u{1F41B}" : fb.type === "suggestion" ? "\u{1F4A1}" : "\u{1F4AC}";
+  const typeLabel = fb.type === "bug" ? "Signalement de bug" : fb.type === "suggestion" ? "Suggestion" : "Retour utilisateur";
+  sendToGroup(
+    `${typeIcon} <b>${typeLabel.toUpperCase()}</b>
+
+\u{1F4CC} <b>${esc2(fb.title)}</b>
+\u{1F4DD} ${esc2(fb.message)}
+
+\u{1F464} ${esc2(fb.userName ?? "Inconnu")} \u2014 ${esc2(fb.userPhone ?? "?")}
+\u{1F550} ${togoDt()}`
+  ).catch(() => {
+  });
+}
+function notifyAdminLoginFail(email3, ip) {
+  sendToGroup(
+    `\u26A0\uFE0F <b>TENTATIVE DE CONNEXION ADMIN \xC9CHOU\xC9E</b>
+
+\u{1F4E7} Email : <code>${esc2(email3)}</code>
+\u{1F310} IP : <code>${esc2(ip)}</code>
+\u{1F550} ${togoDt()}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
+        ]
+      }
+    }
+  ).catch(() => {
+  });
+}
+function notifyAdminTotpFail(email3, ip) {
+  sendToGroup(
+    `\u{1F510} <b>CODE TOTP INVALIDE \u2014 ADMIN</b>
+
+\u{1F4E7} Email : <code>${esc2(email3)}</code>
+\u{1F310} IP : <code>${esc2(ip)}</code>
+\u{1F550} ${togoDt()}`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "\u{1F6AB} Bloquer cette IP", callback_data: `block_ip:${ip}` }]
+        ]
+      }
+    }
+  ).catch(() => {
+  });
+}
+function notifyIpBlocked(opts) {
+  const title = opts.auto ? "\u{1F50D} VPN/PROXY BLOQU\xC9 AUTOMATIQUEMENT" : "\u{1F6AB} IP BLOQU\xC9E";
+  sendToGroup(
+    `${title}
+
+\u{1F310} IP : <code>${esc2(opts.ip)}</code>
+` + (opts.country ? `\u{1F3F3}\uFE0F Pays : ${esc2(opts.country)}
+` : "") + (opts.type ? `\u{1F4E1} Type : ${esc2(opts.type)}
+` : "") + `\u{1F4DD} Raison : ${esc2(opts.reason)}
+` + (opts.path ? `\u{1F517} Chemin : ${esc2(opts.path)}
+` : "") + `\u{1F4C5} ${togoDt()}
+
+L'IP a \xE9t\xE9 bloqu\xE9e d\xE9finitivement en base de donn\xE9es.`
+  ).catch(() => {
+  });
+}
+async function sendDailyReport() {
+  if (!groupChatId) return;
+  try {
+    const todayStart = /* @__PURE__ */ new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const [totalUsers] = await db.select({ c: count() }).from(usersTable);
+    const [todayUsers] = await db.select({ c: count() }).from(usersTable).where(gte(usersTable.createdAt, todayStart));
+    const [todayTx] = await db.select({
+      c: count(),
+      vol: sql`coalesce(sum(${transactionsTable.amount}), 0)`,
+      fees: sql`coalesce(sum(${transactionsTable.fees}), 0)`
+    }).from(transactionsTable).where(gte(transactionsTable.createdAt, todayStart));
+    const [successTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "success")
+      )
+    );
+    const [failedTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "failed")
+      )
+    );
+    const [pendingTx] = await db.select({ c: count() }).from(transactionsTable).where(
+      and(
+        gte(transactionsTable.createdAt, todayStart),
+        eq(transactionsTable.status, "pending")
+      )
+    );
+    const now = /* @__PURE__ */ new Date();
+    const hLabel = now.getUTCHours() === 0 ? "00h00" : "12h00";
+    await sendMessage(
+      groupChatId,
+      `\u{1F4CA} <b>BILAN ${hLabel} \u2014 BLOUM CASH</b>
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+
+\u{1F465} <b>Utilisateurs</b>
+\u2022 Total : <b>${fmt(totalUsers.c)}</b>
+\u2022 Aujourd'hui : +${todayUsers.c} nouveaux
+
+\u{1F4B8} <b>Transactions du jour</b>
+\u2022 Total : ${todayTx.c} op\xE9rations
+\u2022 Volume : <b>${fmt(todayTx.vol)} FCFA</b>
+\u2022 Commissions : ${fmt(todayTx.fees)} FCFA
+\u2022 \u2705 R\xE9ussies : ${successTx.c}
+\u2022 \u274C \xC9chou\xE9es : ${failedTx.c}
+\u2022 \u23F3 En attente : ${pendingTx.c}
+
+\u{1F4C5} ${togoDt()} (Togo UTC+0)
+<i>Rapport automatique Bloum Cash Admin</i>`
+    );
+  } catch (err) {
+    logger.error({ err }, "Telegram daily report error");
+  }
+}
+async function handleUpdate(update) {
+  const message = update.message;
+  const callbackQuery = update.callback_query;
+  if (message) {
+    const text2 = String(message.text ?? "");
+    const chat = message.chat;
+    const chatId = String(chat?.id ?? "");
+    const normalized = text2.toLowerCase().replace(/[''`]/g, "'").replace(/\s+/g, " ").trim();
+    if (normalized.includes("salut c'est toi le bot") || normalized.includes("salut c est toi le bot") || normalized.includes("salut cest toi le bot")) {
+      await saveGroupChatId(chatId);
+      await sendMessage(
+        chatId,
+        `\u2705 <b>Groupe d\xE9tect\xE9 et enregistr\xE9 !</b>
+
+Je vais maintenant envoyer toutes les notifications ici :
+\u2022 \u{1F195} Nouveaux utilisateurs inscrits
+\u2022 \u{1F4B8} Paiements et transferts r\xE9ussis
+\u2022 \u{1F4AC} Retours &amp; suggestions utilisateurs
+\u2022 \u26A0\uFE0F Tentatives de connexion admin \xE9chou\xE9es
+\u2022 \u{1F6AB} IP bloqu\xE9es (avec bouton blocage rapide)
+\u2022 \u{1F4CA} Bilans quotidiens \xE0 00h et 12h (Togo)
+
+<i>Bloum Cash Admin Bot actif \u2713</i>`
+      );
+      logger.info({ chatId }, "\u{1F916} Telegram group chat ID enregistr\xE9");
+    }
+  }
+  if (callbackQuery) {
+    const data = String(callbackQuery.data ?? "");
+    const callbackId = String(callbackQuery.id ?? "");
+    const cbMsg = callbackQuery.message;
+    if (data.startsWith("block_ip:")) {
+      const ip = data.slice(9).trim();
+      if (!ip) return;
+      try {
+        await db.insert(blockedIpsTable).values({ ip, reason: "Bloqu\xE9 via bouton Telegram" });
+        await db.insert(securityEventsTable).values({
+          type: "ip_blocked",
+          ip,
+          details: "Bloqu\xE9 via bouton Telegram par l'admin"
+        });
+        await tgFetch("answerCallbackQuery", {
+          callback_query_id: callbackId,
+          text: `\u2705 IP ${ip} bloqu\xE9e d\xE9finitivement !`,
+          show_alert: true
+        });
+        if (cbMsg) {
+          const cbChat = cbMsg.chat;
+          const cbMsgId = cbMsg.message_id;
+          const originalText = String(cbMsg.text ?? "");
+          await tgFetch("editMessageText", {
+            chat_id: cbChat?.id,
+            message_id: cbMsgId,
+            text: originalText + `
+
+\u{1F6AB} <b>IP bloqu\xE9e d\xE9finitivement par l'admin.</b>`,
+            parse_mode: "HTML"
+          });
+        }
+        logger.info({ ip }, "\u{1F6AB} IP bloqu\xE9e via bouton Telegram");
+      } catch (err) {
+        const e = err;
+        const alreadyBlocked = e?.code === "23505" || e?.message?.includes("unique");
+        await tgFetch("answerCallbackQuery", {
+          callback_query_id: callbackId,
+          text: alreadyBlocked ? `\u26A0\uFE0F IP ${ip} d\xE9j\xE0 bloqu\xE9e` : `\u274C Erreur lors du blocage`,
+          show_alert: true
+        });
+      }
+    }
+  }
+}
+async function pollForever() {
+  let offset = 0;
+  logger.info("\u{1F916} Telegram long polling d\xE9marr\xE9");
+  while (true) {
+    try {
+      const res = await fetch(
+        `${TG_API}/getUpdates?offset=${offset}&timeout=25&allowed_updates=message,callback_query`,
+        { signal: AbortSignal.timeout(35e3) }
+      );
+      if (!res.ok) {
+        await new Promise((r) => setTimeout(r, 5e3));
+        continue;
+      }
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.result)) {
+        for (const update of data.result) {
+          offset = update.update_id + 1;
+          handleUpdate(update).catch(
+            (err) => logger.error({ err }, "Telegram handleUpdate error")
+          );
+        }
+      }
+    } catch {
+      await new Promise((r) => setTimeout(r, 5e3));
+    }
+  }
+}
+var lastReportHour = -1;
+function startScheduler() {
+  setInterval(async () => {
+    const now = /* @__PURE__ */ new Date();
+    const h = now.getUTCHours();
+    const m = now.getUTCMinutes();
+    if (m === 0 && (h === 0 || h === 12) && h !== lastReportHour) {
+      lastReportHour = h;
+      sendDailyReport().catch(
+        (err) => logger.error({ err }, "Telegram scheduled report error")
+      );
+    }
+  }, 6e4);
+}
+async function startTelegram() {
+  if (!TOKEN) {
+    logger.warn("\u26A0\uFE0F TELEGRAM_BOT_TOKEN non configur\xE9 \u2014 bot Telegram d\xE9sactiv\xE9");
+    return;
+  }
+  await loadGroupChatId();
+  pollForever().catch(
+    (err) => logger.error({ err }, "Telegram polling fatal error")
+  );
+  startScheduler();
+  logger.info("\u{1F916} Telegram bot pr\xEAt (polling + scheduler quotidien)");
+}
+
 // src/routes/auth.ts
 var router2 = (0, import_express2.Router)();
 var loginLimiter = rate_limit_default({
@@ -67047,6 +67400,7 @@ router2.post("/auth/register", registerLimiter, async (req, res) => {
       message: `Bonjour ${user.fullName}, votre compte est cr\xE9\xE9 !`,
       data: { type: "register" }
     }, req.log);
+    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
     res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {
     req.log.error({ err }, "Register error");
@@ -68576,6 +68930,7 @@ router6.post("/transfer", requireUser, async (req, res) => {
           payoutSent: true,
           userId
         });
+        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
         res.status(201).json({
           success: true,
           message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 GomboPlus non configur\xE9)",
@@ -68669,6 +69024,7 @@ router6.post("/transfer", requireUser, async (req, res) => {
         payoutSent: true,
         userId
       });
+      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
       res.status(201).json({
         success: true,
         message: "Transfert effectu\xE9 (mode d\xE9mo \u2014 PayDunya non configur\xE9)",
@@ -68989,6 +69345,15 @@ router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
             { reference: tx.reference, transactionId: payoutResult.transactionId },
             "PayDunya webhook: payout destinataire OK \u2192 transaction SUCCESS"
           );
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null
+          });
           if (tx.userId) {
             const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
             if (userRows.length && userRows[0].email) {
@@ -69334,6 +69699,15 @@ router9.post("/gomboplus/webhook", requireWebhookSecret, async (req, res) => {
         if (payoutResult.success) {
           await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
           req.log.info({ reference: tx.reference, gpRef: payoutResult.gpReference }, "GomboPlus webhook: CASHOUT OK \u2192 success");
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null
+          });
           if (tx.userId) {
             const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
             if (userRows[0]?.email) {
@@ -69395,6 +69769,10 @@ var import_express10 = __toESM(require_express2(), 1);
 import { createHmac, randomBytes as randomBytes2 } from "crypto";
 import fs from "fs";
 import path from "path";
+function getReqIp(req) {
+  const fwd = req.headers["x-forwarded-for"];
+  return String(Array.isArray(fwd) ? fwd[0] : fwd ?? req.ip ?? "inconnue").split(",")[0].trim();
+}
 function base32Decode(encoded) {
   const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   const str = encoded.toUpperCase().replace(/=+$/, "");
@@ -69489,12 +69867,14 @@ router10.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
     }
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, email3)).limit(1);
     if (!admins.length) {
+      notifyAdminLoginFail(email3, getReqIp(req));
       res.status(401).json({ error: "Identifiants incorrects" });
       return;
     }
     const admin = admins[0];
     const ok = await bcryptjs_default.compare(String(password), admin.passwordHash);
     if (!ok) {
+      notifyAdminLoginFail(email3, getReqIp(req));
       res.status(401).json({ error: "Identifiants incorrects" });
       return;
     }
@@ -69575,6 +69955,7 @@ router10.post("/admin/auth/verify-totp", admin2FALimiter, async (req, res) => {
     const isValid2 = authenticator.verify({ token: String(code), secret: admin.totpSecret });
     if (!isValid2) {
       req.log.warn({ adminId: admin.id }, "Admin TOTP code invalide");
+      notifyAdminTotpFail(admin.email, getReqIp(req));
       res.status(400).json({ error: "Code invalide ou expir\xE9. R\xE9essayez." });
       return;
     }
@@ -70237,6 +70618,7 @@ router10.post("/admin/security/block-ip", requireAdmin, async (req, res) => {
     }
     const [row] = await db.insert(blockedIpsTable).values({ ip, reason: reason ?? null }).returning();
     await db.insert(securityEventsTable).values({ type: "ip_blocked", ip, details: reason ?? "Bloqu\xE9 manuellement" });
+    notifyIpBlocked({ ip, reason: reason ?? "Bloqu\xE9 manuellement par l'admin" });
     res.status(201).json(row);
   } catch (err) {
     const e = err;
@@ -70965,6 +71347,13 @@ router14.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
       userPhone: user?.phone ?? null,
       userName: user?.fullName ?? null
     });
+    notifyFeedback({
+      type: String(type),
+      title: String(title).trim().slice(0, 100),
+      message: String(message).trim().slice(0, 500),
+      userName: user?.fullName ?? null,
+      userPhone: user?.phone ?? null
+    });
     res.status(201).json({ success: true, message: "Retour envoy\xE9 avec succ\xE8s." });
   } catch (err) {
     req.log.error({ err }, "Feedback submit error");
@@ -71015,24 +71404,6 @@ router15.use(push_notification_default);
 router15.use(test_push_default);
 router15.use(feedback_default);
 var routes_default = router15;
-
-// src/lib/logger.ts
-var import_pino = __toESM(require_pino(), 1);
-var isProduction = process.env.NODE_ENV === "production";
-var logger = (0, import_pino.default)({
-  level: process.env.LOG_LEVEL ?? "info",
-  redact: [
-    "req.headers.authorization",
-    "req.headers.cookie",
-    "res.headers['set-cookie']"
-  ],
-  ...isProduction ? {} : {
-    transport: {
-      target: "pino-pretty",
-      options: { colorize: true }
-    }
-  }
-});
 
 // src/app.ts
 var _appDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
@@ -71180,6 +71551,7 @@ async function runStartupSeed() {
       });
     }
     logger.info("\u{1F331} Startup seed termin\xE9");
+    startTelegram().catch((err) => logger.error({ err }, "Telegram start error"));
   } catch (err) {
     logger.error({ err }, "Startup seed error");
   }

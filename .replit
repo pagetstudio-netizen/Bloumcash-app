@@ -97,3 +97,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 ONESIGNAL_APP_ID = "ae2ed1b9-b544-49e9-a825-38d41202d58d"
+TELEGRAM_BOT_TOKEN = "8971087865:AAHuA3j7fwb9EUCFOAmP4myw9NZmhH9UToQ"

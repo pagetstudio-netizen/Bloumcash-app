@@ -7,6 +7,7 @@ import type { DisburseStatus } from "../lib/paydunya";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
 import { requireWebhookSecret } from "../middleware/webhook-auth";
+import { notifyPayment } from "../lib/telegram";
 
 const router: IRouter = Router();
 
@@ -139,6 +140,16 @@ router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
             { reference: tx.reference, transactionId: payoutResult.transactionId },
             "PayDunya webhook: payout destinataire OK → transaction SUCCESS"
           );
+
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null,
+          });
 
           /* Notification push à l'expéditeur */
           if (tx.userId) {

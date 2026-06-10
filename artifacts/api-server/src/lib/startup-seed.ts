@@ -6,6 +6,7 @@ import {
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { logger } from "./logger";
+import { startTelegram } from "./telegram";
 
 export async function runStartupSeed() {
   try {
@@ -95,6 +96,9 @@ export async function runStartupSeed() {
     }
 
     logger.info("🌱 Startup seed terminé");
+
+    // Démarrer le bot Telegram en background (non-bloquant)
+    startTelegram().catch(err => logger.error({ err }, "Telegram start error"));
   } catch (err) {
     logger.error({ err }, "Startup seed error");
   }

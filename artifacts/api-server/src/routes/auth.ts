@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { signUserToken, requireUser } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
 import { sendPinResetEmail } from "../lib/email";
+import { notifyNewUser } from "../lib/telegram";
 
 const router: IRouter = Router();
 
@@ -172,6 +173,8 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
       message: `Bonjour ${user.fullName}, votre compte est créé !`,
       data: { type: "register" },
     }, req.log);
+
+    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
 
     res.status(201).json({ token, user: { id: String(user.id), fullName: user.fullName, email: user.email, phone: user.phone } });
   } catch (err) {

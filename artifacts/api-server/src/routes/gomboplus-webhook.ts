@@ -29,6 +29,7 @@ import * as gomboplus from "../lib/gomboplus";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
 import { requireWebhookSecret } from "../middleware/webhook-auth";
+import { notifyPayment } from "../lib/telegram";
 
 const router: IRouter = Router();
 
@@ -117,6 +118,16 @@ router.post("/gomboplus/webhook", requireWebhookSecret, async (req, res) => {
         if (payoutResult.success) {
           await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, tx.reference));
           req.log.info({ reference: tx.reference, gpRef: payoutResult.gpReference }, "GomboPlus webhook: CASHOUT OK → success");
+
+          notifyPayment({
+            reference: tx.reference,
+            amount: tx.amount,
+            fees: tx.fees ?? 0,
+            fromPhone: tx.fromPhone ?? null,
+            toPhone: tx.toPhone ?? null,
+            fromOperator: tx.operator ?? null,
+            toOperator: tx.toOperator ?? null,
+          });
 
           if (tx.userId) {
             const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, tx.userId)).limit(1);
