@@ -1,11 +1,24 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
-import { userFeedbackTable, usersTable } from "@workspace/db";
+import { userFeedbackTable, usersTable, adminSettingsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { requireUser } from "../middleware/user-auth";
 import { requireAdmin } from "../middleware/admin-auth";
 import { notifyFeedback } from "../lib/telegram";
+
+/* ── Config par défaut du formulaire suggestions ── */
+const DEFAULT_FEEDBACK_CONFIG = {
+  pageTitle: "Suggestions & Retours",
+  pageSubtitle: "Aidez-nous à améliorer Bloum Cash",
+  introQuestion: "Que souhaitez-vous partager avec nous ?",
+  footerMessage: "Vos retours sont précieux. Chaque suggestion est lue et étudiée par notre équipe. Merci de contribuer à l'amélioration de Bloum Cash.",
+  types: [
+    { key: "suggestion", label: "Suggestion d'amélioration", desc: "Proposez une nouvelle fonctionnalité", colorHex: "#f59e0b", bgHex: "#fffbeb", borderHex: "#fde68a" },
+    { key: "retour",     label: "Retour sur l'application", desc: "Partagez votre expérience utilisateur", colorHex: "#2d52e8", bgHex: "#eff2ff", borderHex: "#c7d2fe" },
+    { key: "bug",        label: "Signaler un problème",     desc: "Décrivez un bug ou dysfonctionnement",  colorHex: "#ef4444", bgHex: "#fef2f2", borderHex: "#fecaca" },
+  ],
+};
 
 const router: IRouter = Router();
 
@@ -93,6 +106,40 @@ router.patch("/admin/feedback/:id/status", requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Admin feedback status update error");
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+
+/* ── GET /feedback/config — Config publique du formulaire ── */
+router.get("/feedback/config", async (req, res) => {
+  try {
+    const rows = await db.select().from(adminSettingsTable)
+      .where(eq(adminSettingsTable.key, "feedback_form_config")).limit(1);
+    if (rows[0]?.value) {
+      res.json(JSON.parse(rows[0].value));
+    } else {
+      res.json(DEFAULT_FEEDBACK_CONFIG);
+    }
+  } catch {
+    res.json(DEFAULT_FEEDBACK_CONFIG);
+  }
+});
+
+/* ── PUT /admin/feedback/config — Sauvegarder la config (admin) ── */
+router.put("/admin/feedback/config", requireAdmin, async (req, res) => {
+  try {
+    const config = req.body;
+    if (!config.pageTitle || !Array.isArray(config.types) || config.types.length === 0) {
+      res.status(400).json({ error: "Configuration invalide." });
+      return;
+    }
+    const value = JSON.stringify(config);
+    await db.insert(adminSettingsTable)
+      .values({ key: "feedback_form_config", value })
+      .onConflictDoUpdate({ target: adminSettingsTable.key, set: { value, updatedAt: new Date() } });
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Feedback config save error");
     res.status(500).json({ error: "Erreur serveur." });
   }
 });

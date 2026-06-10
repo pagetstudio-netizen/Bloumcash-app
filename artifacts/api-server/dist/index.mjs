@@ -71311,6 +71311,17 @@ var config_default = router13;
 // src/routes/feedback.ts
 var import_express14 = __toESM(require_express2(), 1);
 init_user_auth();
+var DEFAULT_FEEDBACK_CONFIG = {
+  pageTitle: "Suggestions & Retours",
+  pageSubtitle: "Aidez-nous \xE0 am\xE9liorer Bloum Cash",
+  introQuestion: "Que souhaitez-vous partager avec nous ?",
+  footerMessage: "Vos retours sont pr\xE9cieux. Chaque suggestion est lue et \xE9tudi\xE9e par notre \xE9quipe. Merci de contribuer \xE0 l'am\xE9lioration de Bloum Cash.",
+  types: [
+    { key: "suggestion", label: "Suggestion d'am\xE9lioration", desc: "Proposez une nouvelle fonctionnalit\xE9", colorHex: "#f59e0b", bgHex: "#fffbeb", borderHex: "#fde68a" },
+    { key: "retour", label: "Retour sur l'application", desc: "Partagez votre exp\xE9rience utilisateur", colorHex: "#2d52e8", bgHex: "#eff2ff", borderHex: "#c7d2fe" },
+    { key: "bug", label: "Signaler un probl\xE8me", desc: "D\xE9crivez un bug ou dysfonctionnement", colorHex: "#ef4444", bgHex: "#fef2f2", borderHex: "#fecaca" }
+  ]
+};
 var router14 = (0, import_express14.Router)();
 var feedbackLimiter = rate_limit_default({
   windowMs: 60 * 60 * 1e3,
@@ -71382,6 +71393,33 @@ router14.patch("/admin/feedback/:id/status", requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Admin feedback status update error");
+    res.status(500).json({ error: "Erreur serveur." });
+  }
+});
+router14.get("/feedback/config", async (req, res) => {
+  try {
+    const rows = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, "feedback_form_config")).limit(1);
+    if (rows[0]?.value) {
+      res.json(JSON.parse(rows[0].value));
+    } else {
+      res.json(DEFAULT_FEEDBACK_CONFIG);
+    }
+  } catch {
+    res.json(DEFAULT_FEEDBACK_CONFIG);
+  }
+});
+router14.put("/admin/feedback/config", requireAdmin, async (req, res) => {
+  try {
+    const config2 = req.body;
+    if (!config2.pageTitle || !Array.isArray(config2.types) || config2.types.length === 0) {
+      res.status(400).json({ error: "Configuration invalide." });
+      return;
+    }
+    const value = JSON.stringify(config2);
+    await db.insert(adminSettingsTable).values({ key: "feedback_form_config", value }).onConflictDoUpdate({ target: adminSettingsTable.key, set: { value, updatedAt: /* @__PURE__ */ new Date() } });
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Feedback config save error");
     res.status(500).json({ error: "Erreur serveur." });
   }
 });
