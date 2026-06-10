@@ -35,7 +35,8 @@ export const LoginResponse = zod.object({
   "user": zod.object({
   "id": zod.string(),
   "fullName": zod.string(),
-  "email": zod.string()
+  "email": zod.string(),
+  "phone": zod.string()
 })
 })
 

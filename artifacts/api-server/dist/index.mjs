@@ -40259,7 +40259,8 @@ var LoginResponse = objectType({
   "user": objectType({
     "id": stringType(),
     "fullName": stringType(),
-    "email": stringType()
+    "email": stringType(),
+    "phone": stringType()
   })
 });
 var registerBodyPinMin = 4;

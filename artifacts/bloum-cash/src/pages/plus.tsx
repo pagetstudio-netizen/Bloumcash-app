@@ -9,20 +9,25 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
-function getAvatarStyle(name: string): { background: string; color: string } {
-  const colors = [
-    { background: "#e8edfb", color: "#1a3fc4" },
-    { background: "#f3effe", color: "#7c3aed" },
-    { background: "#fce7f3", color: "#db2777" },
-    { background: "#d1fae5", color: "#059669" },
-    { background: "#fef3c7", color: "#d97706" },
-    { background: "#fee2e2", color: "#dc2626" },
-    { background: "#cffafe", color: "#0891b2" },
-    { background: "#ecfccb", color: "#65a30d" },
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
+function formatTogoPhone(raw: string | undefined | null): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("228") && digits.length === 11) return `+${digits}`;
+  if (digits.length === 8) return `+228${digits}`;
+  return `+${digits}`;
+}
+
+interface MenuItem {
+  icon: React.ReactNode;
+  label: string;
+  href: string;
+  color?: string;
+  external?: string;
+}
+
+interface MenuGroup {
+  title: string;
+  items: MenuItem[];
 }
 
 const TEST_EMAIL = "blousprono@gmail.com";
@@ -63,7 +68,7 @@ export default function Plus() {
     setLocation("/login");
   };
 
-  const menuGroups = [
+  const menuGroups: MenuGroup[] = [
     {
       title: "Assistance",
       items: [
@@ -99,21 +104,13 @@ export default function Plus() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card rounded-2xl p-4 border border-border shadow-sm flex items-center gap-4"
         >
-          {(() => {
-            const name = user?.fullName || "Utilisateur";
-            const avatarStyle = getAvatarStyle(name);
-            return (
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0"
-                style={avatarStyle}
-              >
-                {name.substring(0, 2).toUpperCase()}
-              </div>
-            );
-          })()}
+          <img
+            src="/icon-avatar.png"
+            alt="avatar"
+            className="w-16 h-16 rounded-full flex-shrink-0 object-cover"
+          />
           <div className="flex-1">
-            <h2 className="font-bold text-lg text-foreground">{user?.fullName || "Utilisateur"}</h2>
-            <p className="text-muted-foreground text-sm">{user?.email || "email@exemple.com"}</p>
+            <p className="font-bold text-lg text-foreground">{formatTogoPhone(user?.phone)}</p>
           </div>
         </motion.div>
 

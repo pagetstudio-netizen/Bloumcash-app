@@ -367,13 +367,15 @@ components:
 
     User:
       type: object
-      required: [id, fullName, email]
+      required: [id, fullName, email, phone]
       properties:
         id:
           type: string
         fullName:
           type: string
         email:
+          type: string
+        phone:
           type: string
 
     MessageResponse:
