@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Loader2,
   MessageCircle,
+  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatAmount, validateTogoPhone, useWhatsAppSupportNumber } from "@/lib/utils";
@@ -665,7 +666,7 @@ export default function Transfert() {
 
             {/* Avertissement bénéficiaire */}
             <div className="rounded-xl px-3 py-2 flex items-center gap-2" style={{ background: "#3B4FC5" }}>
-              <span className="text-sm leading-none flex-shrink-0">⚠️</span>
+              <Info size={16} className="flex-shrink-0 text-white opacity-90" />
               <p className="text-[11px] font-medium text-white leading-snug">
                 Vérifiez le numéro du bénéficiaire. Les fonds envoyés par erreur ne peuvent pas être remboursés.
               </p>
