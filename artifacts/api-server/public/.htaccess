@@ -1,0 +1,18 @@
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+# Servir les fichiers et dossiers existants directement
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Ne pas réécrire les appels API (laisser Passenger/Node.js les gérer)
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_URI} ^/uploads/
+RewriteRule ^ - [L]
+
+# Pour toutes les autres routes SPA → renvoyer index.html
+RewriteRule ^ index.html [QSA,L]
