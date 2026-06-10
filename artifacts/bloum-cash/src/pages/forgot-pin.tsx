@@ -167,9 +167,6 @@ export default function ForgotPin() {
                         required
                       />
                     </div>
-                    <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, marginLeft: 2 }}>
-                      TMoney: 90-93 · Moov Money: 96-99
-                    </p>
                   </div>
 
                   {error && (

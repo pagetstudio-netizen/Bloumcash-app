@@ -82,9 +82,9 @@ export default function Login() {
                 </div>
                 <input placeholder="XX XX XX XX" type="tel" inputMode="numeric" autoComplete="off" data-form-type="other" {...form.register("phone")} style={{ flex: 1, height: "100%", background: "transparent", border: "none", outline: "none", padding: "0 14px", fontSize: 15, color: "#111827", letterSpacing: 1 }} />
               </div>
-              {errors.phone
-                ? <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>{errors.phone.message}</p>
-                : <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, marginLeft: 2 }}>TMoney: 90-93 · Moov Money: 96-99</p>}
+              {errors.phone && (
+                <p style={{ fontSize: 11, color: "#ef4444", marginTop: 4, marginLeft: 2 }}>{errors.phone.message}</p>
+              )}
             </div>
 
             {/* ── Mot de passe ── */}
