@@ -1,51 +1,70 @@
+'use strict';
 /**
- * Entry point for Node.js hosting (Plesk, cPanel, etc.)
+ * Entry point for Plesk / Phusion Passenger
  *
- * All npm dependencies are pre-bundled in dist/index.mjs by esbuild.
+ * CJS module — no top-level await — fully Passenger-compatible.
+ * All dependencies are pre-bundled inside dist/index.mjs (esbuild).
  *
- * Required environment variables:
- *   DATABASE_URL   — PostgreSQL connection string
- *   PORT           — Port to listen on (set automatically by Plesk)
- *   NODE_ENV       — Set to "production"
- *
- * Optional:
- *   TELEGRAM_BOT_TOKEN, ONESIGNAL_APP_ID, ONESIGNAL_API_KEY, etc.
+ * Required env vars (set in Plesk → Node.js → Environment Variables):
+ *   SUPABASE_DATABASE_URL  — PostgreSQL Supabase connection string
+ *   USER_JWT_SECRET        — secret for user tokens
+ *   ADMIN_JWT_SECRET       — secret for admin tokens
+ *   NODE_ENV               — "production"
+ *   PORT                   — set automatically by Passenger/Plesk
  */
 
-try {
-  await import('./dist/index.mjs');
-} catch (startupErr) {
-  // Fallback server: keeps the process alive and returns JSON errors for API
-  // calls (instead of crashing and having Passenger show an HTML error page).
-  console.error('[Bloum Cash] Erreur au démarrage du serveur :', startupErr?.message ?? startupErr);
+var path = require('path');
+var http = require('http');
+var fs   = require('fs');
 
-  const http = await import('node:http');
-  const fs   = await import('node:fs');
-  const path = await import('node:path');
-  const url  = await import('node:url');
+(async function start() {
+  try {
+    // dist/index.mjs is an esbuild ESM bundle — dynamic import works from CJS
+    await import('./dist/index.mjs');
+  } catch (startupErr) {
+    var errMsg = (startupErr && startupErr.message) ? startupErr.message : String(startupErr);
+    console.error('[Bloum Cash] ERREUR DEMARRAGE:', errMsg);
+    console.error('[Bloum Cash] Stack:', startupErr && startupErr.stack);
 
-  const __dir    = path.dirname(url.fileURLToPath(import.meta.url));
-  const publicDir = path.join(__dir, 'public');
-  const indexPath = path.join(publicDir, 'index.html');
-  const port      = Number(process.env.PORT ?? 3000);
+    // Fallback server: keeps Passenger alive and serves the frontend SPA.
+    // API calls return 503 with the error message so you can diagnose remotely.
+    var publicDir = path.join(__dirname, 'public');
+    var indexPath = path.join(publicDir, 'index.html');
+    var port      = Number(process.env.PORT || 3000);
 
-  const errMsg = String(startupErr?.message ?? startupErr);
+    http.createServer(function (req, res) {
+      var url = req.url || '/';
 
-  http.createServer((req, res) => {
-    if (req.url?.startsWith('/api') || req.url?.startsWith('/uploads')) {
-      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: `Service indisponible — ${errMsg}` }));
-      return;
-    }
-    if (fs.existsSync(indexPath)) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(fs.readFileSync(indexPath));
-    } else {
-      res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
-      res.end(`Service indisponible : ${errMsg}`);
-    }
-  }).listen(port, () => {
-    console.error(`[Bloum Cash] Serveur de secours démarré sur le port ${port}`);
-    console.error('[Bloum Cash] Vérifiez que DATABASE_URL est bien configuré sur Plesk.');
-  });
-}
+      // Health check — always accessible for debugging
+      if (url === '/api/health' || url === '/api/health/') {
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({
+          status: 'ERROR',
+          error: errMsg,
+          hint: 'Verifiez SUPABASE_DATABASE_URL, USER_JWT_SECRET, ADMIN_JWT_SECRET dans Plesk env vars'
+        }, null, 2));
+        return;
+      }
+
+      // API / uploads → JSON error
+      if (url.startsWith('/api') || url.startsWith('/uploads')) {
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Service indisponible — ' + errMsg }));
+        return;
+      }
+
+      // Everything else → serve index.html (SPA fallback)
+      if (fs.existsSync(indexPath)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(fs.readFileSync(indexPath));
+      } else {
+        res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Service indisponible : ' + errMsg + '\n(public/index.html introuvable)');
+      }
+    }).listen(port, function () {
+      console.error('[Bloum Cash] Serveur de SECOURS actif sur le port ' + port);
+      console.error('[Bloum Cash] Cause: ' + errMsg);
+      console.error('[Bloum Cash] → Ouvrez /api/health pour diagnostiquer');
+    });
+  }
+})();
