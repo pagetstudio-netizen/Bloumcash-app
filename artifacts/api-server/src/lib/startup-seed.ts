@@ -62,13 +62,21 @@ export async function runStartupSeed() {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
       if (!ex.length) { await db.insert(adminSettingsTable).values(s); }
     }
-    // Always enforce current fee values (force-update on every startup)
+    // Always enforce current fee values + social links (force-update on every startup)
     const feeUpdates = [
       { key: "fee_deposit_percent", value: "5" },
       { key: "fee_withdraw_percent", value: "5" },
+      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
+      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
+      { key: "youtube_url", value: "https://youtube.com/@bloumcash?si=wTxmV34QWgyMxDRq" },
     ];
     for (const s of feeUpdates) {
-      await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
+      const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
+      if (ex.length) {
+        await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
+      } else {
+        await db.insert(adminSettingsTable).values(s);
+      }
     }
 
     // Banners — pré-seeder avec les 5 images (insert si absent)

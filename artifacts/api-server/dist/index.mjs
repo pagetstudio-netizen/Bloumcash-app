@@ -67917,10 +67917,18 @@ async function runStartupSeed() {
     }
     const feeUpdates = [
       { key: "fee_deposit_percent", value: "5" },
-      { key: "fee_withdraw_percent", value: "5" }
+      { key: "fee_withdraw_percent", value: "5" },
+      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
+      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
+      { key: "youtube_url", value: "https://youtube.com/@bloumcash?si=wTxmV34QWgyMxDRq" }
     ];
     for (const s of feeUpdates) {
-      await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
+      const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
+      if (ex.length) {
+        await db.update(adminSettingsTable).set({ value: s.value }).where(eq(adminSettingsTable.key, s.key));
+      } else {
+        await db.insert(adminSettingsTable).values(s);
+      }
     }
     const allBanners = await db.select({ imageUrl: dashboardBannersTable.imageUrl }).from(dashboardBannersTable);
     const existingUrls = new Set(allBanners.map((b) => b.imageUrl));
