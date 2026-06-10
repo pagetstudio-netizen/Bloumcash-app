@@ -4,19 +4,16 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error(
-    "SUPABASE_DATABASE_URL ou DATABASE_URL doit être défini.",
+    "DATABASE_URL doit être défini.",
   );
 }
 
-const isSupabase = !!process.env.SUPABASE_DATABASE_URL;
-
 export const pool = new Pool({
   connectionString,
-  ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
 });
 export const db = drizzle(pool, { schema });
 

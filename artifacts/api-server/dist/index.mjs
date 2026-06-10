@@ -60062,16 +60062,14 @@ var userFeedbackTable = pgTable("user_feedback", {
 
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
-var connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+var connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error(
-    "SUPABASE_DATABASE_URL ou DATABASE_URL doit \xEAtre d\xE9fini."
+    "DATABASE_URL doit \xEAtre d\xE9fini."
   );
 }
-var isSupabase = !!process.env.SUPABASE_DATABASE_URL;
 var pool = new Pool3({
-  connectionString,
-  ssl: isSupabase ? { rejectUnauthorized: false } : void 0
+  connectionString
 });
 var db = drizzle(pool, { schema: schema_exports });
 
