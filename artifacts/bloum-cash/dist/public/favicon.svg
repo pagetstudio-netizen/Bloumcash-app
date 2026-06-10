@@ -1,0 +1,15 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a3fc4"/>
+      <stop offset="100%" stop-color="#2b50e8"/>
+    </linearGradient>
+  </defs>
+  <!-- Fond arrondi -->
+  <rect width="180" height="180" rx="40" fill="url(#bg)"/>
+  <!-- Lettre B stylisée -->
+  <text x="90" y="125" font-family="Georgia, serif" font-size="110" font-weight="900" fill="white" text-anchor="middle" letter-spacing="-4">B</text>
+  <!-- Éclat / point doré en bas à droite -->
+  <circle cx="128" cy="128" r="14" fill="#FFD700" opacity="0.9"/>
+  <path d="M128 118 L130.5 125.5 L138 128 L130.5 130.5 L128 138 L125.5 130.5 L118 128 L125.5 125.5 Z" fill="white" opacity="0.95"/>
+</svg>
