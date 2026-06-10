@@ -17,7 +17,7 @@ export function formatAmount(amount: number): string {
   return amount.toLocaleString("fr-FR").replace(/\u202f/g, " ") + " FCFA";
 }
 
-export type TogoOperator = "tmoney" | "moov" | null;
+export type TogoOperator = "tmoney" | "moov" | "other" | null;
 
 /** Convertit un support_phone (ex "+228 92 29 97 72") en numéro wa.me (ex "22892299772") */
 export function phoneToWaNumber(phone: string): string {
@@ -41,6 +41,14 @@ export function useWhatsAppSupportNumber(): string {
   return waNumber;
 }
 
+// Préfixes invalides au Togo (fixes / services) — refusés à l'inscription et au transfert
+const BLOCKED_TOGO_PREFIXES = new Set([
+  20, 21, 22, 23, 24, 25, 26, 27, 28, 29, // Togo Telecom fixes (Lomé, régions)
+  30, 31, 32, 33, 34, 35, 36, 37, 38, 39, // fixes interurbains
+  57,                                       // numéros spéciaux
+  60, 61, 62,                               // plages non attribuées
+]);
+
 export function validateTogoPhone(phone: string): { normalized: string; operator: TogoOperator; valid: boolean } {
   const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
   let digits = cleaned;
@@ -56,8 +64,12 @@ export function validateTogoPhone(phone: string): { normalized: string; operator
   }
 
   const prefix = parseInt(digits.slice(0, 2));
-  let operator: TogoOperator = null;
 
+  if (BLOCKED_TOGO_PREFIXES.has(prefix)) {
+    return { normalized: "+228" + digits, operator: null, valid: false };
+  }
+
+  let operator: TogoOperator = "other";
   if ([90, 91, 92, 93].includes(prefix)) {
     operator = "tmoney";
   } else if ([96, 97, 98, 99].includes(prefix)) {
@@ -67,6 +79,6 @@ export function validateTogoPhone(phone: string): { normalized: string; operator
   return {
     normalized: "+228" + digits,
     operator,
-    valid: operator !== null,
+    valid: true,
   };
 }
