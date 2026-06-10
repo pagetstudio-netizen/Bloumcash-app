@@ -227,8 +227,8 @@ function OpModal({
                       "border-gray-200 bg-white active:scale-[0.96] hover:border-blue-300 hover:bg-blue-50/30"
                     }`}
                   >
-                    <img src={OPS[op].logo} alt={OPS[op].name} className="w-12 h-12 rounded-2xl object-cover" />
-                    <span className="text-[12px] font-bold text-gray-800 text-center leading-tight">{OPS[op].name}</span>
+                    <img src={OPS[op].logo} alt={OPS[op].name} className="w-14 h-14 rounded-2xl object-cover" />
+                    <span className="text-[13px] font-bold text-gray-800 text-center leading-tight">{OPS[op].name}</span>
                     {maintenance && !disabled && (
                       <span className="text-[10px] font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Maintenance</span>
                     )}
