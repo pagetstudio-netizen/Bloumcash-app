@@ -37,9 +37,11 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5000",
   "http://localhost:3001",
   ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
-  // Domaine de prod
+  // Domaines de prod
   "https://bloumcash.com",
   "https://www.bloumcash.com",
+  "https://app.wendysapp.sbs",
+  "https://www.app.wendysapp.sbs",
 ];
 
 app.use(
