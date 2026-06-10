@@ -62277,10 +62277,11 @@ var loginLimiter = rate_limit_default({
 });
 var registerLimiter = rate_limit_default({
   windowMs: 60 * 60 * 1e3,
-  max: 5,
+  max: process.env.NODE_ENV === "production" ? 5 : 50,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Trop de cr\xE9ations de compte depuis cette adresse IP. R\xE9essayez dans 1 heure." }
+  message: { error: "Trop de cr\xE9ations de compte depuis cette adresse IP. R\xE9essayez dans 1 heure." },
+  skip: () => process.env.NODE_ENV !== "production"
 });
 var forgotPinLimiter = rate_limit_default({
   windowMs: 60 * 60 * 1e3,
