@@ -62369,10 +62369,11 @@ router2.post("/auth/register", registerLimiter, async (req, res) => {
     const region = req.body.region ? sanitizeStr(req.body.region, 100) : null;
     const country = req.body.country ? sanitizeStr(req.body.country, 100) : "Togo";
     const phone = normalizeTogoPhone(rawPhone);
-    if (!fullName || !phone) {
-      res.status(400).json({ error: "Nom complet et num\xE9ro de t\xE9l\xE9phone Togo requis" });
+    if (!phone) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone Togo requis" });
       return;
     }
+    const resolvedName = fullName || `Utilisateur ${phone.slice(-4)}`;
     if (!pin || pin.length < 4) {
       res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caract\xE8res" });
       return;
@@ -62388,7 +62389,7 @@ router2.post("/auth/register", registerLimiter, async (req, res) => {
     }
     const email3 = phoneToEmail(phone);
     const hashedPin = await bcryptjs_default.hash(pin, 12);
-    const [user] = await db.insert(usersTable).values({ fullName, email: email3, pin: hashedPin, phone, onesignalExternalUserId: email3, village, city, region, country }).returning();
+    const [user] = await db.insert(usersTable).values({ fullName: resolvedName, email: email3, pin: hashedPin, phone, onesignalExternalUserId: email3, village, city, region, country }).returning();
     const token = signUserToken({ id: user.id, email: user.email });
     sendPushNotification({
       externalUserId: user.email,

@@ -139,10 +139,11 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
     const country  = req.body.country  ? sanitizeStr(req.body.country, 100) : "Togo";
 
     const phone = normalizeTogoPhone(rawPhone);
-    if (!fullName || !phone) {
-      res.status(400).json({ error: "Nom complet et numéro de téléphone Togo requis" });
+    if (!phone) {
+      res.status(400).json({ error: "Numéro de téléphone Togo requis" });
       return;
     }
+    const resolvedName = fullName || `Utilisateur ${phone.slice(-4)}`;
     if (!pin || pin.length < 4) {
       res.status(400).json({ error: "Le mot de passe doit avoir au moins 4 caractères" });
       return;
@@ -162,7 +163,7 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
     const email = phoneToEmail(phone);
     const hashedPin = await bcrypt.hash(pin, 12);
     const [user] = await db.insert(usersTable)
-      .values({ fullName, email, pin: hashedPin, phone, onesignalExternalUserId: email, village, city, region, country })
+      .values({ fullName: resolvedName, email, pin: hashedPin, phone, onesignalExternalUserId: email, village, city, region, country })
       .returning();
 
     const token = signUserToken({ id: user.id, email: user.email });
