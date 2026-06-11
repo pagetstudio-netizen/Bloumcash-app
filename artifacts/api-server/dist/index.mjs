@@ -67625,7 +67625,10 @@ app.use(
 );
 app.use(import_express17.default.json({ limit: "12mb" }));
 app.use(import_express17.default.urlencoded({ extended: true, limit: "12mb" }));
-app.use("/uploads", import_express17.default.static(UPLOADS_DIR2, {
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  next();
+}, import_express17.default.static(UPLOADS_DIR2, {
   index: false,
   dotfiles: "deny"
 }));
@@ -67633,10 +67636,28 @@ app.use("/api", routes_default);
 var _serverDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
 var FRONTEND_DIST = path2.resolve(_serverDir, "..", "public");
 if (fs2.existsSync(FRONTEND_DIST)) {
-  app.use(import_express17.default.static(FRONTEND_DIST, { index: false }));
+  app.use("/assets", (req, res, next) => {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    next();
+  }, import_express17.default.static(path2.join(FRONTEND_DIST, "assets"), { index: false }));
+  app.use(["/sw.js", "/OneSignalSDKWorker.js", "/manifest.json"], (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    next();
+  });
+  app.use(import_express17.default.static(FRONTEND_DIST, {
+    index: false,
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      } else if (/\.(png|jpg|jpeg|webp|gif|svg|ico|woff2|woff|ttf)$/.test(filePath)) {
+        res.setHeader("Cache-Control", "public, max-age=604800");
+      }
+    }
+  }));
   app.get("/{*path}", (_req, res) => {
     const indexPath = path2.join(FRONTEND_DIST, "index.html");
     if (fs2.existsSync(indexPath)) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(indexPath);
     } else {
       res.status(503).send("Frontend not built. Run: pnpm --filter @workspace/bloum-cash run build");

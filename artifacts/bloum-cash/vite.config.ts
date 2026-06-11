@@ -4,10 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-// PORT and BASE_PATH are only required for dev/preview — not for production builds
 const rawPort = process.env.PORT;
 const port = rawPort ? Number(rawPort) : 5000;
-
 const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
@@ -41,6 +39,41 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "..", "..", "artifacts", "api-server", "public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          /* ── React core ─────────────────────────────────── */
+          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+            return "vendor-react";
+          }
+          /* ── Animations (framer-motion est ~170 kB gzip) ── */
+          if (id.includes("node_modules/framer-motion")) {
+            return "vendor-motion";
+          }
+          /* ── Icônes ─────────────────────────────────────── */
+          if (id.includes("node_modules/lucide-react")) {
+            return "vendor-lucide";
+          }
+          /* ── UI / Radix ─────────────────────────────────── */
+          if (id.includes("node_modules/@radix-ui")) {
+            return "vendor-radix";
+          }
+          /* ── React Query ────────────────────────────────── */
+          if (id.includes("node_modules/@tanstack")) {
+            return "vendor-query";
+          }
+          /* ── QR Code ────────────────────────────────────── */
+          if (id.includes("node_modules/qrcode")) {
+            return "vendor-qr";
+          }
+          /* ── Reste des node_modules ─────────────────────── */
+          if (id.includes("node_modules/")) {
+            return "vendor-misc";
+          }
+        },
+      },
+    },
   },
   server: {
     port,
