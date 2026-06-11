@@ -24,16 +24,21 @@ import {
  * Priorité : PAYDUNYA_CALLBACK_URL → REPLIT_DOMAINS (prod) → REPLIT_DEV_DOMAIN (dev) → fallback
  */
 function getAppBaseUrl(): string {
+  // Priorité 1 : URL spécifique PayDunya
   if (process.env.PAYDUNYA_CALLBACK_URL) {
     return process.env.PAYDUNYA_CALLBACK_URL.replace(/\/$/, "");
   }
-  // En production déployée, REPLIT_DOMAINS contient le(s) domaine(s) publics
+  // Priorité 2 : URL commune (une seule valeur à changer pour tous les webhooks)
+  if (process.env.APP_BASE_URL) {
+    return process.env.APP_BASE_URL.replace(/\/$/, "");
+  }
+  // Priorité 3 : domaine Replit en production
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
     const firstDomain = replitDomains.split(",")[0].trim();
     return `https://${firstDomain}`;
   }
-  // En développement, REPLIT_DEV_DOMAIN = domaine temporaire de preview
+  // Priorité 4 : domaine Replit en développement
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }

@@ -13,13 +13,20 @@
 const BASE_URL = "https://api.gomboplus.com";
 
 function getAppBaseUrl(): string {
+  // Priorité 1 : URL spécifique GomboPlus
   if (process.env.GOMBOPLUS_CALLBACK_URL) {
     return process.env.GOMBOPLUS_CALLBACK_URL.replace(/\/$/, "");
   }
+  // Priorité 2 : URL commune (une seule valeur à changer pour tous les webhooks)
+  if (process.env.APP_BASE_URL) {
+    return process.env.APP_BASE_URL.replace(/\/$/, "");
+  }
+  // Priorité 3 : domaine Replit en production
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
     return `https://${replitDomains.split(",")[0].trim()}`;
   }
+  // Priorité 4 : domaine Replit en développement
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }

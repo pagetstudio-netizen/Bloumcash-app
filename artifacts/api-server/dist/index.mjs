@@ -59031,6 +59031,9 @@ function getAppBaseUrl() {
   if (process.env.PAYDUNYA_CALLBACK_URL) {
     return process.env.PAYDUNYA_CALLBACK_URL.replace(/\/$/, "");
   }
+  if (process.env.APP_BASE_URL) {
+    return process.env.APP_BASE_URL.replace(/\/$/, "");
+  }
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
     const firstDomain = replitDomains.split(",")[0].trim();
@@ -59649,6 +59652,9 @@ var BASE_URL2 = "https://api.gomboplus.com";
 function getAppBaseUrl2() {
   if (process.env.GOMBOPLUS_CALLBACK_URL) {
     return process.env.GOMBOPLUS_CALLBACK_URL.replace(/\/$/, "");
+  }
+  if (process.env.APP_BASE_URL) {
+    return process.env.APP_BASE_URL.replace(/\/$/, "");
   }
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
