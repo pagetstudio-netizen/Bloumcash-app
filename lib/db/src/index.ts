@@ -4,9 +4,11 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
+/* SUPABASE_DATABASE_URL a la priorité : même DB sur Replit et Plesk.
+   DATABASE_URL sert de fallback (base Replit native en dev si Supabase non configuré). */
 const connectionString =
-  process.env.DATABASE_URL ||
-  process.env.SUPABASE_DATABASE_URL;
+  process.env.SUPABASE_DATABASE_URL ||
+  process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error(
