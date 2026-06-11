@@ -67,7 +67,10 @@ import * as paydunya from "../lib/paydunya";
 import { sendPushNotification, isOneSignalConfigured } from "../lib/onesignal";
 import { sendMassEmail } from "../lib/email";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const _adminDir = typeof __dirname !== "undefined"
+  ? __dirname
+  : path.dirname(new URL(import.meta.url).pathname);
+const UPLOADS_DIR = path.resolve(_adminDir, "..", "..", "..", "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const router: IRouter = Router();

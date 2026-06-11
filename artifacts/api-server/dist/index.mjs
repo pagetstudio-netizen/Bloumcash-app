@@ -65857,7 +65857,8 @@ var authenticator = {
     return [-1, 0, 1].some((d) => totpGenerate(secret, counter + d) === String(token));
   }
 };
-var UPLOADS_DIR = path.join(process.cwd(), "uploads");
+var _adminDir = typeof __dirname !== "undefined" ? __dirname : path.dirname(new URL(import.meta.url).pathname);
+var UPLOADS_DIR = path.resolve(_adminDir, "..", "..", "..", "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 var router10 = (0, import_express10.Router)();
 var adminLoginLimiter = rate_limit_default({
