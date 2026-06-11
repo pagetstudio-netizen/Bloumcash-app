@@ -66029,13 +66029,13 @@ router10.get("/admin/stats", requireAdmin, async (req, res) => {
       total: count(),
       totalAmount: sql`COALESCE(SUM(amount),0)`,
       totalFees: sql`COALESCE(SUM(fees),0)`
-    }).from(transactionsTable).where(withSince());
+    }).from(transactionsTable).where(withSince(eq(transactionsTable.status, "success")));
     const [deposits] = await db.select({
       total: sql`COALESCE(SUM(amount),0)`
-    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "incoming")));
+    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "incoming"), eq(transactionsTable.status, "success")));
     const [withdraws] = await db.select({
       total: sql`COALESCE(SUM(amount),0)`
-    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "outgoing")));
+    }).from(transactionsTable).where(withSince(eq(transactionsTable.type, "outgoing"), eq(transactionsTable.status, "success")));
     const today = /* @__PURE__ */ new Date();
     today.setHours(0, 0, 0, 0);
     const [todayFees] = await db.select({
@@ -66075,6 +66075,7 @@ router10.get("/admin/stats/charts", requireAdmin, async (req, res) => {
         COALESCE(SUM(fees), 0) AS commissions
       FROM transactions
       WHERE created_at >= ${since.toISOString()}
+        AND status = 'success'
       GROUP BY DATE(created_at AT TIME ZONE 'UTC')
       ORDER BY day
     `);
