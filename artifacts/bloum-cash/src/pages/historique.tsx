@@ -193,10 +193,16 @@ export default function Historique() {
                       {selected.toPhone   && <p className="text-xs text-gray-500">Destinataire : +228 {selected.toPhone}</p>}
                     </div>
                     <div className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                      selected.status === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                      selected.status === "success" ? "bg-green-100 text-green-700" :
+                      selected.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                      "bg-red-100 text-red-600"
                     }`}>
-                      {selected.status === "success" ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                      {selected.status === "success" ? "Effectué" : "Échoué"}
+                      {selected.status === "success" ? <CheckCircle2 className="w-3 h-3" /> :
+                       selected.status === "pending" ? <Loader2 className="w-3 h-3 animate-spin" /> :
+                       <XCircle className="w-3 h-3" />}
+                      {selected.status === "success" ? "Effectué" :
+                       selected.status === "pending" ? "En attente" :
+                       "Échoué"}
                     </div>
                   </div>
                 </div>
@@ -218,8 +224,14 @@ export default function Historique() {
                   {selected.fees != null && <InfoRow label="Total" value={formatAmount(selected.amount + selected.fees)} />}
                   <div className="flex justify-between items-center py-2.5">
                     <span className="text-sm text-gray-500">Statut</span>
-                    <p className={`text-sm font-black ${selected.status === "success" ? "text-green-600" : "text-red-500"}`}>
-                      {selected.status === "success" ? "Succès" : "Échec"}
+                    <p className={`text-sm font-black ${
+                      selected.status === "success" ? "text-green-600" :
+                      selected.status === "pending" ? "text-yellow-600" :
+                      "text-red-500"
+                    }`}>
+                      {selected.status === "success" ? "Succès" :
+                       selected.status === "pending" ? "En attente" :
+                       "Échec"}
                     </p>
                   </div>
                 </div>

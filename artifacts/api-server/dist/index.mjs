@@ -67982,6 +67982,41 @@ async function runStartupSeed() {
   }
 }
 
+// src/lib/pending-expiry.ts
+var EXPIRY_MINUTES = 120;
+var CHECK_INTERVAL_MS = 10 * 60 * 1e3;
+async function expirePendingTransactions() {
+  try {
+    const cutoff = new Date(Date.now() - EXPIRY_MINUTES * 60 * 1e3);
+    const expired = await db.update(transactionsTable).set({ status: "failed" }).where(
+      and(
+        eq(transactionsTable.status, "pending"),
+        lte(transactionsTable.createdAt, cutoff)
+      )
+    ).returning({ reference: transactionsTable.reference });
+    if (expired.length > 0) {
+      logger.warn(
+        { count: expired.length, refs: expired.map((r) => r.reference) },
+        `\u23F1 ${expired.length} transaction(s) en attente expir\xE9e(s) \u2192 \xE9chou\xE9 (d\xE9lai > ${EXPIRY_MINUTES} min)`
+      );
+    }
+  } catch (err) {
+    logger.error({ err }, "Erreur lors de l'expiration des transactions pending");
+  }
+}
+function startPendingExpiryScheduler() {
+  expirePendingTransactions().catch(() => {
+  });
+  setInterval(() => {
+    expirePendingTransactions().catch(() => {
+    });
+  }, CHECK_INTERVAL_MS);
+  logger.info(
+    { expiryMinutes: EXPIRY_MINUTES, checkEveryMinutes: CHECK_INTERVAL_MS / 6e4 },
+    "\u23F1 Scheduler expiration pending d\xE9marr\xE9"
+  );
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"] ?? "3000";
 var port = Number(rawPort);
@@ -67994,7 +68029,7 @@ app_default.listen(port, (err) => {
     process.exit(1);
   }
   logger.info({ port }, "Server listening");
-  runStartupMigration().then(() => runStartupSeed()).catch((e) => logger.error({ e }, "Startup migration/seed failed"));
+  runStartupMigration().then(() => runStartupSeed()).then(() => startPendingExpiryScheduler()).catch((e) => logger.error({ e }, "Startup migration/seed failed"));
 });
 /*! Bundled license information:
 
