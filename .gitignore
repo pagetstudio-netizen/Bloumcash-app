@@ -9,6 +9,9 @@ artifacts/bloum-cash/dist/
 artifacts/api-server/dist/**/*.map
 artifacts/api-server/public/**/*.map
 
+# Fichiers uploadés par les admins (images bannières/promos) — persistants sur le serveur
+uploads/
+
 # env secrets (ne jamais committer)
 .env
 .env.local
