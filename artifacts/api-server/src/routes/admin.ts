@@ -1089,15 +1089,24 @@ router.get("/admin/promotions", requireAdmin, async (req, res) => {
 
 router.post("/admin/promotions", requireAdmin, async (req, res) => {
   try {
-    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
-    if (!title?.trim() || !description?.trim()) { res.status(400).json({ error: "Titre et description requis" }); return; }
+    const { icon, title, description, imageData, imageUrl: externalImageUrl, badge, color, bgColor, buttonText, buttonActionType, buttonUrl, isActive, sortOrder, expiresAt } = req.body;
+    if (!title?.trim()) { res.status(400).json({ error: "Le titre est requis" }); return; }
+    let imageUrl: string | null = externalImageUrl ?? null;
+    if (imageData) {
+      const saved = saveUploadedImage(String(imageData), "promo");
+      if (saved) imageUrl = saved;
+    }
     const [row] = await db.insert(promotionsTable).values({
       icon: icon?.trim() || "🎁",
       title: title.trim(),
-      description: description.trim(),
+      description: description?.trim() || null,
+      imageUrl,
       badge: badge || "active",
       color: color || "#1a3fc4",
       bgColor: bgColor || "#eff2ff",
+      buttonText: buttonText?.trim() || null,
+      buttonActionType: buttonActionType || "none",
+      buttonUrl: buttonUrl?.trim() || null,
       isActive: isActive !== false,
       sortOrder: parseInt(String(sortOrder)) || 0,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
@@ -1111,14 +1120,23 @@ router.put("/admin/promotions/:id", requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id as string);
     const existing = await db.select().from(promotionsTable).where(eq(promotionsTable.id, id)).limit(1);
     if (!existing.length) { res.status(404).json({ error: "Promotion introuvable" }); return; }
-    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
+    const { icon, title, description, imageData, imageUrl: externalImageUrl, badge, color, bgColor, buttonText, buttonActionType, buttonUrl, isActive, sortOrder, expiresAt } = req.body;
     const updates: Partial<typeof promotionsTable.$inferInsert> = {};
     if (icon !== undefined) updates.icon = icon;
     if (title !== undefined) updates.title = title;
-    if (description !== undefined) updates.description = description;
+    if (description !== undefined) updates.description = description?.trim() || null;
+    if (imageData) {
+      const saved = saveUploadedImage(String(imageData), "promo");
+      if (saved) updates.imageUrl = saved;
+    } else if (externalImageUrl !== undefined) {
+      updates.imageUrl = externalImageUrl || null;
+    }
     if (badge !== undefined) updates.badge = badge;
     if (color !== undefined) updates.color = color;
     if (bgColor !== undefined) updates.bgColor = bgColor;
+    if (buttonText !== undefined) updates.buttonText = buttonText?.trim() || null;
+    if (buttonActionType !== undefined) updates.buttonActionType = buttonActionType;
+    if (buttonUrl !== undefined) updates.buttonUrl = buttonUrl?.trim() || null;
     if (isActive !== undefined) updates.isActive = isActive;
     if (sortOrder !== undefined) updates.sortOrder = parseInt(String(sortOrder)) || 0;
     if (expiresAt !== undefined) updates.expiresAt = expiresAt ? new Date(expiresAt) : null;

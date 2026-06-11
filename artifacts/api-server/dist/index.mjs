@@ -54995,10 +54995,14 @@ var promotionsTable = pgTable("promotions", {
   id: serial("id").primaryKey(),
   icon: text("icon").notNull().default("\u{1F381}"),
   title: text("title").notNull(),
-  description: text("description").notNull(),
+  description: text("description"),
+  imageUrl: text("image_url"),
   badge: text("badge").notNull().default("active"),
   color: text("color").notNull().default("#1a3fc4"),
   bgColor: text("bg_color").notNull().default("#eff2ff"),
+  buttonText: text("button_text"),
+  buttonActionType: text("button_action_type").default("none"),
+  buttonUrl: text("button_url"),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   expiresAt: timestamp("expires_at"),
@@ -66989,18 +66993,27 @@ router10.get("/admin/promotions", requireAdmin, async (req, res) => {
 });
 router10.post("/admin/promotions", requireAdmin, async (req, res) => {
   try {
-    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
-    if (!title?.trim() || !description?.trim()) {
-      res.status(400).json({ error: "Titre et description requis" });
+    const { icon, title, description, imageData, imageUrl: externalImageUrl, badge, color, bgColor, buttonText, buttonActionType, buttonUrl, isActive, sortOrder, expiresAt } = req.body;
+    if (!title?.trim()) {
+      res.status(400).json({ error: "Le titre est requis" });
       return;
+    }
+    let imageUrl = externalImageUrl ?? null;
+    if (imageData) {
+      const saved = saveUploadedImage(String(imageData), "promo");
+      if (saved) imageUrl = saved;
     }
     const [row] = await db.insert(promotionsTable).values({
       icon: icon?.trim() || "\u{1F381}",
       title: title.trim(),
-      description: description.trim(),
+      description: description?.trim() || null,
+      imageUrl,
       badge: badge || "active",
       color: color || "#1a3fc4",
       bgColor: bgColor || "#eff2ff",
+      buttonText: buttonText?.trim() || null,
+      buttonActionType: buttonActionType || "none",
+      buttonUrl: buttonUrl?.trim() || null,
       isActive: isActive !== false,
       sortOrder: parseInt(String(sortOrder)) || 0,
       expiresAt: expiresAt ? new Date(expiresAt) : null
@@ -67019,14 +67032,23 @@ router10.put("/admin/promotions/:id", requireAdmin, async (req, res) => {
       res.status(404).json({ error: "Promotion introuvable" });
       return;
     }
-    const { icon, title, description, badge, color, bgColor, isActive, sortOrder, expiresAt } = req.body;
+    const { icon, title, description, imageData, imageUrl: externalImageUrl, badge, color, bgColor, buttonText, buttonActionType, buttonUrl, isActive, sortOrder, expiresAt } = req.body;
     const updates = {};
     if (icon !== void 0) updates.icon = icon;
     if (title !== void 0) updates.title = title;
-    if (description !== void 0) updates.description = description;
+    if (description !== void 0) updates.description = description?.trim() || null;
+    if (imageData) {
+      const saved = saveUploadedImage(String(imageData), "promo");
+      if (saved) updates.imageUrl = saved;
+    } else if (externalImageUrl !== void 0) {
+      updates.imageUrl = externalImageUrl || null;
+    }
     if (badge !== void 0) updates.badge = badge;
     if (color !== void 0) updates.color = color;
     if (bgColor !== void 0) updates.bgColor = bgColor;
+    if (buttonText !== void 0) updates.buttonText = buttonText?.trim() || null;
+    if (buttonActionType !== void 0) updates.buttonActionType = buttonActionType;
+    if (buttonUrl !== void 0) updates.buttonUrl = buttonUrl?.trim() || null;
     if (isActive !== void 0) updates.isActive = isActive;
     if (sortOrder !== void 0) updates.sortOrder = parseInt(String(sortOrder)) || 0;
     if (expiresAt !== void 0) updates.expiresAt = expiresAt ? new Date(expiresAt) : null;
