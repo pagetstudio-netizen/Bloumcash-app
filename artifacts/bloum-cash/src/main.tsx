@@ -5,10 +5,8 @@ import "./index.css";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { isMedianApp } from "./lib/utils";
 
-/* Injecter le token utilisateur dans tous les appels API générés */
 setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
 
-/* Exposer isMedianApp globalement pour un accès depuis n'importe quel script */
 declare global {
   interface Window {
     isMedianApp: boolean;
@@ -19,6 +17,20 @@ window.isMedianApp = isMedianApp;
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 document.addEventListener("dragstart", (e) => e.preventDefault());
 
-createRoot(document.getElementById("root")!).render(
-  <App />
-);
+/* ── Retirer l'écran de chargement natif une fois React monté ── */
+function hideLoader() {
+  const loader = document.getElementById("app-loader");
+  if (!loader) return;
+  loader.classList.add("hidden");
+  /* Supprimer du DOM après la transition CSS (350ms) */
+  setTimeout(() => loader.remove(), 400);
+}
+
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
+
+/* React ne fournit pas de callback "rendu terminé" pour les renders initiaux.
+   On utilise requestAnimationFrame × 2 pour attendre le premier paint. */
+requestAnimationFrame(() => {
+  requestAnimationFrame(hideLoader);
+});
