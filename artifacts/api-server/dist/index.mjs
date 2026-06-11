@@ -58249,6 +58249,19 @@ async function startTelegram() {
     (err) => logger.error({ err }, "Telegram polling fatal error")
   );
   startScheduler();
+  if (groupChatId) {
+    sendToGroup(
+      `\u{1F7E2} <b>SERVEUR RED\xC9MARR\xC9 \u2014 BLOUM CASH</b>
+
+\u2705 Le bot Telegram est actif et op\xE9rationnel.
+\u{1F4E1} Long polling en cours...
+\u{1F4C5} ${togoDt()} (Togo UTC+0)
+
+<i>Toutes les notifications sont r\xE9tablies.</i>`
+    ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+  } else {
+    logger.warn("\u26A0\uFE0F Telegram : aucun groupe enregistr\xE9 \u2014 envoyez \xAB salut c'est toi le bot \xBB dans le groupe pour l'activer.");
+  }
   logger.info("\u{1F916} Telegram bot pr\xEAt (polling + scheduler quotidien)");
 }
 

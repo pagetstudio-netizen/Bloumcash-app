@@ -484,5 +484,17 @@ export async function startTelegram(): Promise<void> {
 
   startScheduler();
 
+  if (groupChatId) {
+    sendToGroup(
+      `🟢 <b>SERVEUR REDÉMARRÉ — BLOUM CASH</b>\n\n` +
+      `✅ Le bot Telegram est actif et opérationnel.\n` +
+      `📡 Long polling en cours...\n` +
+      `📅 ${togoDt()} (Togo UTC+0)\n\n` +
+      `<i>Toutes les notifications sont rétablies.</i>`
+    ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+  } else {
+    logger.warn("⚠️ Telegram : aucun groupe enregistré — envoyez « salut c'est toi le bot » dans le groupe pour l'activer.");
+  }
+
   logger.info("🤖 Telegram bot prêt (polling + scheduler quotidien)");
 }
