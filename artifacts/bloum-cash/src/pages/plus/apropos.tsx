@@ -1,109 +1,244 @@
-import React from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Star, MessageCircle, Globe } from "lucide-react";
-import { motion } from "framer-motion";
+import { ArrowLeft, BookOpen, LogOut } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { useWhatsAppSupportNumber } from "@/lib/utils";
-
-const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
+import { useEffect } from "react";
 
 export default function Apropos() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const [, setLocation] = useLocation();
-  const waNumber = useWhatsAppSupportNumber();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
 
   if (!isAuthenticated) return null;
 
+  const handleLogout = () => {
+    logout();
+    setLocation("/welcome");
+  };
+
   return (
-    <div className={BG}>
-      <div className="flex-shrink-0 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white px-5 py-4 flex items-center gap-4 shadow-md z-50">
-        <button onClick={() => setLocation("/plus")} className="p-1 -ml-1">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <h1 className="text-lg font-bold flex-1">À propos de Bloum Cash</h1>
+    <div
+      style={{
+        minHeight: "100dvh",
+        width: "100%",
+        maxWidth: 430,
+        margin: "0 auto",
+        display: "flex",
+        flexDirection: "column",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* ── Fond photo + overlay bleu ── */}
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          maxWidth: 430,
+          margin: "0 auto",
+          zIndex: 0,
+        }}
+      >
+        <img
+          src="/opengraph.jpg"
+          alt=""
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center",
+            display: "block",
+          }}
+        />
+        {/* overlay bleu royal profond */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(180deg, rgba(15,30,120,0.88) 0%, rgba(26,63,196,0.93) 40%, rgba(18,44,160,0.97) 100%)",
+          }}
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-5 pb-8">
+      {/* ── Contenu scrollable ── */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          position: "relative",
+          zIndex: 1,
+          paddingBottom: 96,
+        }}
+      >
+        {/* Bouton retour */}
+        <div style={{ padding: "52px 20px 0" }}>
+          <button
+            onClick={() => setLocation("/plus")}
+            style={{
+              width: 38,
+              height: 38,
+              background: "rgba(255,255,255,0.18)",
+              border: "none",
+              borderRadius: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <ArrowLeft size={20} color="#fff" />
+          </button>
+        </div>
 
-        {/* Logo & version */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="flex flex-col items-center gap-3"
-        >
-          <div className="w-20 h-20 rounded-3xl overflow-hidden shadow-lg">
-            <img src="/logo-512.png" alt="Bloum Cash" className="w-full h-full object-cover" />
+        {/* Logo */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 24, padding: "0 24px" }}>
+          <div
+            style={{
+              width: 84,
+              height: 84,
+              background: "#fff",
+              borderRadius: 22,
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img src="/logo-512.png" alt="Bloum Cash" style={{ width: 70, height: 70, objectFit: "contain" }} />
           </div>
-          <div className="text-center">
-            <h2 className="text-xl font-black text-foreground">Bloum Cash</h2>
-            <p className="text-sm text-muted-foreground">Version 1.0.0</p>
-            <p className="text-xs text-muted-foreground mt-0.5">par ashtech Sarl</p>
-          </div>
-          <div className="flex gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
-        </motion.div>
 
-        {/* Site officiel */}
-        <motion.a
-          href="https://bloumcash.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          whileTap={{ scale: 0.97 }}
-          className="flex items-center gap-3 bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white rounded-2xl px-4 py-3.5 shadow-md"
-        >
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Globe className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1">
-            <p className="font-bold text-sm">Site officiel</p>
-            <p className="text-xs text-white/80">bloumcash.com</p>
-          </div>
-          <svg className="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
-        </motion.a>
+          {/* Titre */}
+          <h1
+            style={{
+              fontSize: 26,
+              fontWeight: 900,
+              color: "#fff",
+              textAlign: "center",
+              marginTop: 18,
+              lineHeight: 1.2,
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            À propos de{"\n"}Bloum Cash
+          </h1>
 
-        {/* Mission */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card rounded-2xl border border-border shadow-sm p-4"
-        >
-          <h3 className="font-bold text-sm text-foreground mb-2">Notre mission</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Bloum Cash simplifie les paiements mobiles en Afrique de l'Ouest et Centrale en offrant une plateforme sécurisée, rapide et intuitive pour transférer de l'argent via TMoney et Moov Money.
+          {/* Ligne décorative */}
+          <div
+            style={{
+              width: 48,
+              height: 3,
+              background: "rgba(255,255,255,0.5)",
+              borderRadius: 2,
+              marginTop: 12,
+            }}
+          />
+
+          {/* Description */}
+          <p
+            style={{
+              fontSize: 14.5,
+              color: "rgba(255,255,255,0.88)",
+              textAlign: "center",
+              marginTop: 18,
+              lineHeight: 1.65,
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            Nous simplifions les transferts d'argent au Togo pour que chaque togolais puisse gérer son argent
+            facilement, rapidement et en toute sécurité.
           </p>
-        </motion.div>
+        </div>
 
-        {/* Support */}
-        <motion.a
-          href={`https://wa.me/${waNumber}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          whileTap={{ scale: 0.97 }}
-          className="w-full h-12 bg-[#25D366] text-white rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow"
-        >
-          <MessageCircle className="w-4 h-4 fill-white" />
-          Nous contacter sur WhatsApp
-        </motion.a>
+        {/* Section Notre Histoire */}
+        <div style={{ margin: "28px 20px 0", background: "rgba(255,255,255,0.10)", borderRadius: 18, padding: "18px 16px", backdropFilter: "blur(6px)", border: "1px solid rgba(255,255,255,0.15)" }}>
+          {/* En-tête section */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                background: "rgba(255,255,255,0.2)",
+                borderRadius: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <BookOpen size={20} color="#fff" />
+            </div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "Inter, sans-serif" }}>
+              Notre Histoire
+            </span>
+          </div>
 
-        <p className="text-center text-xs text-muted-foreground pb-4">
-          © 2026 ashtech Sarl. Tous droits réservés.
+          {/* Texte */}
+          <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.85)", lineHeight: 1.7, fontFamily: "Inter, sans-serif", margin: 0 }}>
+            Bloum Cash est né d'une vision simple : permettre à chaque togolais d'envoyer de l'argent entre
+            TMoney et Moov Money sans se déplacer, sans attente, en quelques secondes depuis son téléphone.
+          </p>
+
+          <div style={{ height: 12 }} />
+
+          <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.85)", lineHeight: 1.7, fontFamily: "Inter, sans-serif", margin: 0 }}>
+            Fondée par une équipe passionnée par la fintech africaine, notre application a été conçue pour
+            répondre aux réalités des Togolais, avec une interface simple et une sécurité sans compromis.
+          </p>
+        </div>
+
+        {/* Copyright */}
+        <p style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 24, fontFamily: "Inter, sans-serif" }}>
+          © 2026 Ashtech Sarl — Tous droits réservés
         </p>
+      </div>
+
+      {/* ── Bouton Déconnecter — fixe en bas ── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "100%",
+          maxWidth: 430,
+          padding: "12px 20px 28px",
+          background: "linear-gradient(180deg, transparent 0%, rgba(18,44,160,0.95) 40%)",
+          zIndex: 10,
+        }}
+      >
+        <button
+          onClick={handleLogout}
+          style={{
+            width: "100%",
+            height: 54,
+            background: "#e11d48",
+            border: "none",
+            borderRadius: 16,
+            color: "#fff",
+            fontSize: 16,
+            fontWeight: 700,
+            fontFamily: "Inter, sans-serif",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            boxShadow: "0 4px 20px rgba(225,29,72,0.45)",
+            transition: "transform 0.12s, box-shadow 0.12s",
+          }}
+          onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
+          onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+          onTouchStart={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
+          onTouchEnd={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+        >
+          <LogOut size={20} color="#fff" />
+          Déconnecter
+        </button>
       </div>
     </div>
   );
