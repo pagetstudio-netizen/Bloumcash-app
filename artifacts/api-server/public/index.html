@@ -257,6 +257,15 @@
       </div>
     </div>
 
+    <!-- Masquer le splash sur "/" : s'exécute immédiatement après que le div existe -->
+    <script>
+      if (window.location.pathname === '/') {
+        var l = document.getElementById('app-loader');
+        if (l) l.style.display = 'none';
+        document.body.style.background = '#f9fafb';
+      }
+    </script>
+
     <div id="root"></div>
   </body>
 </html>
