@@ -1,17 +1,56 @@
-import pageUnavailableImg from "@assets/istockphoto-1483030008-612x612_1780820131115.jpg";
-
 export default function Landing() {
   return (
-    <div className="min-h-[100dvh] w-full flex items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-6 px-6 text-center max-w-sm">
+    <div
+      style={{
+        minHeight: "100dvh",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f0f2f5",
+        padding: "0 24px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 20,
+          textAlign: "center",
+          maxWidth: 320,
+        }}
+      >
         <img
-          src={pageUnavailableImg}
-          alt=""
-          className="w-64 max-w-[80vw] rounded-2xl"
+          src="/page-unavailable.jpg"
+          alt="Page non disponible"
+          style={{
+            width: 220,
+            maxWidth: "80vw",
+            borderRadius: 20,
+            objectFit: "cover",
+          }}
         />
         <div>
-          <h1 className="text-xl font-bold text-gray-800 mb-2">Cette page n'est pas disponible</h1>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <h1
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: "#1f2937",
+              marginBottom: 8,
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            Cette page n'est pas disponible
+          </h1>
+          <p
+            style={{
+              fontSize: 13.5,
+              color: "#6b7280",
+              lineHeight: 1.6,
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
             Il est possible que le lien soit rompu ou que la page ait été supprimée.
           </p>
         </div>

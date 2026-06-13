@@ -43,13 +43,8 @@ export default function AppGate() {
         navigate("/login", { replace: true });
       }
     } else {
-      // Invalid or missing access code → send to login anyway if no code
-      // (avoids blank "page unavailable" screen for direct URL visits)
-      if (!access) {
-        navigate("/login", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      // Invalid or missing access code → page non disponible
+      navigate("/", { replace: true });
     }
   }, [navigate]);
 
