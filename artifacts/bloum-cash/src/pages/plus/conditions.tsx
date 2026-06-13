@@ -1,53 +1,20 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { motion } from "framer-motion";
 import { useAuth } from "@/components/auth-provider";
 
-const BG = "h-[100dvh] w-full bg-background flex flex-col md:max-w-md md:mx-auto overflow-hidden";
+const BG = "h-[100dvh] w-full bg-white flex flex-col md:max-w-md md:mx-auto overflow-hidden";
 
-const sections = [
-  {
-    title: "1. Acceptation des conditions",
-    content:
-      "En utilisant Bloum Cash, vous acceptez les présentes conditions générales d'utilisation. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser l'application.",
-  },
-  {
-    title: "2. Description du service",
-    content:
-      "Bloum Cash est une application de paiement mobile permettant d'effectuer et de recevoir des paiements via les réseaux TMoney et Moov Money au Togo. Le service est fourni tel quel.",
-  },
-  {
-    title: "3. Compte utilisateur",
-    content:
-      "Vous êtes responsable de la confidentialité de vos identifiants de connexion (e-mail et code PIN). Toute activité effectuée depuis votre compte est de votre responsabilité.",
-  },
-  {
-    title: "4. Transactions",
-    content:
-      "Les transactions sont irrévocables une fois confirmées. Bloum Cash n'est pas responsable des erreurs de saisie de la part de l'utilisateur. Vérifiez toujours les informations avant de valider.",
-  },
-  {
-    title: "5. Frais et tarifs",
-    content:
-      "Des frais de service peuvent s'appliquer selon le type et le montant de la transaction. Ces frais sont affichés avant chaque validation. Bloum Cash se réserve le droit de modifier ses tarifs.",
-  },
-  {
-    title: "6. Limitation de responsabilité",
-    content:
-      "Bloum Cash ne saurait être tenu responsable des pertes résultant d'une utilisation frauduleuse de votre compte si vous n'avez pas pris les précautions nécessaires pour protéger vos accès.",
-  },
-  {
-    title: "7. Modification des conditions",
-    content:
-      "Bloum Cash se réserve le droit de modifier ces conditions à tout moment. Les utilisateurs seront notifiés des changements importants par e-mail ou notification dans l'application.",
-  },
-  {
-    title: "8. Droit applicable",
-    content:
-      "Les présentes conditions sont régies par le droit togolais. Tout litige sera soumis à la juridiction compétente de Lomé, Togo.",
-  },
-];
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-8">
+      <h3 className="text-xl font-bold text-gray-900 mb-3">{title}</h3>
+      <div className="text-[15px] text-gray-700 leading-relaxed space-y-2 [&_ul]:mt-2 [&_ul]:space-y-1.5 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:leading-relaxed">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default function Conditions() {
   const { isAuthenticated } = useAuth();
@@ -68,29 +35,138 @@ export default function Conditions() {
         <h1 className="text-lg font-bold flex-1">Conditions d'utilisation</h1>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-xs text-muted-foreground px-1"
-        >
-          Dernière mise à jour : Juin 2026
-        </motion.p>
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-6 py-8">
+          <h2 className="text-3xl font-bold text-center text-gray-900 leading-tight mb-2">
+            Conditions Générales<br />d'Utilisation
+          </h2>
+          <p className="text-center text-sm text-gray-400 mb-10">Dernière mise à jour : Juin 2026</p>
 
-        {sections.map((section, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-            className="bg-card rounded-2xl border border-border shadow-sm p-4"
-          >
-            <h3 className="font-bold text-sm text-foreground mb-2">{section.title}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{section.content}</p>
-          </motion.div>
-        ))}
+          <Section title="1. Introduction">
+            <p>
+              Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation de l'application mobile <strong>Bloum Cash</strong>, éditée par <strong>Ashtech Sarl</strong>, société enregistrée en République Togolaise.
+            </p>
+            <p>
+              En téléchargeant, en vous inscrivant ou en utilisant Bloum Cash, vous acceptez sans réserve les présentes CGU. Si vous n'acceptez pas ces conditions, veuillez cesser immédiatement d'utiliser l'application.
+            </p>
+          </Section>
 
-        <div className="pb-4" />
+          <Section title="2. Description du service">
+            <p>Bloum Cash est une application de paiement mobile permettant :</p>
+            <ul>
+              <li>D'effectuer des transferts d'argent entre les réseaux <strong>TMoney</strong> et <strong>Moov Money</strong> au Togo ;</li>
+              <li>De recevoir des paiements via un code QR personnel ;</li>
+              <li>De consulter l'historique de vos transactions en temps réel ;</li>
+              <li>D'accéder à des services financiers complémentaires proposés par Ashtech Sarl.</li>
+            </ul>
+            <p>
+              Le service est disponible 24h/24, 7j/7, sous réserve de maintenance ou d'indisponibilité temporaire des réseaux des opérateurs partenaires.
+            </p>
+          </Section>
+
+          <Section title="3. Conditions d'accès">
+            <p>Pour utiliser Bloum Cash, vous devez :</p>
+            <ul>
+              <li>Être âgé d'au moins <strong>18 ans</strong> ;</li>
+              <li>Résider en République Togolaise ;</li>
+              <li>Disposer d'un numéro de téléphone mobile actif au Togo ;</li>
+              <li>Posséder un compte TMoney et/ou Moov Money actif et suffisamment approvisionné ;</li>
+              <li>Disposer d'une connexion internet fonctionnelle.</li>
+            </ul>
+          </Section>
+
+          <Section title="4. Compte utilisateur">
+            <p>
+              Lors de votre inscription, vous devez fournir des informations exactes, complètes et à jour. Vous êtes entièrement responsable de la confidentialité de vos identifiants (numéro de téléphone et code PIN).
+            </p>
+            <p>
+              Toute activité effectuée depuis votre compte est réputée être de votre fait. En cas de compromission de vos accès, vous devez nous notifier immédiatement via le support disponible dans l'application.
+            </p>
+            <p>
+              Ashtech Sarl se réserve le droit de suspendre ou de supprimer tout compte en cas d'utilisation frauduleuse, abusive ou contraire aux présentes CGU, sans préavis ni indemnité.
+            </p>
+          </Section>
+
+          <Section title="5. Transactions et frais">
+            <p>
+              Les transactions sont <strong>irrévocables</strong> une fois confirmées. Vérifiez soigneusement le numéro de téléphone du destinataire avant de valider tout transfert.
+            </p>
+            <p>Les frais de service applicables sont :</p>
+            <ul>
+              <li><strong>Transfert même réseau</strong> (TMoney → TMoney ou Moov → Moov) : <strong>1 %</strong> du montant ;</li>
+              <li><strong>Transfert inter-réseaux</strong> (TMoney → Moov ou Moov → TMoney) : <strong>2 %</strong> du montant.</li>
+            </ul>
+            <p>
+              Ces frais sont affichés avant chaque validation. Ashtech Sarl se réserve le droit de modifier ses tarifs, avec notification préalable aux utilisateurs.
+            </p>
+          </Section>
+
+          <Section title="6. Obligations de l'utilisateur">
+            <p>En utilisant Bloum Cash, vous vous engagez à :</p>
+            <ul>
+              <li>Utiliser l'application uniquement à des fins légales et licites ;</li>
+              <li>Ne pas tenter de contourner les systèmes de sécurité de l'application ;</li>
+              <li>Ne pas utiliser le service à des fins de blanchiment d'argent ou de financement d'activités illégales ;</li>
+              <li>Ne pas partager vos identifiants de connexion avec des tiers ;</li>
+              <li>Signaler immédiatement toute opération suspecte ou anomalie constatée.</li>
+            </ul>
+          </Section>
+
+          <Section title="7. Limitation de responsabilité">
+            <p>Ashtech Sarl ne pourra être tenu responsable des pertes résultant :</p>
+            <ul>
+              <li>D'une utilisation frauduleuse de votre compte due à votre négligence ;</li>
+              <li>D'erreurs de saisie lors d'un transfert (mauvais numéro, mauvais montant) ;</li>
+              <li>D'une indisponibilité des réseaux TMoney ou Moov Money ;</li>
+              <li>De cas de force majeure (pannes réseau, catastrophes naturelles, décisions gouvernementales).</li>
+            </ul>
+            <p>
+              La responsabilité d'Ashtech Sarl est en tout état de cause limitée au montant de la transaction litigieuse.
+            </p>
+          </Section>
+
+          <Section title="8. Propriété intellectuelle">
+            <p>
+              L'application Bloum Cash, son logo, ses interfaces graphiques, ses textes et l'ensemble de ses contenus sont la propriété exclusive d'Ashtech Sarl et sont protégés par les lois en vigueur en matière de propriété intellectuelle.
+            </p>
+            <p>
+              Toute reproduction, distribution ou utilisation commerciale sans autorisation écrite préalable est strictement interdite.
+            </p>
+          </Section>
+
+          <Section title="9. Modification des conditions">
+            <p>
+              Ashtech Sarl se réserve le droit de modifier les présentes CGU à tout moment. Les utilisateurs seront informés des modifications importantes par notification dans l'application ou par e-mail.
+            </p>
+            <p>
+              La poursuite de l'utilisation de l'application après notification vaut acceptation des nouvelles conditions.
+            </p>
+          </Section>
+
+          <Section title="10. Résiliation">
+            <p>
+              Vous pouvez demander la suppression de votre compte à tout moment depuis la section Paramètres de l'application ou en contactant le support. Ashtech Sarl peut résilier votre accès en cas de violation des présentes CGU.
+            </p>
+          </Section>
+
+          <Section title="11. Droit applicable et juridiction">
+            <p>
+              Les présentes CGU sont régies par le droit de la République Togolaise. En cas de litige, les parties s'engagent à rechercher une solution amiable avant tout recours judiciaire. À défaut, tout litige sera soumis à la compétence exclusive des tribunaux de <strong>Lomé, Togo</strong>.
+            </p>
+          </Section>
+
+          <Section title="12. Contact">
+            <p>Pour toute question relative aux présentes CGU :</p>
+            <ul>
+              <li><strong>Société :</strong> Ashtech Sarl</li>
+              <li><strong>Application :</strong> Bloum Cash</li>
+              <li><strong>Support :</strong> Menu → Aide dans l'application</li>
+              <li><strong>WhatsApp :</strong> Menu → Support WhatsApp</li>
+            </ul>
+          </Section>
+
+          <div className="pb-8" />
+        </div>
       </div>
     </div>
   );
