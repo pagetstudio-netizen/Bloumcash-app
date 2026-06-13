@@ -334,8 +334,9 @@ export default function Dashboard() {
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
           </div>
         ) : !recentTxs || recentTxs.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground text-sm">
-            Aucune transaction pour l'instant
+          <div className="py-8 flex flex-col items-center gap-3">
+            <img src="/nodata.png" alt="Aucune donnée" className="w-24 h-24 object-contain opacity-90" />
+            <p className="text-muted-foreground text-sm font-medium">Aucune transaction pour l'instant</p>
           </div>
         ) : (
           recentTxs.map((tx, i) => (

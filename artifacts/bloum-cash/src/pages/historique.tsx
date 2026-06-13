@@ -84,11 +84,9 @@ export default function Historique() {
             <Loader2 className="w-7 h-7 text-primary animate-spin" />
           </div>
         ) : !transactions || transactions.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search className="w-8 h-8 text-muted-foreground" />
-            </div>
-            <p className="text-muted-foreground font-medium">Aucune transaction trouvée</p>
+          <div className="text-center py-10 flex flex-col items-center gap-3">
+            <img src="/nodata.png" alt="Aucune donnée" className="w-28 h-28 object-contain opacity-90" />
+            <p className="text-muted-foreground font-medium text-sm">Aucune transaction trouvée</p>
           </div>
         ) : (
           transactions.map((tx, i) => (
