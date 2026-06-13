@@ -25,7 +25,7 @@ export default function Splash() {
           if (isAuthenticated) {
             setLocation("/dashboard");
           } else {
-            setLocation("/login");
+            setLocation("/welcome");
           }
         }, 200);
       }
