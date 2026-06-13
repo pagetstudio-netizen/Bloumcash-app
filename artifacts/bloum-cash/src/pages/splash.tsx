@@ -1,52 +1,110 @@
-import React, { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+
+const DURATION = 4500;
 
 export default function Splash() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isAuthenticated) {
-        setLocation("/dashboard");
-      } else {
-        setLocation("/login");
-      }
-    }, 800);
+    const start = performance.now();
+    let rafId: number;
 
-    return () => clearTimeout(timer);
+    const frame = (now: number) => {
+      const elapsed = now - start;
+      const pct = Math.min((elapsed / DURATION) * 100, 100);
+      setProgress(pct);
+
+      if (pct < 100) {
+        rafId = requestAnimationFrame(frame);
+      } else {
+        setTimeout(() => {
+          if (isAuthenticated) {
+            setLocation("/dashboard");
+          } else {
+            setLocation("/login");
+          }
+        }, 200);
+      }
+    };
+
+    rafId = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(rafId);
   }, [isAuthenticated, setLocation]);
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a3fc4] to-[#2b50e8] overflow-hidden">
-      <div className="flex flex-col items-center" style={{ animation: "splashIn 0.6s cubic-bezier(0,0.71,0.2,1.01) both" }}>
-        <div className="w-28 h-28 bg-white rounded-3xl flex items-center justify-center shadow-2xl mb-6 overflow-hidden">
-          <img
-            src="/logo-512.png"
-            alt="Bloum Cash"
-            className="w-full h-full object-contain"
-            fetchPriority="high"
-            decoding="async"
-          />
+    <div
+      style={{
+        minHeight: "100dvh",
+        width: "100%",
+        background: "#ffffff",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+        <img
+          src="/logo-512.png"
+          alt="Bloum Cash"
+          style={{ width: 120, height: 120, objectFit: "contain" }}
+          fetchPriority="high"
+          decoding="sync"
+        />
+        <div style={{ textAlign: "center", lineHeight: 1.2 }}>
+          <div
+            style={{
+              fontSize: 30,
+              fontWeight: 700,
+              color: "#111827",
+              letterSpacing: "-0.5px",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            Bloum Cash
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: "#6b7280",
+              marginTop: 6,
+              fontFamily: "Inter, sans-serif",
+              fontWeight: 400,
+            }}
+          >
+            For Cashless World
+          </div>
         </div>
-        <h1 className="text-3xl font-bold text-white tracking-tight">Bloum Cash</h1>
       </div>
 
-      <div className="absolute bottom-12 flex items-center justify-center" style={{ animation: "fadeIn 0.3s 0.4s both" }}>
-        <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      {/* Barre de progression bleue */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 52,
+          left: "10%",
+          width: "80%",
+          height: 4,
+          background: "#e5e7eb",
+          borderRadius: 999,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${progress}%`,
+            background: "linear-gradient(90deg, #1a3fc4, #2b50e8)",
+            borderRadius: 999,
+          }}
+        />
       </div>
-
-      <style>{`
-        @keyframes splashIn {
-          from { opacity: 0; transform: scale(0.85); }
-          to   { opacity: 1; transform: scale(1); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }
