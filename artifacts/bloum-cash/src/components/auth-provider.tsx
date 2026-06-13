@@ -200,6 +200,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       OneSignal.logout().catch(() => {});
     }
+
+    window.location.replace("/splash");
   };
 
   return (

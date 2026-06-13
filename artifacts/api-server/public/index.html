@@ -88,18 +88,6 @@
       .al-bar:nth-child(4) { height: 16px; animation-delay: 0.45s; }
       .al-bar:nth-child(5) { height: 10px; animation-delay: 0.60s; }
 
-      /* Message connexion lente (apparaît après 5s si React n'est pas encore monté) */
-      .al-slow-msg {
-        position: absolute;
-        bottom: 96px;
-        color: rgba(255,255,255,0.75);
-        font-size: 13px;
-        font-weight: 500;
-        text-align: center;
-        padding: 0 32px;
-        opacity: 0;
-        animation: al-fadein 0.6s 5s forwards;
-      }
 
       @keyframes al-pop {
         from { opacity: 0; transform: scale(0.82); }
@@ -118,7 +106,7 @@
       body { margin: 0; background: #1a3fc4; }
       #root { min-height: 100dvh; }
     </style>
-    <script type="module" crossorigin src="/assets/index-Dw1aOYvQ.js"></script>
+    <script type="module" crossorigin src="/assets/index-0yllzf4Y.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-misc-Dz43UFUQ.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-B9VLiaQe.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-query-CbszkFJ2.js">
@@ -258,11 +246,6 @@
         <img src="/logo-512.png" alt="Bloum Cash" fetchpriority="high" decoding="async" />
       </div>
       <div class="al-title">Bloum Cash</div>
-
-      <!-- Message connexion lente (apparaît après 5 s) -->
-      <div class="al-slow-msg">
-        Connexion lente détectée…<br>Chargement en cours, patientez
-      </div>
 
       <!-- Petites barres animées en bas -->
       <div class="al-bars" aria-hidden="true">
