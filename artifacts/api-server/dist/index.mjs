@@ -66606,6 +66606,14 @@ router10.get("/admin-notifications/active", async (req, res) => {
     res.json(null);
   }
 });
+router10.get("/admin-notifications/all", async (req, res) => {
+  try {
+    const rows = await db.select().from(adminNotificationsTable).where(eq(adminNotificationsTable.isActive, true)).orderBy(desc(adminNotificationsTable.createdAt));
+    res.json(rows);
+  } catch (err) {
+    res.json([]);
+  }
+});
 router10.get("/admin/blacklist", requireAdmin, async (req, res) => {
   try {
     const rows = await db.select().from(blacklistTable).orderBy(desc(blacklistTable.createdAt));

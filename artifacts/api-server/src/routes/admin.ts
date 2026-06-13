@@ -727,6 +727,14 @@ router.get("/admin-notifications/active", async (req, res) => {
   } catch (err) { res.json(null); }
 });
 
+/* Public endpoint — all active admin notifications for the user notifications page */
+router.get("/admin-notifications/all", async (req, res) => {
+  try {
+    const rows = await db.select().from(adminNotificationsTable).where(eq(adminNotificationsTable.isActive, true)).orderBy(desc(adminNotificationsTable.createdAt));
+    res.json(rows);
+  } catch (err) { res.json([]); }
+});
+
 /* ─────────────────────────── BLACKLIST ─────────────────────────── */
 router.get("/admin/blacklist", requireAdmin, async (req, res) => {
   try {
