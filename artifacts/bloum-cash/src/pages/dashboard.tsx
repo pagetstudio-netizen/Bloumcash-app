@@ -7,7 +7,6 @@ import {
   Bell, ChevronRight,
   LogOut, X, Loader2,
   ArrowDownLeft, ArrowUpRight, Share2,
-  RefreshCw,
 } from "lucide-react";
 import { formatAmount } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,9 +14,6 @@ import { useGetRecentTransactions } from "@workspace/api-client-react";
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
 
-/* ── Constantes pull-to-refresh ── */
-const PULL_THRESHOLD = 72;
-const PULL_MAX = 100;
 
 interface DashBanner { id: number; title: string | null; imageUrl: string; actionType: string; actionUrl: string | null; }
 const LOCAL_BANNERS: DashBanner[] = [
@@ -41,15 +37,7 @@ export default function Dashboard() {
   const carouselRef = useRef<HTMLDivElement>(null);
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* ── Pull-to-refresh ── */
-  const [pullY, setPullY] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const txScrollRef = useRef<HTMLDivElement>(null);
-  const touchStartYRef = useRef(0);
-  const pullYRef = useRef(0);
-  const isPullingRef = useRef(false);
-
-  const { data: recentTxs, isLoading: txLoading, refetch: refetchTxs } = useGetRecentTransactions({
+  const { data: recentTxs, isLoading: txLoading } = useGetRecentTransactions({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     query: { enabled: isAuthenticated } as any,
   });
@@ -109,60 +97,6 @@ export default function Dashboard() {
     const idx = Math.round(el.scrollLeft / el.offsetWidth);
     if (idx !== activeSlide) setActiveSlide(idx);
   };
-
-  /* ── Listeners non-passifs pour le pull-to-refresh ── */
-  useEffect(() => {
-    const el = txScrollRef.current;
-    if (!el) return;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (el.scrollTop > 0) return;
-      touchStartYRef.current = e.touches[0].clientY;
-      isPullingRef.current = true;
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (!isPullingRef.current) return;
-      if (el.scrollTop > 0) {
-        isPullingRef.current = false;
-        pullYRef.current = 0;
-        setPullY(0);
-        return;
-      }
-      const dy = e.touches[0].clientY - touchStartYRef.current;
-      if (dy <= 0) { pullYRef.current = 0; setPullY(0); return; }
-      e.preventDefault();
-      /* Résistance progressive au-delà du seuil */
-      const dampened = dy <= PULL_THRESHOLD
-        ? dy
-        : PULL_THRESHOLD + (dy - PULL_THRESHOLD) * 0.35;
-      const clamped = Math.min(dampened, PULL_MAX);
-      pullYRef.current = clamped;
-      setPullY(clamped);
-    };
-
-    const onTouchEnd = async () => {
-      if (!isPullingRef.current) return;
-      isPullingRef.current = false;
-      const pulled = pullYRef.current;
-      pullYRef.current = 0;
-      setPullY(0);
-      if (pulled >= PULL_THRESHOLD) {
-        setIsRefreshing(true);
-        try { await refetchTxs(); } finally { setIsRefreshing(false); }
-      }
-    };
-
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   if (!isAuthenticated) return null;
 
@@ -393,33 +327,8 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* ── LISTE DES TRANSACTIONS — scrollable avec pull-to-refresh ── */}
-      <div ref={txScrollRef} className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
-
-        {/* Indicateur pull-to-refresh */}
-        <AnimatePresence>
-          {(pullY > 0 || isRefreshing) && (
-            <motion.div
-              key="ptr-indicator"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: isRefreshing ? 56 : Math.max(24, pullY * 0.55) }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="flex items-center justify-center gap-2 overflow-hidden"
-            >
-              <motion.div
-                animate={isRefreshing ? { rotate: 360 } : { rotate: pullY >= PULL_THRESHOLD ? 180 : pullY * 1.8 }}
-                transition={isRefreshing ? { repeat: Infinity, duration: 0.7, ease: "linear" } : { type: "spring" }}
-                style={{ color: pullY >= PULL_THRESHOLD || isRefreshing ? "#1a3fc4" : "#9ca3af" }}
-              >
-                <RefreshCw className="w-5 h-5" />
-              </motion.div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: pullY >= PULL_THRESHOLD || isRefreshing ? "#1a3fc4" : "#9ca3af" }}>
-                {isRefreshing ? "Actualisation…" : pullY >= PULL_THRESHOLD ? "Relâcher pour actualiser" : "Tirer pour actualiser"}
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* ── LISTE DES TRANSACTIONS — scrollable ── */}
+      <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
         {txLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
