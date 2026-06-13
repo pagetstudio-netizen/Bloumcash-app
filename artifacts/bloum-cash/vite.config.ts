@@ -43,9 +43,18 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          /* ── React core ─────────────────────────────────── */
-          if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) {
+          /* ── React core + scheduler (évite les chunks circulaires) ── */
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/scheduler/") ||
+            id.includes("node_modules/react-is/")
+          ) {
             return "vendor-react";
+          }
+          /* ── React Query ────────────────────────────────── */
+          if (id.includes("node_modules/@tanstack")) {
+            return "vendor-query";
           }
           /* ── Animations (framer-motion est ~170 kB gzip) ── */
           if (id.includes("node_modules/framer-motion")) {
@@ -58,10 +67,6 @@ export default defineConfig({
           /* ── UI / Radix ─────────────────────────────────── */
           if (id.includes("node_modules/@radix-ui")) {
             return "vendor-radix";
-          }
-          /* ── React Query ────────────────────────────────── */
-          if (id.includes("node_modules/@tanstack")) {
-            return "vendor-query";
           }
           /* ── QR Code ────────────────────────────────────── */
           if (id.includes("node_modules/qrcode")) {
