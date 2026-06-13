@@ -67,8 +67,9 @@ const AdminFeedback      = React.lazy(() => import("@/pages/admin/feedback"));
 /* ─── Fallback minimal pendant qu'un chunk se charge ───────────────────────── */
 function PageLoader() {
   return (
-    <div className="min-h-[100dvh] w-full flex items-center justify-center bg-white">
-      <div className="w-8 h-8 border-2 border-[#1a3fc4]/20 border-t-[#1a3fc4] rounded-full animate-spin" />
+    <div style={{ minHeight: "100dvh", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#eff2f7" }}>
+      <div style={{ width: 36, height: 36, border: "3px solid #d1d9f5", borderTopColor: "#1a3fc4", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
