@@ -2,7 +2,7 @@ import pageUnavailableImg from "@assets/istockphoto-1483030008-612x612_178082013
 
 export default function Landing() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
+    <div className="min-h-[100dvh] w-full flex items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center gap-6 px-6 text-center max-w-sm">
         <img
           src={pageUnavailableImg}
