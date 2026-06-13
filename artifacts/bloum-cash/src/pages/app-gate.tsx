@@ -37,10 +37,11 @@ export default function AppGate() {
       localStorage.setItem(STORAGE_KEY, "true");
       const isLoggedIn = !!localStorage.getItem("bloum_token");
       if (isLoggedIn) {
-        // replace: true → back button won't return to the access URL
+        // Déjà connecté → dashboard directement
         navigate("/dashboard", { replace: true });
       } else {
-        navigate("/login", { replace: true });
+        // Pas connecté → splash (barre de chargement) → page de bienvenue
+        navigate("/splash", { replace: true });
       }
     } else {
       // Invalid or missing access code → page non disponible
