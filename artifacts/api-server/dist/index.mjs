@@ -55053,7 +55053,7 @@ var userFeedbackTable = pgTable("user_feedback", {
 
 // ../../lib/db/src/index.ts
 var { Pool: Pool3 } = esm_default;
-var connectionString = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL;
+var connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error(
     "\u274C DATABASE_URL ou SUPABASE_DATABASE_URL doit \xEAtre d\xE9fini."
