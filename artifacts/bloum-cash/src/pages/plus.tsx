@@ -157,12 +157,33 @@ export default function Plus() {
             </button>
           )}
 
-          <button 
+          <button
             onClick={handleLogout}
-            className="w-full bg-red-50 text-red-600 font-bold p-4 rounded-2xl border border-red-100 flex items-center justify-center gap-2 hover:bg-red-100 active:bg-red-200 transition-colors"
+            style={{
+              width: "100%",
+              height: 54,
+              background: "#e11d48",
+              border: "none",
+              borderRadius: 16,
+              color: "#fff",
+              fontSize: 16,
+              fontWeight: 700,
+              fontFamily: "Inter, sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              boxShadow: "0 4px 20px rgba(225,29,72,0.35)",
+              transition: "transform 0.12s",
+            }}
+            onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+            onTouchStart={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
           >
-            <LogOut className="w-5 h-5" />
-            Déconnexion
+            <LogOut size={20} color="#fff" />
+            Déconnecter
           </button>
           
           <p className="text-center text-xs text-muted-foreground mt-6">
