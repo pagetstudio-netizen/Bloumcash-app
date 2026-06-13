@@ -7,24 +7,16 @@ import { isMedianApp } from "./lib/utils";
 
 setAuthTokenGetter(() => localStorage.getItem("bloum_token"));
 
-/* ── Nettoyage des anciens service workers ─────────────────────────────────
- * Si un ancien SW (version précédente) est installé, on le désenregistre
- * immédiatement pour éviter qu'il serve des fichiers JS/CSS périmés.
- * Le nouveau sw.js se réinstalle tout seul via skipWaiting() + clients.claim().
+/* ── Désactiver tout service worker existant ───────────────────────────────
+ * Le SW causait des pages blanches en servant d'anciens fichiers JS/CSS cachés
+ * après chaque rebuild. On désenregistre tout et on ne réenregistre pas.
  * ──────────────────────────────────────────────────────────────────────────── */
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {
-      const scriptURL = registration.active?.scriptURL ?? registration.installing?.scriptURL ?? "";
-      /* On conserve uniquement le SW actuel ; tout autre est supprimé */
-      if (scriptURL && !scriptURL.includes("/sw.js")) {
-        registration.unregister();
-      }
+      registration.unregister();
     }
   }).catch(() => {});
-
-  /* Enregistrement du SW principal */
-  navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {});
 }
 
 declare global {
