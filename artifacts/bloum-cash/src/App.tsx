@@ -14,7 +14,6 @@ import NotFound from "@/pages/not-found";
 
 /* ─── Pages utilisateur — lazy (chargées à la demande) ─────────────────────── */
 const Landing        = React.lazy(() => import("@/pages/landing"));
-const Welcome        = React.lazy(() => import("@/pages/welcome"));
 const AppGate        = React.lazy(() => import("@/pages/app-gate"));
 const Login          = React.lazy(() => import("@/pages/login"));
 const Register       = React.lazy(() => import("@/pages/register"));
@@ -139,7 +138,6 @@ function Router() {
 
           {/* User routes */}
           <Route path="/" component={Landing} />
-          <Route path="/welcome" component={Welcome} />
           <Route path="/app" component={AppGate} />
           <Route path="/splash" component={Splash} />
           <Route path="/login" component={Login} />

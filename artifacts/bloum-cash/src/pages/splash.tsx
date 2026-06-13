@@ -25,7 +25,7 @@ export default function Splash() {
           if (isAuthenticated) {
             setLocation("/dashboard");
           } else {
-            setLocation("/welcome");
+            setLocation("/login");
           }
         }, 200);
       }
@@ -68,17 +68,6 @@ export default function Splash() {
             }}
           >
             Bloum Cash
-          </div>
-          <div
-            style={{
-              fontSize: 14,
-              color: "#6b7280",
-              marginTop: 6,
-              fontFamily: "Inter, sans-serif",
-              fontWeight: 400,
-            }}
-          >
-            For Cashless World
           </div>
         </div>
       </div>

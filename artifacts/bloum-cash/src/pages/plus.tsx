@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 import { 
   ArrowLeft, MessageCircleQuestion, 
-  Phone, KeyRound, FileText, Shield, LogOut, ChevronRight, Bell, Loader2, Info
+  Phone, KeyRound, FileText, Shield, LogOut, ChevronRight, Bell, Loader2
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -74,7 +74,6 @@ export default function Plus() {
         { icon: <KeyRound className="w-5 h-5" />, label: "Modifier mot de passe", href: "/plus/modifier-pin" },
         { icon: <FileText className="w-5 h-5" />, label: "Conditions d'utilisation", href: "/plus/conditions" },
         { icon: <Shield className="w-5 h-5" />, label: "Politique de confidentialité", href: "/plus/confidentialite" },
-        { icon: <Info className="w-5 h-5" />, label: "À propos", href: "/plus/apropos" },
       ]
     }
   ];
