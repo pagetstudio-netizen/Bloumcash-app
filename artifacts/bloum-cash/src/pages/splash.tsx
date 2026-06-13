@@ -13,7 +13,7 @@ export default function Splash() {
       } else {
         setLocation("/login");
       }
-    }, 1800);
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [isAuthenticated, setLocation]);
