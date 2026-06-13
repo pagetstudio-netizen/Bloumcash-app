@@ -96,10 +96,30 @@ export default function ForgotPin() {
         >
           <button
             onClick={() => step === "code" ? setStep("phone") : setLocation("/login")}
-            style={{ display: "flex", alignItems: "center", color: "rgba(255,255,255,0.9)", background: "none", border: "none", cursor: "pointer", marginBottom: 20, fontSize: 14, fontWeight: 600, padding: 0 }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.18)",
+              border: "1.5px solid rgba(255,255,255,0.28)",
+              cursor: "pointer",
+              marginBottom: 20,
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              transition: "background 0.15s",
+              padding: 0,
+              flexShrink: 0,
+            }}
+            onMouseDown={e => (e.currentTarget.style.background = "rgba(255,255,255,0.28)")}
+            onMouseUp={e => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+            onTouchStart={e => (e.currentTarget.style.background = "rgba(255,255,255,0.28)")}
+            onTouchEnd={e => (e.currentTarget.style.background = "rgba(255,255,255,0.18)")}
+            aria-label="Retour"
           >
-            <ArrowLeft size={20} style={{ marginRight: 8 }} />
-            {step === "code" ? "Retour" : "Retour à la connexion"}
+            <ArrowLeft size={20} color="white" strokeWidth={2.5} />
           </button>
 
           <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
