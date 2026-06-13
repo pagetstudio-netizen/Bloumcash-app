@@ -31,23 +31,17 @@ echo ""
 echo "→ Installation des dépendances..."
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install --no-frozen-lockfile
 
-# ── Build du frontend React/Vite → artifacts/api-server/public/ ─
-echo ""
-echo "→ Build frontend..."
-pnpm --filter @workspace/bloum-cash run build
-
-# ── Build du serveur API → artifacts/api-server/dist/ ───────
-echo ""
-echo "→ Build API serveur..."
-pnpm --filter @workspace/api-server run build
+# ── Les fichiers buildés sont inclus dans git ────────────────
+# artifacts/api-server/public/  → frontend React (déjà compilé)
+# artifacts/api-server/dist/    → API serveur  (déjà compilé)
+# → git pull suffit, pas besoin de rebuilder sur Plesk.
 
 # ── Les migrations DB sont appliquées automatiquement ────────
 # au démarrage du serveur (startup-migrate.ts)
-# Aucune commande drizzle-kit ici.
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅  Build terminé !"
+echo "  ✅  Prêt !"
 echo "  → Cliquez Restart dans Plesk pour redémarrer."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
