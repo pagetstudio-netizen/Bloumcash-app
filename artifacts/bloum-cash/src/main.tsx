@@ -41,16 +41,26 @@ document.addEventListener("dragstart", (e) => e.preventDefault());
 function hideLoader() {
   const loader = document.getElementById("app-loader");
   if (!loader) return;
-  loader.classList.add("hidden");
-  /* Supprimer du DOM après la transition CSS (350ms) */
-  setTimeout(() => loader.remove(), 400);
+  /* Forcer la disparition via style inline (contourne tout problème CSS/cache) */
+  loader.style.transition = "opacity 0.3s ease";
+  loader.style.opacity = "0";
+  loader.style.pointerEvents = "none";
+  setTimeout(() => {
+    loader.style.display = "none";
+    loader.remove();
+  }, 350);
 }
 
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
 
-/* React ne fournit pas de callback "rendu terminé" pour les renders initiaux.
-   On utilise requestAnimationFrame × 2 pour attendre le premier paint. */
+/* Attendre que React ait réellement peint quelque chose avant de retirer le loader.
+   rAF×2 + 100ms de sécurité pour les chunks lazy chargés en production. */
 requestAnimationFrame(() => {
-  requestAnimationFrame(hideLoader);
+  requestAnimationFrame(() => {
+    setTimeout(hideLoader, 100);
+  });
 });
+
+/* Filet de sécurité : retirer le loader de force après 4 secondes maximum */
+setTimeout(hideLoader, 4000);
