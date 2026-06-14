@@ -107,7 +107,8 @@ function SplashRedirect() {
     const isPaymentRoute = location.startsWith("/paiement");
     const isAppGate = location.startsWith("/app");
     const isSplash = location === "/splash";
-    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash) return;
+    const isLanding = location === "/";
+    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash || isLanding) return;
 
     const shown = sessionStorage.getItem("splashShown");
     if (!shown) {
