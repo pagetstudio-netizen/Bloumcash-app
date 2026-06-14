@@ -84,6 +84,8 @@ function whenMedianReady(fn: () => void): void {
 
 function onMedianReady(): void {
   medianReady = true;
+  // Remplace l'URL par le titre de l'app dans la barre de navigation Median
+  try { median.navigationtitle.set({ title: "Bloum Cash" }); } catch { /* API non dispo */ }
   for (const fn of pendingMedianCmds) {
     try { fn(); } catch { /* silencieux */ }
   }

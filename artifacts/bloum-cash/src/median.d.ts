@@ -49,4 +49,12 @@ declare const median: {
   };
   vibrate: () => void;
   toast: (options: { message: string; duration?: "short" | "long" }) => void;
+
+  /**
+   * Contrôle le titre affiché dans la barre de navigation supérieure Median.
+   * Appelé après median_ready pour remplacer l'URL par un titre personnalisé.
+   */
+  navigationtitle: {
+    set: (options: { title: string }) => void;
+  };
 };
