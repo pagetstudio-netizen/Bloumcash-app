@@ -11,7 +11,7 @@ export function cn(...inputs: ClassValue[]) {
  * Use this to conditionally show mobile-only features.
  */
 export const isMedianApp: boolean =
-  navigator.userAgent.indexOf("median") > -1;
+  navigator.userAgent.toLowerCase().indexOf("median") > -1;
 
 export function formatAmount(amount: number): string {
   return amount.toLocaleString("fr-FR").replace(/\u202f/g, " ") + " FCFA";

@@ -32,7 +32,7 @@ export default function Plus() {
   const handleTestPush = async () => {
     setTestingPush(true);
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("bloum_token");
       const res = await fetch("/api/test-push-self", {
         method: "POST",
         headers: {
