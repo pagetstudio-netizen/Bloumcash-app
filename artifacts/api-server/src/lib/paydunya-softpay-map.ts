@@ -59,7 +59,7 @@ export const OPERATOR_MAP: Record<OperatorKey, OperatorConfig> = {
     label: "T-Money Togo",
     country: "TG",
     endpoint: "t-money-togo",
-    channels: ["t-money-togo"],
+    channels: ["tmoney-togo"],
     isPending: true,
     requiredFields: ["name_t_money", "email_t_money", "phone_t_money", "payment_token"],
     payloadBuilder: ({ name, email, phone, paymentToken }) => ({
