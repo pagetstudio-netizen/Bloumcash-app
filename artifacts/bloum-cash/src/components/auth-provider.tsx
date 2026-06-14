@@ -60,51 +60,76 @@ async function subscribeWebNotifications(email: string): Promise<void> {
 
 /* ── Median native ──────────────────────────────────────────────────────────
  *
- * Stratégie à deux niveaux :
+ * Median expose un objet global `median` APRÈS l'événement `median_ready`.
+ * Si on appelle median.xxx avant cet événement, la commande est silencieusement
+ * perdue. On stocke les commandes en attente et on les rejoue dès que Median
+ * est prêt.
  *
- * 1. median.push.register()  — push natif Median, inscription silencieuse
- *    (provisional authorization iOS 12+), AUCUNE popup de permission.
- *    Utilisé dès le lancement pour que l'app soit immédiatement joignable.
- *
- * 2. median.onesignal.login(email) — identifie l'utilisateur dans OneSignal
- *    pour les campagnes avancées (pas de popup, juste un tag de ciblage).
- *    On n'appelle JAMAIS promptForPermission() — la permission est déjà
- *    acquise via le push natif Median.
- *
+ * Flux correct :
+ *  1. Au montage → écouter `median_ready` + appeler median.push.register()
+ *  2. À la connexion → appeler median.onesignal.login({ externalId: email })
+ *  3. À la déconnexion → appeler median.onesignal.logout()
  * ─────────────────────────────────────────────────────────────────────────── */
 
-function registerMedianPush(): void {
-  if (typeof median === "undefined") return;
-  try {
-    median.push.register();
-  } catch {
-    // push non disponible sur cette version du wrapper
+let medianReady = false;
+const pendingMedianCmds: Array<() => void> = [];
+
+function whenMedianReady(fn: () => void): void {
+  if (medianReady) {
+    fn();
+  } else {
+    pendingMedianCmds.push(fn);
   }
+}
+
+function onMedianReady(): void {
+  medianReady = true;
+  for (const fn of pendingMedianCmds) {
+    try { fn(); } catch { /* silencieux */ }
+  }
+  pendingMedianCmds.length = 0;
+}
+
+/* Écoute l'événement Median — déclenché quand le bridge natif est prêt */
+if (typeof document !== "undefined") {
+  document.addEventListener("median_ready", onMedianReady, { once: true });
+  /* Fallback si l'event a déjà été déclenché avant notre écoute */
+  if (typeof median !== "undefined") {
+    onMedianReady();
+  }
+}
+
+function registerMedianPush(): void {
+  whenMedianReady(() => {
+    try {
+      median.push.register();
+    } catch {
+      // push non disponible sur cette version du wrapper
+    }
+  });
 }
 
 function linkOneSignalUser(email: string): void {
-  if (typeof median === "undefined") return;
-  try {
-    median.onesignal.login({ externalId: email });
-  } catch {
-    // OneSignal plugin non configuré — silencieux
-  }
+  whenMedianReady(() => {
+    try {
+      median.onesignal.login({ externalId: email });
+    } catch {
+      // OneSignal plugin non configuré dans le dashboard Median
+    }
+  });
 }
 
 function unlinkOneSignalUser(): void {
-  if (typeof median === "undefined") return;
-  try {
-    median.onesignal.logout();
-  } catch {
-    // silencieux
-  }
+  whenMedianReady(() => {
+    try {
+      median.onesignal.logout();
+    } catch {
+      // silencieux
+    }
+  });
 }
 
-/* ── Détection automatique de la localisation via IP ────────────────────
- * Appelée silencieusement après chaque connexion — aucune popup, aucune
- * saisie manuelle. Les données sont enregistrées côté serveur et visibles
- * uniquement par l'administrateur.
- * ─────────────────────────────────────────────────────────────────────── */
+/* ── Détection automatique de la localisation via IP ────────────────────── */
 
 async function detectAndSaveLocation(token: string): Promise<void> {
   try {
@@ -138,10 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /* Au montage : enregistrement push selon l'environnement */
   useEffect(() => {
     if (isMedianApp) {
-      // Push natif Median silencieux — aucune popup de permission
       registerMedianPush();
     } else {
-      // Web browser : initialiser le SDK OneSignal
       initOneSignalWeb();
     }
   }, []);
@@ -166,7 +189,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       trySubscribe();
     }
 
-    // Mettre à jour la localisation à chaque réouverture de l'app
     detectAndSaveLocation(token);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -185,7 +207,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscribeWebNotifications(userData.email);
     }
 
-    // Détection automatique de la localisation — silencieuse, aucune popup
     detectAndSaveLocation(authToken);
   };
 
