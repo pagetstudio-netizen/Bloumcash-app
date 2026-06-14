@@ -60165,47 +60165,68 @@ router6.post("/transfer", requireUser, async (req, res) => {
           fees
         }, "\u26A0\uFE0F CRITIQUE \u2014 Charge Moov synchrone OK mais \xE9chec insertion DB.");
       }
-      req.log.info(
-        { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt },
-        "PayDunya charge synchrone confirm\xE9e \u2014 d\xE9clenchement payout imm\xE9diat"
-      );
-      const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
-      if (updated.length > 0) {
-        try {
-          const payoutResult = await disburseTogoWallet(
-            toOperator,
-            { name: "B\xE9n\xE9ficiaire Bloum Cash", phone: toPhone, amount: amt, reference },
-            req.log
-          );
-          if (payoutResult.success) {
-            await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, reference));
-            req.log.info({ reference, toOperator, toPhone }, "Payout synchrone Moov\u2192TMoney OK \u2192 success");
-            notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
-            if (userId) {
-              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-              if (userRows[0]?.email) {
-                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(amt)} vers ${toPhone} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference } }, req.log);
-              }
-            }
-          } else {
-            await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
-            req.log.error({ reference, msg: payoutResult.message }, "Payout synchrone refus\xE9 \u2014 INTERVENTION MANUELLE REQUISE");
-          }
-        } catch (payoutErr) {
-          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
-          req.log.error({ err: payoutErr, reference }, "Erreur payout synchrone \u2014 INTERVENTION MANUELLE REQUISE");
-        }
+      let cashinConfirmed = false;
+      try {
+        const confirmation = await confirmInvoice(paymentToken, req.log);
+        cashinConfirmed = confirmation.completed;
+        req.log.info(
+          { reference, invoiceStatus: confirmation.status, cashinConfirmed },
+          "PayDunya confirmInvoice apr\xE8s charge Moov"
+        );
+      } catch (confirmErr) {
+        req.log.warn({ err: confirmErr, reference }, "confirmInvoice Moov \xE9chou\xE9 \u2014 retour en attente webhook");
       }
-      res.status(201).json({
-        success: true,
-        message: "Paiement confirm\xE9. Transfert en cours de traitement.",
-        reference,
-        fees,
-        total,
-        isPending: false,
-        paydunhaConfigured: true,
-        gateway: "PayDunya"
-      });
+      if (cashinConfirmed) {
+        const updated = await db.update(transactionsTable).set({ payoutSent: true }).where(and(eq(transactionsTable.reference, reference), eq(transactionsTable.payoutSent, false))).returning({ id: transactionsTable.id });
+        if (updated.length > 0) {
+          try {
+            const payoutResult = await disburseTogoWallet(
+              toOperator,
+              { name: "B\xE9n\xE9ficiaire Bloum Cash", phone: toPhone, amount: amt, reference },
+              req.log
+            );
+            if (payoutResult.success) {
+              await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, reference));
+              req.log.info({ reference, toOperator, toPhone }, "\u2705 Payout Moov\u2192TMoney OK apr\xE8s confirmation encaissement");
+              notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+              if (userId) {
+                const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+                if (userRows[0]?.email) {
+                  sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirm\xE9 \u2705", message: `Votre transfert de ${formatAmount(amt)} vers ${toPhone} a \xE9t\xE9 confirm\xE9.`, data: { type: "transfer_confirmed", reference } }, req.log);
+                }
+              }
+            } else {
+              await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+              req.log.error({ reference, msg: payoutResult.message }, "Payout Moov refus\xE9 apr\xE8s encaissement confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE");
+            }
+          } catch (payoutErr) {
+            await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+            req.log.error({ err: payoutErr, reference }, "Erreur payout Moov \u2014 INTERVENTION MANUELLE REQUISE");
+          }
+        }
+        res.status(201).json({
+          success: true,
+          message: "Paiement re\xE7u et transfert d\xE9clench\xE9.",
+          reference,
+          fees,
+          total,
+          isPending: false,
+          paydunhaConfigured: true,
+          gateway: "PayDunya"
+        });
+      } else {
+        req.log.info({ reference }, "Moov: encaissement non encore confirm\xE9 \u2014 attente webhook/polling");
+        res.status(201).json({
+          success: true,
+          message: "Demande de paiement envoy\xE9e. Veuillez valider sur votre t\xE9l\xE9phone mobile.",
+          reference,
+          fees,
+          total,
+          isPending: true,
+          paydunhaConfigured: true,
+          gateway: "PayDunya"
+        });
+      }
       return;
     }
     try {
