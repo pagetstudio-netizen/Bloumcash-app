@@ -338,8 +338,8 @@ export async function createInvoice(
     invoice: {
       total_amount: amount,
       description,
-      channels,
     },
+    channels,
     store: {
       name:           process.env.PAYDUNYA_STORE_NAME  || "Bloum Cash",
       tagline:        "Transferts TMoney & Moov Money au Togo",

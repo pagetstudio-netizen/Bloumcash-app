@@ -1,6 +1,7 @@
 - [Admin dashboard](admin-dashboard.md) — tableau de bord admin complet à /admin, compte pagetstudio@gmail.com/AAbb11##, seed au démarrage API.
 - [User auth token](user-auth-token.md) — `randomBytes` remplacé par HMAC signé (user-auth.ts); tous les endpoints transactions/stats filtrent par userId; frontend injecte Bearer via setAuthTokenGetter.
 - [PayDunya SoftPay](paydunya-softpay.md) — intégration PayDunya avec carte opérateurs, HTML detection, retry logic, structured logging.
+- [PayDunya channels placement](paydunya-channels.md) — `channels` doit être à la RACINE du JSON, pas dans `invoice`; sinon 1003 "not a valid payment channel".
 - [Express SPA fallback](express-spa-fallback.md) — Express 5 requires `"/{*path}"` not `"*"` for catch-all routes; SPA dist is at `../bloum-cash/dist/public` relative to api-server CWD.
 - [AppGate access URL](appgate-access.md) — `##` in URL `?access=...##` stripped by browser; wouter navigate `{ replace: true }` prevents back-button to access URL; Replit screenshot tool strips query strings (test limitation, not a real bug).
 - [Vite build env vars](vite-build-env.md) — PORT/BASE_PATH are only needed for dev/preview; made optional with fallbacks so `pnpm build` works without env vars.
