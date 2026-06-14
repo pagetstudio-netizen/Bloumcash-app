@@ -57807,7 +57807,7 @@ function isOneSignalConfigured() {
 async function sendPushNotification(options, log) {
   if (!isOneSignalConfigured()) {
     log?.warn({ reason: "ONESIGNAL_APP_ID ou ONESIGNAL_API_KEY manquant" }, "OneSignal non configur\xE9 \u2014 notification ignor\xE9e");
-    return;
+    return { success: false, error: "OneSignal non configur\xE9" };
   }
   const payload = {
     app_id: ONESIGNAL_APP_ID,
@@ -57828,16 +57828,26 @@ async function sendPushNotification(options, log) {
     });
     const body = await response.json();
     const errorsArr = Array.isArray(body.errors) ? body.errors : [];
-    const notSubscribed = errorsArr.some((e) => e.toLowerCase().includes("not subscribed"));
+    if (response.status === 400 && errorsArr.some((e) => e.toLowerCase().includes("access denied"))) {
+      log?.error({ externalUserId: options.externalUserId }, "OneSignal \u2014 CLEF API INVALIDE : v\xE9rifiez ONESIGNAL_API_KEY dans les param\xE8tres");
+      return { success: false, accessDenied: true, error: "Cl\xE9 API OneSignal invalide \u2014 mettez \xE0 jour ONESIGNAL_API_KEY" };
+    }
+    const notSubscribed = errorsArr.some(
+      (e) => e.toLowerCase().includes("not subscribed") || e.toLowerCase().includes("no subscriptions")
+    );
     if (notSubscribed) {
       log?.warn({ externalUserId: options.externalUserId }, "OneSignal \u2014 appareil non abonn\xE9 (pas encore ouvert l'app Median)");
-    } else if (!response.ok || body.errors) {
-      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal \u2014 \xE9chec envoi");
-    } else {
-      log?.info({ notificationId: body.id, recipients: body.recipients, externalUserId: options.externalUserId }, "OneSignal \u2014 notification envoy\xE9e");
+      return { success: false, notSubscribed: true };
     }
+    if (!response.ok || errorsArr.length > 0) {
+      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal \u2014 \xE9chec envoi");
+      return { success: false, error: String(body.errors ?? response.status) };
+    }
+    log?.info({ notificationId: body.id, recipients: body.recipients, externalUserId: options.externalUserId }, "OneSignal \u2014 notification envoy\xE9e");
+    return { success: true, notificationId: body.id, recipients: body.recipients };
   } catch (err) {
     log?.warn({ err, externalUserId: options.externalUserId }, "OneSignal \u2014 erreur r\xE9seau lors de l'envoi");
+    return { success: false, error: String(err) };
   }
 }
 
@@ -67227,21 +67237,39 @@ router10.post("/admin/notifications/push/broadcast", requireAdmin, async (req, r
     }
     const CHUNK = 50;
     let sent = 0;
+    let failed = 0;
+    let accessDenied = false;
     for (let i = 0; i < users.length; i += CHUNK) {
       const chunk = users.slice(i, i + CHUNK);
-      await Promise.all(
+      const results = await Promise.all(
         chunk.map(async (u) => {
-          if (!u.email) return;
-          await sendPushNotification(
+          if (!u.email) return null;
+          return sendPushNotification(
             { externalUserId: u.email, title: title.trim(), message: message.trim(), data: { type: "campaign" } },
             req.log
           );
-          sent++;
         })
       );
+      for (const r of results) {
+        if (!r) continue;
+        if (r.accessDenied) {
+          accessDenied = true;
+          failed++;
+        } else if (r.success) sent++;
+        else failed++;
+      }
+      if (accessDenied) break;
     }
-    req.log.info({ sent, title }, "Admin \u2014 push broadcast envoy\xE9");
-    res.json({ success: true, sent, message: `Notification envoy\xE9e \xE0 ${sent} utilisateur(s).` });
+    if (accessDenied) {
+      res.status(503).json({
+        success: false,
+        sent: 0,
+        error: "Cl\xE9 API OneSignal invalide. Allez dans Settings \u2192 Keys & IDs \u2192 REST API Key sur le dashboard OneSignal et mettez \xE0 jour ONESIGNAL_API_KEY."
+      });
+      return;
+    }
+    req.log.info({ sent, failed, title }, "Admin \u2014 push broadcast termin\xE9");
+    res.json({ success: true, sent, failed, message: `Notification envoy\xE9e \xE0 ${sent} utilisateur(s). ${failed > 0 ? `${failed} \xE9chec(s).` : ""}` });
   } catch (err) {
     req.log.error({ err }, "Admin push broadcast error");
     res.status(500).json({ error: "Erreur serveur interne." });

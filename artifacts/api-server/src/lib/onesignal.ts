@@ -18,13 +18,22 @@ export interface PushNotificationOptions {
   data?: Record<string, string>;
 }
 
+export interface PushResult {
+  success: boolean;
+  notSubscribed?: boolean;
+  accessDenied?: boolean;
+  error?: string;
+  recipients?: number;
+  notificationId?: string;
+}
+
 export async function sendPushNotification(
   options: PushNotificationOptions,
-  log?: { warn: (obj: object, msg: string) => void; info: (obj: object, msg: string) => void }
-): Promise<void> {
+  log?: { warn: (obj: object, msg: string) => void; info: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void }
+): Promise<PushResult> {
   if (!isOneSignalConfigured()) {
     log?.warn({ reason: "ONESIGNAL_APP_ID ou ONESIGNAL_API_KEY manquant" }, "OneSignal non configuré — notification ignorée");
-    return;
+    return { success: false, error: "OneSignal non configuré" };
   }
 
   const payload = {
@@ -49,16 +58,32 @@ export async function sendPushNotification(
     const body = await response.json() as { id?: string; errors?: unknown; recipients?: number };
 
     const errorsArr = Array.isArray(body.errors) ? body.errors as string[] : [];
-    const notSubscribed = errorsArr.some((e: string) => e.toLowerCase().includes("not subscribed"));
 
+    /* Clé API invalide */
+    if (response.status === 400 && errorsArr.some((e: string) => e.toLowerCase().includes("access denied"))) {
+      log?.error({ externalUserId: options.externalUserId }, "OneSignal — CLEF API INVALIDE : vérifiez ONESIGNAL_API_KEY dans les paramètres");
+      return { success: false, accessDenied: true, error: "Clé API OneSignal invalide — mettez à jour ONESIGNAL_API_KEY" };
+    }
+
+    /* Appareil non abonné */
+    const notSubscribed = errorsArr.some((e: string) =>
+      e.toLowerCase().includes("not subscribed") || e.toLowerCase().includes("no subscriptions")
+    );
     if (notSubscribed) {
       log?.warn({ externalUserId: options.externalUserId }, "OneSignal — appareil non abonné (pas encore ouvert l'app Median)");
-    } else if (!response.ok || body.errors) {
-      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal — échec envoi");
-    } else {
-      log?.info({ notificationId: body.id, recipients: body.recipients, externalUserId: options.externalUserId }, "OneSignal — notification envoyée");
+      return { success: false, notSubscribed: true };
     }
+
+    /* Autre erreur OneSignal */
+    if (!response.ok || errorsArr.length > 0) {
+      log?.warn({ status: response.status, errors: body.errors, externalUserId: options.externalUserId }, "OneSignal — échec envoi");
+      return { success: false, error: String(body.errors ?? response.status) };
+    }
+
+    log?.info({ notificationId: body.id, recipients: body.recipients, externalUserId: options.externalUserId }, "OneSignal — notification envoyée");
+    return { success: true, notificationId: body.id, recipients: body.recipients };
   } catch (err) {
     log?.warn({ err, externalUserId: options.externalUserId }, "OneSignal — erreur réseau lors de l'envoi");
+    return { success: false, error: String(err) };
   }
 }

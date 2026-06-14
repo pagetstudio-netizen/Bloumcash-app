@@ -1284,22 +1284,41 @@ router.post("/admin/notifications/push/broadcast", requireAdmin, async (req, res
     // Envoyer en parallèle (max 50 simultanés pour ne pas saturer)
     const CHUNK = 50;
     let sent = 0;
+    let failed = 0;
+    let accessDenied = false;
+
     for (let i = 0; i < users.length; i += CHUNK) {
       const chunk = users.slice(i, i + CHUNK);
-      await Promise.all(
+      const results = await Promise.all(
         chunk.map(async (u) => {
-          if (!u.email) return;
-          await sendPushNotification(
+          if (!u.email) return null;
+          return sendPushNotification(
             { externalUserId: u.email, title: title.trim(), message: message.trim(), data: { type: "campaign" } },
             req.log
           );
-          sent++;
         })
       );
+      for (const r of results) {
+        if (!r) continue;
+        if (r.accessDenied) { accessDenied = true; failed++; }
+        else if (r.success) sent++;
+        else failed++;
+      }
+      /* Si la clé est invalide, inutile de continuer */
+      if (accessDenied) break;
     }
 
-    req.log.info({ sent, title }, "Admin — push broadcast envoyé");
-    res.json({ success: true, sent, message: `Notification envoyée à ${sent} utilisateur(s).` });
+    if (accessDenied) {
+      res.status(503).json({
+        success: false,
+        sent: 0,
+        error: "Clé API OneSignal invalide. Allez dans Settings → Keys & IDs → REST API Key sur le dashboard OneSignal et mettez à jour ONESIGNAL_API_KEY.",
+      });
+      return;
+    }
+
+    req.log.info({ sent, failed, title }, "Admin — push broadcast terminé");
+    res.json({ success: true, sent, failed, message: `Notification envoyée à ${sent} utilisateur(s). ${failed > 0 ? `${failed} échec(s).` : ""}` });
   } catch (err) {
     req.log.error({ err }, "Admin push broadcast error");
     res.status(500).json({ error: "Erreur serveur interne." });
