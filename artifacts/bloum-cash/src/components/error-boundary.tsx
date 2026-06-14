@@ -5,6 +5,20 @@ import { motion } from "framer-motion";
 interface State {
   hasError: boolean;
   error?: Error;
+  isChunkError: boolean;
+}
+
+async function clearAllCaches() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch { /* silent */ }
 }
 
 export class ErrorBoundary extends React.Component<
@@ -13,24 +27,36 @@ export class ErrorBoundary extends React.Component<
 > {
   constructor(props: { children: React.ReactNode }) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, isChunkError: false };
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    const isChunkError =
+      error.message.includes("dynamically imported module") ||
+      error.message.includes("Failed to fetch") ||
+      error.message.includes("Loading chunk") ||
+      error.name === "ChunkLoadError";
+    return { hasError: true, error, isChunkError };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("[ErrorBoundary]", error, info.componentStack);
   }
 
-  handleReset = () => {
-    this.setState({ hasError: false, error: undefined });
-    window.location.href = "/dashboard";
+  handleReset = async () => {
+    await clearAllCaches();
+    window.location.replace("/dashboard");
+  };
+
+  handleHardReload = async () => {
+    await clearAllCaches();
+    window.location.reload();
   };
 
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    const { isChunkError, error } = this.state;
 
     return (
       <div className="h-[100dvh] w-full bg-background flex flex-col items-center justify-center md:max-w-md md:mx-auto px-6 select-none">
@@ -71,14 +97,16 @@ export class ErrorBoundary extends React.Component<
             className="space-y-2"
           >
             <h1 className="text-2xl font-bold text-foreground">
-              Quelque chose s'est mal passé
+              {isChunkError ? "Mise à jour disponible" : "Quelque chose s'est mal passé"}
             </h1>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Une erreur inattendue s'est produite. Vos données sont en sécurité.
+              {isChunkError
+                ? "Une nouvelle version de l'app est disponible. Appuyez pour mettre à jour."
+                : "Une erreur inattendue s'est produite. Vos données sont en sécurité."}
             </p>
           </motion.div>
 
-          {this.state.error && (
+          {!isChunkError && error && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -86,22 +114,34 @@ export class ErrorBoundary extends React.Component<
               className="w-full bg-muted/60 rounded-2xl p-3 text-left"
             >
               <p className="text-xs font-mono text-muted-foreground break-words line-clamp-3">
-                {this.state.error.message}
+                {error.message}
               </p>
             </motion.div>
           )}
 
-          <motion.button
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45 }}
-            onClick={this.handleReset}
-            whileTap={{ scale: 0.97 }}
-            className="w-full bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#1a3fc4]/30 active:shadow-none transition-shadow"
+            className="w-full flex flex-col gap-3"
           >
-            <RefreshCw className="w-5 h-5" />
-            Retourner au tableau de bord
-          </motion.button>
+            <button
+              onClick={this.handleHardReload}
+              className="w-full bg-gradient-to-r from-[#1a3fc4] to-[#2b50e8] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#1a3fc4]/30 active:shadow-none transition-shadow"
+            >
+              <RefreshCw className="w-5 h-5" />
+              {isChunkError ? "Mettre à jour l'application" : "Recharger l'application"}
+            </button>
+
+            {!isChunkError && (
+              <button
+                onClick={this.handleReset}
+                className="w-full text-sm text-muted-foreground py-2"
+              >
+                Retourner au tableau de bord
+              </button>
+            )}
+          </motion.div>
         </div>
       </div>
     );
