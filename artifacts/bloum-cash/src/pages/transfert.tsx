@@ -289,19 +289,33 @@ export default function Transfert() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/transfer/${ref}/status`);
+        const token = localStorage.getItem("bloum_token");
+        const res = await fetch(`/api/transfer/${ref}/status`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) return;
         const data = await res.json() as { status?: string };
         if (data.status === "success" || data.status === "completed") {
           clearInterval(pollRef.current!);
           pollRef.current = null;
           setStep("success");
+        } else if (data.status === "failed" || data.status === "payout_failed") {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setStep("step2");
+          showModal({
+            type: "error",
+            title: "Transfert échoué",
+            message: data.status === "payout_failed"
+              ? "Le paiement a été reçu mais le versement au destinataire a échoué. Contactez le support."
+              : "Le transfert a échoué ou a été annulé. Veuillez réessayer.",
+          });
         }
       } catch {
         /* ignore — réessaie au prochain tick */
       }
     }, 3000);
-  }, []);
+  }, [showModal]);
 
   if (!isAuthenticated) return null;
 
