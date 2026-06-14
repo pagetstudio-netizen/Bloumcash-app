@@ -23,11 +23,11 @@ const TYPE_CONFIG: Record<string, { icon: React.ElementType; bg: string; text: s
   error:   { icon: AlertCircle,   bg: "bg-red-100",    text: "text-red-600" },
 };
 
-const DISMISSED_KEY = "bloum_dismissed_notifications";
+const DISMISSED_KEY = "bloum_dismissed_notifications_session";
 
 function getDismissed(): Set<number> {
   try {
-    const raw = localStorage.getItem(DISMISSED_KEY);
+    const raw = sessionStorage.getItem(DISMISSED_KEY);
     return new Set(raw ? JSON.parse(raw) : []);
   } catch { return new Set(); }
 }
@@ -35,7 +35,7 @@ function getDismissed(): Set<number> {
 function dismiss(id: number) {
   const set = getDismissed();
   set.add(id);
-  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set]));
+  sessionStorage.setItem(DISMISSED_KEY, JSON.stringify([...set]));
 }
 
 export default function GlobalNotification() {
