@@ -4,12 +4,35 @@ import { useAuth } from "@/components/auth-provider";
 
 const DURATION = 4500;
 
+const IMAGES_TO_PRELOAD = [
+  "/logo-512.png",
+  "/icon-historique.png",
+  "/icon-plus.png",
+  "/icon-promotion.png",
+  "/icon-transfert.png",
+  "/nodata.png",
+  "/banners/banner1.jpg",
+  "/banners/banner2.jpg",
+  "/banners/banner3.jpg",
+  "/banners/bloum-cash-banner-avis.jpg",
+  "/banners/bloum-cash-banner-transfert.jpg",
+];
+
+function preloadImages(urls: string[]): void {
+  urls.forEach((src) => {
+    const img = new Image();
+    img.src = src;
+  });
+}
+
 export default function Splash() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    preloadImages(IMAGES_TO_PRELOAD);
+
     const start = performance.now();
     let rafId: number;
 
@@ -91,6 +114,7 @@ export default function Splash() {
             width: `${progress}%`,
             background: "linear-gradient(90deg, #1a3fc4, #2b50e8)",
             borderRadius: 999,
+            transition: "none",
           }}
         />
       </div>

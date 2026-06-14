@@ -99,9 +99,30 @@ function OnlineGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function SplashRedirect() {
+  const [location, setLocation] = useLocation();
+
+  React.useEffect(() => {
+    const isAdminRoute = location.startsWith("/admin");
+    const isPaymentRoute = location.startsWith("/paiement");
+    const isAppGate = location.startsWith("/app");
+    const isSplash = location === "/splash";
+    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash) return;
+
+    const shown = sessionStorage.getItem("splashShown");
+    if (!shown) {
+      sessionStorage.setItem("splashShown", "1");
+      setLocation("/splash");
+    }
+  }, [location, setLocation]);
+
+  return null;
+}
+
 function Router() {
   return (
     <OnlineGuard>
+      <SplashRedirect />
       <Switch>
         {/* Admin routes */}
         <Route path="/admin/login" component={AdminLogin} />
