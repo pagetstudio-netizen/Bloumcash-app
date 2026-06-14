@@ -485,13 +485,43 @@ export async function startTelegram(): Promise<void> {
   startScheduler();
 
   if (groupChatId) {
-    sendToGroup(
-      `🟢 <b>SERVEUR REDÉMARRÉ — BLOUM CASH</b>\n\n` +
-      `✅ Le bot Telegram est actif et opérationnel.\n` +
-      `📡 Long polling en cours...\n` +
-      `📅 ${togoDt()} (Togo UTC+0)\n\n` +
-      `<i>Toutes les notifications sont rétablies.</i>`
-    ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+    /* Envoi du message de démarrage limité à 1 fois toutes les 2 heures */
+    const RESTART_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h
+    let shouldSend = true;
+    try {
+      const rows = await db
+        .select({ value: adminSettingsTable.value })
+        .from(adminSettingsTable)
+        .where(eq(adminSettingsTable.key, "telegram_last_restart_notify"))
+        .limit(1);
+      if (rows[0]?.value) {
+        const lastSent = parseInt(rows[0].value, 10);
+        if (!isNaN(lastSent) && Date.now() - lastSent < RESTART_COOLDOWN_MS) {
+          shouldSend = false;
+          logger.info("🤖 Telegram: message de démarrage ignoré (cooldown 2h)");
+        }
+      }
+    } catch { /* on envoie par défaut si la DB est inaccessible */ }
+
+    if (shouldSend) {
+      try {
+        await db
+          .insert(adminSettingsTable)
+          .values({ key: "telegram_last_restart_notify", value: String(Date.now()) })
+          .onConflictDoUpdate({
+            target: adminSettingsTable.key,
+            set: { value: String(Date.now()), updatedAt: new Date() },
+          });
+      } catch { /* silencieux */ }
+
+      sendToGroup(
+        `🟢 <b>SERVEUR REDÉMARRÉ — BLOUM CASH</b>\n\n` +
+        `✅ Le bot Telegram est actif et opérationnel.\n` +
+        `📡 Long polling en cours...\n` +
+        `📅 ${togoDt()} (Togo UTC+0)\n\n` +
+        `<i>Toutes les notifications sont rétablies.</i>`
+      ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+    }
   } else {
     logger.warn("⚠️ Telegram : aucun groupe enregistré — envoyez « salut c'est toi le bot » dans le groupe pour l'activer.");
   }

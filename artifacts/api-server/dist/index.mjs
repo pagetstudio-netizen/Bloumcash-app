@@ -58267,15 +58267,37 @@ async function startTelegram() {
   );
   startScheduler();
   if (groupChatId) {
-    sendToGroup(
-      `\u{1F7E2} <b>SERVEUR RED\xC9MARR\xC9 \u2014 BLOUM CASH</b>
+    const RESTART_COOLDOWN_MS = 2 * 60 * 60 * 1e3;
+    let shouldSend = true;
+    try {
+      const rows = await db.select({ value: adminSettingsTable.value }).from(adminSettingsTable).where(eq(adminSettingsTable.key, "telegram_last_restart_notify")).limit(1);
+      if (rows[0]?.value) {
+        const lastSent = parseInt(rows[0].value, 10);
+        if (!isNaN(lastSent) && Date.now() - lastSent < RESTART_COOLDOWN_MS) {
+          shouldSend = false;
+          logger.info("\u{1F916} Telegram: message de d\xE9marrage ignor\xE9 (cooldown 2h)");
+        }
+      }
+    } catch {
+    }
+    if (shouldSend) {
+      try {
+        await db.insert(adminSettingsTable).values({ key: "telegram_last_restart_notify", value: String(Date.now()) }).onConflictDoUpdate({
+          target: adminSettingsTable.key,
+          set: { value: String(Date.now()), updatedAt: /* @__PURE__ */ new Date() }
+        });
+      } catch {
+      }
+      sendToGroup(
+        `\u{1F7E2} <b>SERVEUR RED\xC9MARR\xC9 \u2014 BLOUM CASH</b>
 
 \u2705 Le bot Telegram est actif et op\xE9rationnel.
 \u{1F4E1} Long polling en cours...
 \u{1F4C5} ${togoDt()} (Togo UTC+0)
 
 <i>Toutes les notifications sont r\xE9tablies.</i>`
-    ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+      ).catch((err) => logger.error({ err }, "Telegram startup message error"));
+    }
   } else {
     logger.warn("\u26A0\uFE0F Telegram : aucun groupe enregistr\xE9 \u2014 envoyez \xAB salut c'est toi le bot \xBB dans le groupe pour l'activer.");
   }
