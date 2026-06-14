@@ -42,7 +42,11 @@ router.get("/stats/summary", requireUser, async (req, res) => {
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, since)));
+      .where(and(
+        eq(transactionsTable.userId, userId),
+        gte(transactionsTable.createdAt, since),
+        eq(transactionsTable.status, "success"),
+      ));
 
     let incoming = 0;
     let outgoing = 0;
@@ -72,7 +76,11 @@ router.get("/stats/chart", requireUser, async (req, res) => {
     const rows = await db
       .select()
       .from(transactionsTable)
-      .where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, getPeriodStart(period))))
+      .where(and(
+        eq(transactionsTable.userId, userId),
+        gte(transactionsTable.createdAt, getPeriodStart(period)),
+        eq(transactionsTable.status, "success"),
+      ))
       .orderBy(transactionsTable.createdAt);
 
     const grouped: Record<string, number> = {};

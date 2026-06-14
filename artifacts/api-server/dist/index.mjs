@@ -58696,7 +58696,11 @@ router4.get("/stats/summary", requireUser, async (req, res) => {
     const userId = extractUser(req).id;
     const period = req.query.period || "month";
     const since = getPeriodStart(period);
-    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, since)));
+    const rows = await db.select().from(transactionsTable).where(and(
+      eq(transactionsTable.userId, userId),
+      gte(transactionsTable.createdAt, since),
+      eq(transactionsTable.status, "success")
+    ));
     let incoming = 0;
     let outgoing = 0;
     for (const row of rows) {
@@ -58719,7 +58723,11 @@ router4.get("/stats/chart", requireUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const period = req.query.period || "month";
-    const rows = await db.select().from(transactionsTable).where(and(eq(transactionsTable.userId, userId), gte(transactionsTable.createdAt, getPeriodStart(period)))).orderBy(transactionsTable.createdAt);
+    const rows = await db.select().from(transactionsTable).where(and(
+      eq(transactionsTable.userId, userId),
+      gte(transactionsTable.createdAt, getPeriodStart(period)),
+      eq(transactionsTable.status, "success")
+    )).orderBy(transactionsTable.createdAt);
     const grouped = {};
     for (const row of rows) {
       const d = new Date(row.createdAt);

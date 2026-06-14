@@ -277,9 +277,10 @@ export default function AdminTransactions() {
   };
 
   const pages = Math.max(1, Math.ceil(total / 50));
-  const totalAmount = txs.reduce((s, t) => s + t.amount, 0);
-  const totalFees   = txs.reduce((s, t) => s + t.fees, 0);
-  const successCount = txs.filter(t => t.status === "success").length;
+  const successTxs   = txs.filter(t => t.status === "success");
+  const totalAmount  = successTxs.reduce((s, t) => s + t.amount, 0);
+  const totalFees    = successTxs.reduce((s, t) => s + t.fees, 0);
+  const successCount = successTxs.length;
 
   const exportCSV = () => {
     const headers = ["ID", "Référence", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "De", "Vers", "UserID", "Date"];
@@ -314,8 +315,8 @@ export default function AdminTransactions() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: "Transactions affichées", value: String(txs.length), sub: `${successCount} réussies` },
-              { label: "Volume total",           value: formatAmount(totalAmount), sub: "montant brut" },
-              { label: "Commissions",            value: formatAmount(totalFees),   sub: "frais collectés" },
+              { label: "Volume total",           value: formatAmount(totalAmount), sub: "succès uniquement" },
+              { label: "Commissions",            value: formatAmount(totalFees),   sub: "succès uniquement" },
             ].map(s => (
               <div key={s.label} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
                 <div className="text-lg font-bold text-gray-900">{s.value}</div>
