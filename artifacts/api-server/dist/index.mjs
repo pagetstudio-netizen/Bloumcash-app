@@ -60288,6 +60288,12 @@ function requireWebhookSecret(req, res, next) {
 
 // src/routes/paydunya-webhook.ts
 var router7 = (0, import_express7.Router)();
+router7.get("/paydunya/webhook", (_req, res) => {
+  res.json({ ok: true });
+});
+router7.get("/paydunya/disburse-webhook", (_req, res) => {
+  res.json({ ok: true });
+});
 router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body;
@@ -60433,7 +60439,7 @@ router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur webhook" });
   }
 });
-router7.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
+router7.post("/paydunya/disburse-webhook", async (req, res) => {
   try {
     const payload = req.body;
     req.log.info({ payload }, "PayDunya disburse webhook re\xE7u");

@@ -20,6 +20,10 @@ const router: IRouter = Router();
  *  - "completed" → déclencher le payout UNIQUEMENT si payoutSent=false (atomique)
  *  - "cancelled"/"failed" → marquer la transaction échouée, JAMAIS de payout
  */
+/* GET — PayDunya vérifie l'accessibilité du callback avant de créer l'invoice */
+router.get("/paydunya/webhook", (_req, res) => { res.json({ ok: true }); });
+router.get("/paydunya/disburse-webhook", (_req, res) => { res.json({ ok: true }); });
+
 router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
@@ -248,7 +252,7 @@ router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
  * POST /api/paydunya/disburse-webhook
  * Appelé par PayDunya quand le statut d'un déboursement change.
  */
-router.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
+router.post("/paydunya/disburse-webhook", async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya disburse webhook reçu");
