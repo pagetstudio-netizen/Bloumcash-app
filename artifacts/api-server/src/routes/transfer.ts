@@ -282,7 +282,73 @@ router.post("/transfer", requireUser, async (req, res) => {
       return;
     }
 
-    /* ── Étape 3 : Sauvegarder en PENDING ── */
+    /* ── Étape 3a : Opérateur SYNCHRONE (ex: Moov) — paiement confirmé immédiatement ── */
+    if (!chargeResult.isPending) {
+      /* Insérer d'abord en pending pour éviter les races, puis déclencher le payout */
+      try {
+        await db.insert(transactionsTable).values({
+          reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
+          amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
+          fees, description: `Transfert ${fromOperator} → ${toOperator}`,
+          status: "pending", payoutSent: false, userId,
+          paydunyaToken: paymentToken,
+        });
+      } catch (dbErr) {
+        req.log.error({
+          err: dbErr, CRITICAL: "PAYDUNYA_SYNC_CHARGE_DB_INSERT_FAILED",
+          reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, fees,
+        }, "⚠️ CRITIQUE — Charge Moov synchrone OK mais échec insertion DB.");
+      }
+
+      req.log.info(
+        { reference, fromOperator, toOperator, fromPhone, toPhone, amount: amt },
+        "PayDunya charge synchrone confirmée — déclenchement payout immédiat"
+      );
+
+      /* Marquer payoutSent atomiquement avant de déclencher le payout */
+      const updated = await db
+        .update(transactionsTable)
+        .set({ payoutSent: true })
+        .where(and(eq(transactionsTable.reference, reference), eq(transactionsTable.payoutSent, false)))
+        .returning({ id: transactionsTable.id });
+
+      if (updated.length > 0) {
+        try {
+          const payoutResult = await paydunya.disburseTogoWallet(
+            toOperator as "tmoney" | "moov",
+            { name: "Bénéficiaire Bloum Cash", phone: toPhone, amount: amt, reference },
+            req.log
+          );
+
+          if (payoutResult.success) {
+            await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, reference));
+            req.log.info({ reference, toOperator, toPhone }, "Payout synchrone Moov→TMoney OK → success");
+            notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+            if (userId) {
+              const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+              if (userRows[0]?.email) {
+                sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirmé ✅", message: `Votre transfert de ${formatAmount(amt)} vers ${toPhone} a été confirmé.`, data: { type: "transfer_confirmed", reference } }, req.log);
+              }
+            }
+          } else {
+            await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+            req.log.error({ reference, msg: payoutResult.message }, "Payout synchrone refusé — INTERVENTION MANUELLE REQUISE");
+          }
+        } catch (payoutErr) {
+          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+          req.log.error({ err: payoutErr, reference }, "Erreur payout synchrone — INTERVENTION MANUELLE REQUISE");
+        }
+      }
+
+      res.status(201).json({
+        success: true,
+        message: "Paiement confirmé. Transfert en cours de traitement.",
+        reference, fees, total, isPending: false, paydunhaConfigured: true, gateway: "PayDunya",
+      });
+      return;
+    }
+
+    /* ── Étape 3b : Opérateur ASYNCHRONE (ex: TMoney) — attente confirmation SMS/webhook ── */
     try {
       await db.insert(transactionsTable).values({
         reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
