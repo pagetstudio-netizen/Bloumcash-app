@@ -658,28 +658,41 @@ router.get("/admin/notifications", requireAdmin, async (req, res) => {
 
 router.post("/admin/notifications", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    const { displayMode, title, message, type, imageUrl: externalImageUrl, imageData, actionType, actionUrl, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl: string | null = externalImageUrl ?? null;
     if (imageData) {
       const saved = saveUploadedImage(String(imageData), "notif");
       if (!saved) { res.status(400).json({ error: "Format d'image invalide ou non autorisé (jpg, png, webp, gif uniquement)" }); return; }
       imageUrl = saved;
     }
-    const [row] = await db.insert(adminNotificationsTable).values({ title, message, type: type ?? "info", imageUrl, buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null, isActive: isActive !== false }).returning();
+    const [row] = await db.insert(adminNotificationsTable).values({
+      displayMode: displayMode ?? "classic",
+      title: title ?? null, message: message ?? null,
+      type: type ?? "info", imageUrl,
+      actionType: actionType ?? "none", actionUrl: actionUrl ?? null,
+      buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null,
+      isActive: isActive !== false,
+    }).returning();
     res.status(201).json(row);
   } catch (err) { req.log.error({ err }, "Create notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });
 
 router.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    const { displayMode, title, message, type, imageUrl: externalImageUrl, imageData, actionType, actionUrl, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl: string | undefined = externalImageUrl;
     if (imageData) {
       const saved = saveUploadedImage(String(imageData), "notif");
       if (!saved) { res.status(400).json({ error: "Format d'image invalide ou non autorisé (jpg, png, webp, gif uniquement)" }); return; }
       imageUrl = saved;
     }
-    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl: imageUrl ?? null, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
+    await db.update(adminNotificationsTable).set({
+      displayMode: displayMode ?? "classic",
+      title: title ?? null, message: message ?? null,
+      type, imageUrl: imageUrl ?? null,
+      actionType: actionType ?? "none", actionUrl: actionUrl ?? null,
+      buttonText, buttonUrl, isActive,
+    }).where(eq(adminNotificationsTable.id, parseInt(req.params.id as string)));
     res.json({ success: true });
   } catch (err) { req.log.error({ err }, "Update notification error"); res.status(500).json({ error: "Erreur serveur" }); }
 });

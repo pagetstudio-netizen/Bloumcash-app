@@ -54925,10 +54925,13 @@ var adminUsersTable = pgTable("admin_users", {
 });
 var adminNotificationsTable = pgTable("admin_notifications", {
   id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
+  displayMode: text("display_mode").notNull().default("classic"),
+  title: text("title"),
+  message: text("message"),
   type: text("type").notNull().default("info"),
   imageUrl: text("image_url"),
+  actionType: text("action_type").notNull().default("none"),
+  actionUrl: text("action_url"),
   buttonText: text("button_text"),
   buttonUrl: text("button_url"),
   isActive: boolean("is_active").notNull().default(true),
@@ -66526,7 +66529,7 @@ router10.get("/admin/notifications", requireAdmin, async (req, res) => {
 });
 router10.post("/admin/notifications", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    const { displayMode, title, message, type, imageUrl: externalImageUrl, imageData, actionType, actionUrl, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl = externalImageUrl ?? null;
     if (imageData) {
       const saved = saveUploadedImage(String(imageData), "notif");
@@ -66536,7 +66539,18 @@ router10.post("/admin/notifications", requireAdmin, async (req, res) => {
       }
       imageUrl = saved;
     }
-    const [row] = await db.insert(adminNotificationsTable).values({ title, message, type: type ?? "info", imageUrl, buttonText: buttonText ?? null, buttonUrl: buttonUrl ?? null, isActive: isActive !== false }).returning();
+    const [row] = await db.insert(adminNotificationsTable).values({
+      displayMode: displayMode ?? "classic",
+      title: title ?? null,
+      message: message ?? null,
+      type: type ?? "info",
+      imageUrl,
+      actionType: actionType ?? "none",
+      actionUrl: actionUrl ?? null,
+      buttonText: buttonText ?? null,
+      buttonUrl: buttonUrl ?? null,
+      isActive: isActive !== false
+    }).returning();
     res.status(201).json(row);
   } catch (err) {
     req.log.error({ err }, "Create notification error");
@@ -66545,7 +66559,7 @@ router10.post("/admin/notifications", requireAdmin, async (req, res) => {
 });
 router10.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
   try {
-    const { title, message, type, imageUrl: externalImageUrl, imageData, buttonText, buttonUrl, isActive } = req.body;
+    const { displayMode, title, message, type, imageUrl: externalImageUrl, imageData, actionType, actionUrl, buttonText, buttonUrl, isActive } = req.body;
     let imageUrl = externalImageUrl;
     if (imageData) {
       const saved = saveUploadedImage(String(imageData), "notif");
@@ -66555,7 +66569,18 @@ router10.put("/admin/notifications/:id", requireAdmin, async (req, res) => {
       }
       imageUrl = saved;
     }
-    await db.update(adminNotificationsTable).set({ title, message, type, imageUrl: imageUrl ?? null, buttonText, buttonUrl, isActive }).where(eq(adminNotificationsTable.id, parseInt(req.params.id)));
+    await db.update(adminNotificationsTable).set({
+      displayMode: displayMode ?? "classic",
+      title: title ?? null,
+      message: message ?? null,
+      type,
+      imageUrl: imageUrl ?? null,
+      actionType: actionType ?? "none",
+      actionUrl: actionUrl ?? null,
+      buttonText,
+      buttonUrl,
+      isActive
+    }).where(eq(adminNotificationsTable.id, parseInt(req.params.id)));
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Update notification error");
@@ -67784,17 +67809,25 @@ async function runStartupMigration() {
     `);
     await run(client, `
       CREATE TABLE IF NOT EXISTS admin_notifications (
-        id          SERIAL PRIMARY KEY,
-        title       TEXT NOT NULL,
-        message     TEXT NOT NULL,
-        type        TEXT NOT NULL DEFAULT 'info',
-        image_url   TEXT,
-        button_text TEXT,
-        button_url  TEXT,
-        is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+        id           SERIAL PRIMARY KEY,
+        display_mode TEXT NOT NULL DEFAULT 'classic',
+        title        TEXT,
+        message      TEXT,
+        type         TEXT NOT NULL DEFAULT 'info',
+        image_url    TEXT,
+        action_type  TEXT NOT NULL DEFAULT 'none',
+        action_url   TEXT,
+        button_text  TEXT,
+        button_url   TEXT,
+        is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS display_mode TEXT NOT NULL DEFAULT 'classic'`);
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS action_type TEXT NOT NULL DEFAULT 'none'`);
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS action_url TEXT`);
+    await run(client, `ALTER TABLE admin_notifications ALTER COLUMN title DROP NOT NULL`);
+    await run(client, `ALTER TABLE admin_notifications ALTER COLUMN message DROP NOT NULL`);
     await run(client, `
       CREATE TABLE IF NOT EXISTS blacklist (
         id         SERIAL PRIMARY KEY,

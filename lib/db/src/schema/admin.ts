@@ -22,10 +22,13 @@ export const adminUsersTable = pgTable("admin_users", {
 
 export const adminNotificationsTable = pgTable("admin_notifications", {
   id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
+  displayMode: text("display_mode").notNull().default("classic"),
+  title: text("title"),
+  message: text("message"),
   type: text("type").notNull().default("info"),
   imageUrl: text("image_url"),
+  actionType: text("action_type").notNull().default("none"),
+  actionUrl: text("action_url"),
   buttonText: text("button_text"),
   buttonUrl: text("button_url"),
   isActive: boolean("is_active").notNull().default(true),

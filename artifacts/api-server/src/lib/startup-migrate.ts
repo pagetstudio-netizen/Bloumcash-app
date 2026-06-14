@@ -121,17 +121,26 @@ export async function runStartupMigration(): Promise<void> {
     /* ─── TABLE admin_notifications ───────────────────────────── */
     await run(client, `
       CREATE TABLE IF NOT EXISTS admin_notifications (
-        id          SERIAL PRIMARY KEY,
-        title       TEXT NOT NULL,
-        message     TEXT NOT NULL,
-        type        TEXT NOT NULL DEFAULT 'info',
-        image_url   TEXT,
-        button_text TEXT,
-        button_url  TEXT,
-        is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+        id           SERIAL PRIMARY KEY,
+        display_mode TEXT NOT NULL DEFAULT 'classic',
+        title        TEXT,
+        message      TEXT,
+        type         TEXT NOT NULL DEFAULT 'info',
+        image_url    TEXT,
+        action_type  TEXT NOT NULL DEFAULT 'none',
+        action_url   TEXT,
+        button_text  TEXT,
+        button_url   TEXT,
+        is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+    /* ─── Colonnes ajoutées après la création initiale ─────── */
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS display_mode TEXT NOT NULL DEFAULT 'classic'`);
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS action_type TEXT NOT NULL DEFAULT 'none'`);
+    await run(client, `ALTER TABLE admin_notifications ADD COLUMN IF NOT EXISTS action_url TEXT`);
+    await run(client, `ALTER TABLE admin_notifications ALTER COLUMN title DROP NOT NULL`);
+    await run(client, `ALTER TABLE admin_notifications ALTER COLUMN message DROP NOT NULL`);
 
     /* ─── TABLE blacklist ─────────────────────────────────────── */
     await run(client, `
