@@ -6,7 +6,6 @@ import {
   Phone, KeyRound, FileText, Shield, LogOut, ChevronRight, Bell, Loader2
 } from "lucide-react";
 
-import { motion } from "framer-motion";
 import { toast } from "sonner";
 
 interface MenuItem {
@@ -90,13 +89,8 @@ export default function Plus() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 pb-6 space-y-6">
-        {menuGroups.map((group, groupIdx) => (
-          <motion.div 
-            key={group.title}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + (groupIdx * 0.05) }}
-          >
+        {menuGroups.map((group) => (
+          <div key={group.title}>
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2 ml-2">{group.title}</h3>
             <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
               <div className="divide-y divide-border">
@@ -133,15 +127,10 @@ export default function Plus() {
                 ))}
               </div>
             </div>
-          </motion.div>
+          </div>
         ))}
 
-        <motion.div
-           initial={{ opacity: 0, y: 10 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ delay: 0.3 }}
-           className="pt-4 space-y-3"
-        >
+        <div className="pt-4 space-y-3">
           {user?.email === TEST_EMAIL && (
             <button
               onClick={handleTestPush}
@@ -189,7 +178,7 @@ export default function Plus() {
           <p className="text-center text-xs text-muted-foreground mt-6">
             Bloum Cash v1.0.0
           </p>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
