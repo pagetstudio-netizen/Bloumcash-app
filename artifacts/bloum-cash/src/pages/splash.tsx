@@ -6,6 +6,8 @@ const DURATION = 4500;
 
 const IMAGES_TO_PRELOAD = [
   "/logo-512.png",
+  "/logo-bloum.png",
+  "/onboarding-collage.png",
   "/icon-historique.png",
   "/icon-plus.png",
   "/icon-promotion.png",
