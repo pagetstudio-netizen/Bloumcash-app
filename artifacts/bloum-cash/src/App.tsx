@@ -13,6 +13,7 @@ import Offline from "@/pages/offline";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import AppGate from "@/pages/app-gate";
+import Onboarding from "@/pages/onboarding";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import ForgotPin from "@/pages/forgot-pin";
@@ -108,7 +109,8 @@ function SplashRedirect() {
     const isAppGate = location.startsWith("/app");
     const isSplash = location === "/splash";
     const isLanding = location === "/";
-    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash || isLanding) return;
+    const isOnboarding = location === "/onboarding";
+    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash || isLanding || isOnboarding) return;
 
     const shown = sessionStorage.getItem("splashShown");
     if (!shown) {
@@ -148,6 +150,7 @@ function Router() {
         {/* User routes */}
         <Route path="/" component={Landing} />
         <Route path="/app" component={AppGate} />
+        <Route path="/onboarding" component={Onboarding} />
         <Route path="/splash" component={Splash} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
