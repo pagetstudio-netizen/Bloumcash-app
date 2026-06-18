@@ -70,10 +70,10 @@ export function validateTogoPhone(phone: string): { normalized: string; operator
   }
 
   let operator: TogoOperator = "other";
-  if ([90, 91, 92, 93].includes(prefix)) {
-    operator = "tmoney";
-  } else if ([96, 97, 98, 99].includes(prefix)) {
-    operator = "moov";
+  if (prefix >= 70 && prefix <= 79) {
+    operator = "tmoney"; // Mixx by yas
+  } else if (prefix >= 90 && prefix <= 99) {
+    operator = "moov"; // Moov Africa
   }
 
   return {

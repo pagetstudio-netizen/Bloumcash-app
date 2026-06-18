@@ -58342,7 +58342,7 @@ function normalizeTogoPhone(raw) {
   else if (digits.startsWith("228")) digits = digits.slice(3);
   if (!/^\d{8}$/.test(digits)) return null;
   const prefix = parseInt(digits.slice(0, 2));
-  if (prefix >= 90 && prefix <= 93 || prefix >= 96 && prefix <= 99) return digits;
+  if (prefix >= 70 && prefix <= 79 || prefix >= 90 && prefix <= 99) return digits;
   return null;
 }
 function phoneToEmail(phone) {
