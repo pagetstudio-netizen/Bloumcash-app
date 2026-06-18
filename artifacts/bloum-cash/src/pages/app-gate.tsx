@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 
 const ACCESS_KEY = "99935673AaAbb11";
 const STORAGE_KEY = "bloum_app_unlocked";
-const ONBOARDING_KEY = "bloum_onboarding_done";
 
 function getAccessParam(): string {
   // Try URLSearchParams first (standard)
@@ -41,14 +40,8 @@ export default function AppGate() {
         // Déjà connecté → dashboard directement
         navigate("/dashboard", { replace: true });
       } else {
-        const onboardingDone = localStorage.getItem(ONBOARDING_KEY) === "1";
-        if (onboardingDone) {
-          // Onboarding déjà vu → page de connexion
-          navigate("/login", { replace: true });
-        } else {
-          // Première visite → onboarding
-          navigate("/onboarding", { replace: true });
-        }
+        // Pas connecté → toujours afficher l'onboarding
+        navigate("/onboarding", { replace: true });
       }
     } else {
       // Invalid or missing access code → page non disponible
