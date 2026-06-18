@@ -31,6 +31,8 @@ export default function Splash() {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    // Marquer le splash comme vu pour que SplashRedirect ne boucle pas
+    sessionStorage.setItem("splashShown", "1");
     preloadImages(IMAGES_TO_PRELOAD);
 
     const start = performance.now();
