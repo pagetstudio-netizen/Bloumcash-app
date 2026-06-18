@@ -40,8 +40,8 @@ export default function AppGate() {
         // Déjà connecté → dashboard directement
         navigate("/dashboard", { replace: true });
       } else {
-        // Pas connecté → toujours afficher l'onboarding
-        navigate("/onboarding", { replace: true });
+        // Pas connecté → splash d'abord, puis onboarding
+        navigate("/splash", { replace: true });
       }
     } else {
       // Invalid or missing access code → page non disponible

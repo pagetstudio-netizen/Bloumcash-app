@@ -29,11 +29,9 @@ export default function Onboarding() {
           src="/logo-bloum.png"
           alt="Bloum Cash"
           style={{
-            width: 56,
-            height: 56,
-            borderRadius: 16,
-            objectFit: "cover",
-            boxShadow: "0 4px 16px rgba(26,63,196,0.15)",
+            width: 60,
+            height: 60,
+            objectFit: "contain",
             display: "block",
           }}
         />
@@ -138,12 +136,13 @@ export default function Onboarding() {
             color: "#ffffff",
             fontSize: 16,
             fontWeight: 700,
-            borderRadius: 14,
+            borderRadius: 8,
             border: "none",
             cursor: "pointer",
             fontFamily: "Inter, sans-serif",
             letterSpacing: 0.2,
-            boxShadow: "0 6px 20px rgba(26,63,196,0.32)",
+            boxShadow: "none",
+            outline: "none",
           }}
           onPointerDown={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "0.85")}
           onPointerUp={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "1")}
