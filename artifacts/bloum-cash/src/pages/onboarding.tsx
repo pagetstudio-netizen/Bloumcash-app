@@ -1,59 +1,52 @@
-import { useEffect } from "react";
 import { useLocation } from "wouter";
-
-const ONBOARDING_KEY = "bloum_onboarding_done";
 
 export default function Onboarding() {
   const [, navigate] = useLocation();
 
-  useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, []);
-
   function handleStart() {
-    localStorage.setItem(ONBOARDING_KEY, "1");
     navigate("/login", { replace: true });
   }
 
   return (
     <div
       style={{
-        minHeight: "100dvh",
+        height: "100dvh",
         width: "100%",
+        maxWidth: 430,
+        margin: "0 auto",
         background: "#ffffff",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         overflow: "hidden",
         position: "relative",
+        boxSizing: "border-box",
       }}
     >
       {/* Logo */}
-      <div style={{ marginTop: 52, marginBottom: 8, zIndex: 2 }}>
+      <div style={{ flexShrink: 0, paddingTop: 36, paddingBottom: 4 }}>
         <img
           src="/logo-bloum.png"
           alt="Bloum Cash"
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: 18,
+            width: 56,
+            height: 56,
+            borderRadius: 16,
             objectFit: "cover",
-            boxShadow: "0 4px 20px rgba(26,63,196,0.18)",
+            boxShadow: "0 4px 16px rgba(26,63,196,0.15)",
+            display: "block",
           }}
         />
       </div>
 
-      {/* Collage photo */}
+      {/* Collage — taille fixe pour laisser la place au texte et au bouton */}
       <div
         style={{
+          flexShrink: 0,
           width: "100%",
-          maxWidth: 420,
           display: "flex",
           justifyContent: "center",
-          padding: "0 16px",
-          marginTop: 8,
-          flex: "0 0 auto",
+          padding: "0 20px",
         }}
       >
         <img
@@ -61,38 +54,39 @@ export default function Onboarding() {
           alt="Personnes utilisant Bloum Cash"
           style={{
             width: "100%",
-            maxWidth: 360,
-            height: "auto",
+            maxWidth: 320,
+            height: 260,
             objectFit: "contain",
+            objectPosition: "center",
             userSelect: "none",
             pointerEvents: "none",
           }}
         />
       </div>
 
-      {/* Text block */}
+      {/* Texte — prend l'espace restant */}
       <div
         style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "flex-end",
-          padding: "0 28px 0",
+          justifyContent: "center",
+          padding: "0 28px",
           textAlign: "center",
           width: "100%",
-          maxWidth: 420,
-          gap: 0,
+          boxSizing: "border-box",
         }}
       >
         <p
           style={{
-            fontSize: 13,
-            fontWeight: 500,
+            fontSize: 12.5,
+            fontWeight: 600,
             color: "#1a3fc4",
             letterSpacing: 0.3,
             margin: 0,
             fontFamily: "Inter, sans-serif",
+            textTransform: "uppercase",
           }}
         >
           Bienvenue sur Bloum Cash
@@ -100,11 +94,11 @@ export default function Onboarding() {
 
         <h1
           style={{
-            fontSize: 26,
+            fontSize: 22,
             fontWeight: 800,
             color: "#0f172a",
-            lineHeight: 1.25,
-            margin: "10px 0 0",
+            lineHeight: 1.3,
+            margin: "8px 0 0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -113,10 +107,10 @@ export default function Onboarding() {
 
         <p
           style={{
-            fontSize: 14,
+            fontSize: 13.5,
             color: "#6b7280",
-            lineHeight: 1.65,
-            margin: "14px 0 0",
+            lineHeight: 1.6,
+            margin: "10px 0 0",
             fontFamily: "Inter, sans-serif",
           }}
         >
@@ -126,35 +120,34 @@ export default function Onboarding() {
         </p>
       </div>
 
-      {/* CTA */}
+      {/* Bouton toujours visible en bas */}
       <div
         style={{
+          flexShrink: 0,
           width: "100%",
-          maxWidth: 420,
-          padding: "28px 28px 44px",
+          padding: "16px 28px 40px",
+          boxSizing: "border-box",
         }}
       >
         <button
           onClick={handleStart}
           style={{
             width: "100%",
-            height: 54,
+            height: 52,
             background: "linear-gradient(135deg, #1a3fc4 0%, #2b50e8 100%)",
             color: "#ffffff",
             fontSize: 16,
             fontWeight: 700,
-            borderRadius: 16,
+            borderRadius: 14,
             border: "none",
             cursor: "pointer",
             fontFamily: "Inter, sans-serif",
-            letterSpacing: 0.3,
-            boxShadow: "0 6px 24px rgba(26,63,196,0.35)",
-            transition: "opacity 0.15s",
+            letterSpacing: 0.2,
+            boxShadow: "0 6px 20px rgba(26,63,196,0.32)",
           }}
-          onMouseDown={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "0.88")}
-          onMouseUp={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "1")}
-          onTouchStart={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "0.88")}
-          onTouchEnd={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "1")}
+          onPointerDown={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "0.85")}
+          onPointerUp={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "1")}
+          onPointerLeave={e => ((e.currentTarget as HTMLButtonElement).style.opacity = "1")}
         >
           Démarrer
         </button>
