@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/auth-provider";
 import { AppModalProvider } from "@/components/app-modal";
+import { UpdateGate, useUpdateCheck } from "@/components/update-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import React from "react";
@@ -59,6 +60,7 @@ import AdminPushCampaigns from "@/pages/admin/push-campaigns";
 import AdminBlacklist from "@/pages/admin/blacklist";
 import AdminSecurity from "@/pages/admin/security";
 import AdminSettings from "@/pages/admin/settings";
+import AdminUpdates from "@/pages/admin/updates";
 import AdminAdmins from "@/pages/admin/admins";
 import AdminPromotions from "@/pages/admin/promotions";
 import AdminFeedback from "@/pages/admin/feedback";
@@ -142,6 +144,7 @@ function Router() {
         <Route path="/admin/promotions" component={AdminPromotions} />
         <Route path="/admin/feedback" component={AdminFeedback} />
         <Route path="/admin/settings" component={AdminSettings} />
+        <Route path="/admin/updates" component={AdminUpdates} />
         <Route path="/admin" component={AdminDashboard} />
 
         {/* Offline */}
@@ -185,6 +188,23 @@ function Router() {
   );
 }
 
+function AppGated() {
+  const { checking } = useUpdateCheck();
+
+  // Tant que /api/config n'a pas répondu, on ne rend aucune route — évite
+  // qu'un utilisateur navigue avant qu'un mode "obligatoire" soit détecté.
+  if (checking) return null;
+
+  return (
+    <>
+      <UpdateGate />
+      <WouterRouter base="">
+        <Router />
+      </WouterRouter>
+    </>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -192,9 +212,7 @@ function App() {
         <AuthProvider>
           <AppModalProvider>
             <TooltipProvider>
-              <WouterRouter base="">
-                <Router />
-              </WouterRouter>
+              <AppGated />
             </TooltipProvider>
           </AppModalProvider>
         </AuthProvider>

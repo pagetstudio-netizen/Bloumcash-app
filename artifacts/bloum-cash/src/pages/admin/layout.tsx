@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import {
   LayoutDashboard, Users, ArrowLeftRight, Globe, Bell, Mail,
   Ban, Shield, Settings, LogOut, Menu, X, ChevronRight,
-  ShieldCheck, Images, BellRing, UserCog, Tag, MessageCircleHeart,
+  ShieldCheck, Images, BellRing, UserCog, Tag, MessageCircleHeart, RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { icon: UserCog, label: "Administrateurs", href: "/admin/admins" },
   { icon: Tag, label: "Promotions", href: "/admin/promotions" },
   { icon: MessageCircleHeart, label: "Suggestions & Retours", href: "/admin/feedback" },
+  { icon: RefreshCw, label: "Mises à jour", href: "/admin/updates" },
   { icon: Settings, label: "Paramètres", href: "/admin/settings" },
 ];
 

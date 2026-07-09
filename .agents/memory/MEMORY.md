@@ -6,3 +6,4 @@
 - [AppGate access URL](appgate-access.md) — `##` in URL `?access=...##` stripped by browser; wouter navigate `{ replace: true }` prevents back-button to access URL; Replit screenshot tool strips query strings (test limitation, not a real bug).
 - [Vite build env vars](vite-build-env.md) — PORT/BASE_PATH are only needed for dev/preview; made optional with fallbacks so `pnpm build` works without env vars.
 - [OneSignal auth header](onesignal-auth.md) — OneSignal REST API v1 requires `Authorization: Key <key>` NOT `Basic <key>`; `Basic` causes silent 401 rejections.
+- [Force-update gate](force-update-gate.md) — app-wide update gate reuses admin_settings + /api/config; mandatory mode must gate pre-router render and be rejected server-side if URL/version missing.

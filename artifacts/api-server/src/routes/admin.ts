@@ -117,6 +117,7 @@ const ALLOWED_SETTING_KEYS = new Set([
   "fee_deposit_percent", "fee_withdraw_percent", "fee_exchange_percent",
   "maintenance_mode", "withdrawals_enabled",
   "facebook_url", "instagram_url", "telegram_url", "tiktok_url", "whatsapp_url", "youtube_url",
+  "update_mode", "min_required_version", "update_download_url", "update_title", "update_message",
 ]);
 
 /* ─────────────────────────── AUTH TOTP ─────────────────────────── */
@@ -852,6 +853,11 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   tiktok_url: "",
   whatsapp_url: "",
   youtube_url: "",
+  update_mode: "disabled",
+  min_required_version: "1.0.0",
+  update_download_url: "",
+  update_title: "Mise à jour disponible",
+  update_message: "Une nouvelle version est disponible. Veuillez mettre à jour pour continuer à utiliser l'application.",
 };
 
 /* ── Public settings (pas d'auth requise) ── */
@@ -880,6 +886,21 @@ router.get("/admin/settings", requireAdmin, async (req, res) => {
 router.put("/admin/settings", requireAdmin, async (req, res) => {
   try {
     const updates = req.body as Record<string, string>;
+
+    // Garde-fou : un mode "obligatoire" sans lien de mise à jour ou sans version
+    // valide bloquerait l'app entière sans issue possible pour les utilisateurs.
+    if (updates.update_mode === "mandatory") {
+      const url = (updates.update_download_url ?? "").trim();
+      const version = (updates.min_required_version ?? "").trim();
+      const validVersion = /^\d+\.\d+\.\d+$/.test(version);
+      if (!url || !validVersion) {
+        res.status(400).json({
+          error: "Le mode obligatoire requiert un lien de mise à jour et une version minimale valide (ex: 1.0.2), sous peine de bloquer l'app sans issue.",
+        });
+        return;
+      }
+    }
+
     const rejected: string[] = [];
     for (const [key, value] of Object.entries(updates)) {
       if (!ALLOWED_SETTING_KEYS.has(key)) { rejected.push(key); continue; }

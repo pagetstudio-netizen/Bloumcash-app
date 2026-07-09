@@ -66053,7 +66053,12 @@ var ALLOWED_SETTING_KEYS = /* @__PURE__ */ new Set([
   "telegram_url",
   "tiktok_url",
   "whatsapp_url",
-  "youtube_url"
+  "youtube_url",
+  "update_mode",
+  "min_required_version",
+  "update_download_url",
+  "update_title",
+  "update_message"
 ]);
 var TOTP_PENDING_TTL_MS = 5 * 60 * 1e3;
 router10.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
@@ -66910,7 +66915,12 @@ var DEFAULT_SETTINGS = {
   telegram_url: "",
   tiktok_url: "",
   whatsapp_url: "",
-  youtube_url: ""
+  youtube_url: "",
+  update_mode: "disabled",
+  min_required_version: "1.0.0",
+  update_download_url: "",
+  update_title: "Mise \xE0 jour disponible",
+  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application."
 };
 router10.get("/public-settings", async (req, res) => {
   try {
@@ -66944,6 +66954,17 @@ router10.get("/admin/settings", requireAdmin, async (req, res) => {
 router10.put("/admin/settings", requireAdmin, async (req, res) => {
   try {
     const updates = req.body;
+    if (updates.update_mode === "mandatory") {
+      const url2 = (updates.update_download_url ?? "").trim();
+      const version4 = (updates.min_required_version ?? "").trim();
+      const validVersion = /^\d+\.\d+\.\d+$/.test(version4);
+      if (!url2 || !validVersion) {
+        res.status(400).json({
+          error: "Le mode obligatoire requiert un lien de mise \xE0 jour et une version minimale valide (ex: 1.0.2), sous peine de bloquer l'app sans issue."
+        });
+        return;
+      }
+    }
     const rejected = [];
     for (const [key, value] of Object.entries(updates)) {
       if (!ALLOWED_SETTING_KEYS.has(key)) {
@@ -67627,9 +67648,40 @@ var push_diagnose_default = router13;
 // src/routes/config.ts
 var import_express14 = __toESM(require_express2());
 var router14 = (0, import_express14.Router)();
-router14.get("/config", (_req, res) => {
+var UPDATE_KEYS = [
+  "update_mode",
+  "min_required_version",
+  "update_download_url",
+  "update_title",
+  "update_message"
+];
+var UPDATE_DEFAULTS = {
+  update_mode: "disabled",
+  min_required_version: "1.0.0",
+  update_download_url: "",
+  update_title: "Mise \xE0 jour disponible",
+  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application."
+};
+router14.get("/config", async (_req, res) => {
+  const update = { ...UPDATE_DEFAULTS };
+  try {
+    const rows = await db.select().from(adminSettingsTable).where(
+      sql`key IN ('update_mode','min_required_version','update_download_url','update_title','update_message')`
+    );
+    for (const row of rows) {
+      if (UPDATE_KEYS.includes(row.key)) {
+        update[row.key] = row.value;
+      }
+    }
+  } catch {
+  }
   res.json({
-    onesignalAppId: process.env.ONESIGNAL_APP_ID ?? ""
+    onesignalAppId: process.env.ONESIGNAL_APP_ID ?? "",
+    updateMode: update.update_mode,
+    minRequiredVersion: update.min_required_version,
+    updateDownloadUrl: update.update_download_url,
+    updateTitle: update.update_title,
+    updateMessage: update.update_message
   });
 });
 var config_default = router14;
