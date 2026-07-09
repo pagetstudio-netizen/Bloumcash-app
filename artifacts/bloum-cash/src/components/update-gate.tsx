@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldAlert, Download } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
 import { APP_VERSION, isVersionOlder } from "@/lib/app-version";
 
 interface UpdateConfig {
@@ -26,7 +26,7 @@ function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
       style={{ background: "#ffffff" }}
     >
       <div className="w-24 h-24 rounded-3xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mb-6">
-        <ShieldAlert className="w-12 h-12" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
+        <RefreshCw className="w-12 h-12" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
       </div>
       <h1 className="text-xl font-bold text-gray-900 mb-2">
         {config.updateTitle || "Mise à jour disponible"}
@@ -72,21 +72,21 @@ function OptionalUpdateModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9998] flex items-end sm:items-center justify-center px-6 pb-6 sm:pb-0"
+      className="fixed inset-0 z-[9998] flex items-center justify-center px-6"
       style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
     >
       <div className="absolute inset-0" onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+        initial={{ opacity: 0, scale: 0.9, y: 0 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 15 }}
+        exit={{ opacity: 0, scale: 0.95, y: 0 }}
         transition={{ type: "spring", damping: 24, stiffness: 320 }}
         className="relative w-full max-w-xs bg-white rounded-3xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-7 pt-8 pb-6 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-3xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mb-5">
-            <Download className="w-9 h-9" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
+            <RefreshCw className="w-9 h-9" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
           </div>
           <h2 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
             {config.updateTitle || "Mise à jour disponible"}
