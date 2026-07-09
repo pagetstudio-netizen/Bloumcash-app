@@ -50,7 +50,7 @@ function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
 
       <button
         onClick={() => goToUpdate(config.updateDownloadUrl || "")}
-        className="flex items-center justify-center gap-2 w-full max-w-xs py-3.5 rounded-full font-bold text-sm text-white shadow-lg active:scale-95 transition-transform"
+        className="flex items-center justify-center gap-2 w-full max-w-xs py-3.5 rounded-xl font-bold text-sm text-white shadow-lg active:scale-95 transition-transform"
         style={{ background: "linear-gradient(90deg, #1a3fc4, #2b50e8)" }}
       >
         <Download className="w-4 h-4" /> Mettre à jour maintenant
@@ -98,14 +98,14 @@ function OptionalUpdateModal({
         <div className="px-6 pb-6 flex flex-col gap-2">
           <button
             onClick={() => goToUpdate(config.updateDownloadUrl || "")}
-            className="w-full py-3 rounded-full text-sm font-bold text-white active:scale-95 transition-transform"
+            className="w-full py-3 rounded-xl text-sm font-bold text-white active:scale-95 transition-transform"
             style={{ background: "linear-gradient(90deg, #1a3fc4, #2b50e8)" }}
           >
             Mettre à jour
           </button>
           <button
             onClick={onClose}
-            className="w-full py-2.5 rounded-full text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
+            className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors"
           >
             Plus tard
           </button>
