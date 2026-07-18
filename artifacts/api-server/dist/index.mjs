@@ -54892,6 +54892,8 @@ var transactionsTable = pgTable("transactions", {
   userId: integer("user_id"),
   paydunyaToken: text("paydunya_token"),
   payoutSent: boolean("payout_sent").default(false).notNull(),
+  adminNote: text("admin_note"),
+  // Détail interne — jamais exposé à l'utilisateur
   createdAt: timestamp("created_at").defaultNow().notNull()
 });
 var insertTransactionSchema = createInsertSchema(transactionsTable).omit({ id: true, createdAt: true });
@@ -58041,6 +58043,20 @@ function notifyPayment(tx) {
 \u{1F550} ${togoDt()}`
   ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyPayment \xE9chec"));
 }
+function notifyPaymentError(opts) {
+  sendToGroup(
+    `\u274C <b>ERREUR PAIEMENT</b>
+
+\u{1F4CB} R\xE9f : <code>${esc2(opts.reference)}</code>
+\u{1F4CD} \xC9tape : ${esc2(opts.stage)}
+\u{1F4B0} Montant : <b>${fmt(opts.amount)} FCFA</b>
+\u{1F4E4} De : ${esc2(opts.fromPhone ?? "?")} (${esc2(opts.fromOperator ?? "?")})
+\u{1F4E5} Vers : ${esc2(opts.toPhone ?? "?")} (${esc2(opts.toOperator ?? "?")})
+\u{1F534} Code : <code>${esc2(opts.errorCode)}</code>
+\u{1F4DD} D\xE9tail : ${esc2(opts.errorDetail)}
+\u{1F550} ${togoDt()}`
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyPaymentError \xE9chec"));
+}
 function notifyFeedback(fb) {
   const typeIcon = fb.type === "bug" ? "\u{1F41B}" : fb.type === "suggestion" ? "\u{1F4A1}" : "\u{1F4AC}";
   const typeLabel = fb.type === "bug" ? "Signalement de bug" : fb.type === "suggestion" ? "Suggestion" : "Retour utilisateur";
@@ -59899,6 +59915,7 @@ function formatAmount(amount) {
 
 // src/routes/transfer.ts
 var router6 = (0, import_express6.Router)();
+var GENERIC_USER_ERROR = "Une erreur s'est produite. R\xE9essayez plus tard.";
 var OPERATOR_DB_NAME = {
   tmoney: "TMoney",
   moov: "Moov Money"
@@ -60033,14 +60050,21 @@ router6.post("/transfer", requireUser, async (req, res) => {
         );
       } catch (err) {
         const isGpErr = err instanceof GomboPlusError;
-        const msg = isGpErr ? err.message : "Erreur lors de la demande de paiement GomboPlus.";
-        const code = isGpErr ? err.code : "GP_CASHIN_ERROR";
-        req.log.error({ err, code }, "GomboPlus cashin \u2014 \xE9chec");
-        res.status(502).json({ error: msg, code });
+        const realDetail = isGpErr ? `[${err.code}] ${err.message}` : String(err);
+        req.log.error({ err }, "GomboPlus cashin \u2014 \xE9chec");
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} \u2192 ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP] ${realDetail}` }).catch(() => {
+        });
+        notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_CASHIN_ERROR", errorDetail: realDetail, stage: "Initiation paiement" });
+        res.status(502).json({ error: GENERIC_USER_ERROR });
         return;
       }
       if (!cashinResult.success) {
-        res.status(402).json({ error: cashinResult.message, code: "GP_PAYMENT_REFUSED" });
+        const realDetail = cashinResult.message ?? "Paiement refus\xE9";
+        req.log.warn({ reference }, "GomboPlus cashin refus\xE9");
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} \u2192 ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP_REFUSED] ${realDetail}` }).catch(() => {
+        });
+        notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_PAYMENT_REFUSED", errorDetail: realDetail, stage: "Initiation paiement (refus\xE9)" });
+        res.status(402).json({ error: GENERIC_USER_ERROR });
         return;
       }
       const storedToken = `gp:${cashinResult.gpReference}`;
@@ -60133,10 +60157,12 @@ router6.post("/transfer", requireUser, async (req, res) => {
       );
     } catch (err) {
       const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors de la cr\xE9ation de l'invoice PayDunya.";
-      const code = isPduErr ? err.code : "INVOICE_ERROR";
-      req.log.error({ err, code }, "Invoice creation failed");
-      res.status(502).json({ error: msg, code });
+      const realDetail = isPduErr ? `[${err.code}] ${err.message}` : String(err);
+      req.log.error({ err }, "Invoice creation failed");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} \u2192 ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[INVOICE_CREATE] ${realDetail}` }).catch(() => {
+      });
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "INVOICE_ERROR", errorDetail: realDetail, stage: "Cr\xE9ation facture" });
+      res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
     }
     let chargeResult;
@@ -60148,14 +60174,21 @@ router6.post("/transfer", requireUser, async (req, res) => {
       );
     } catch (err) {
       const isPduErr = err instanceof PaydunyaError;
-      const msg = isPduErr ? err.message : "Erreur lors de la demande de paiement mobile money.";
-      const code = isPduErr ? err.code : "CHARGE_ERROR";
-      req.log.error({ err, code }, "Charge failed");
-      res.status(502).json({ error: msg, code });
+      const realDetail = isPduErr ? `[${err.code}] ${err.message}` : String(err);
+      req.log.error({ err }, "Charge failed");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} \u2192 ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_ERROR] ${realDetail}` }).catch(() => {
+      });
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "CHARGE_ERROR", errorDetail: realDetail, stage: "Envoi demande paiement" });
+      res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
     }
     if (!chargeResult.success) {
-      res.status(402).json({ error: chargeResult.message, code: "PAYMENT_REFUSED" });
+      const realDetail = chargeResult.message ?? "Paiement refus\xE9";
+      req.log.warn({ reference }, "Charge refus\xE9e");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} \u2192 ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_REFUSED] ${realDetail}` }).catch(() => {
+      });
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYMENT_REFUSED", errorDetail: realDetail, stage: "Envoi demande paiement (refus\xE9)" });
+      res.status(402).json({ error: GENERIC_USER_ERROR });
       return;
     }
     if (!chargeResult.isPending) {
@@ -60220,12 +60253,16 @@ router6.post("/transfer", requireUser, async (req, res) => {
                 }
               }
             } else {
-              await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+              const realDetail = payoutResult.message ?? "Retrait refus\xE9";
+              await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_REFUSED] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
               req.log.error({ reference, msg: payoutResult.message }, "Payout Moov refus\xE9 apr\xE8s encaissement confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE");
+              notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_REFUSED", errorDetail: realDetail, stage: "Retrait (refus\xE9)" });
             }
           } catch (payoutErr) {
-            await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+            const realDetail = String(payoutErr);
+            await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_ERROR] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
             req.log.error({ err: payoutErr, reference }, "Erreur payout Moov \u2014 INTERVENTION MANUELLE REQUISE");
+            notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_ERROR", errorDetail: realDetail, stage: "Retrait (erreur technique)" });
           }
         }
         res.status(201).json({
@@ -60553,18 +60590,22 @@ router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
             }
           }
         } else {
-          await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+          const realDetail = payoutResult.message ?? "Retrait refus\xE9";
+          await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[WEBHOOK_PAYOUT_REFUSED] ${realDetail}` }).where(eq(transactionsTable.reference, tx.reference));
           req.log.error(
             { reference: tx.reference, message: payoutResult.message },
             "PayDunya webhook: payout refus\xE9 apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
           );
+          notifyPaymentError({ reference: tx.reference, fromPhone: tx.fromPhone ?? null, toPhone: tx.toPhone ?? null, fromOperator: tx.operator ?? null, toOperator: tx.toOperator ?? null, amount: tx.amount, errorCode: "WEBHOOK_PAYOUT_REFUSED", errorDetail: realDetail, stage: "Retrait webhook (refus\xE9)" });
         }
       } catch (payoutErr) {
-        await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
+        const realDetail = String(payoutErr);
+        await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[WEBHOOK_PAYOUT_ERROR] ${realDetail}` }).where(eq(transactionsTable.reference, tx.reference));
         req.log.error(
           { err: payoutErr, reference: tx.reference },
           "PayDunya webhook: erreur payout apr\xE8s payin confirm\xE9 \u2014 INTERVENTION MANUELLE REQUISE"
         );
+        notifyPaymentError({ reference: tx.reference, fromPhone: tx.fromPhone ?? null, toPhone: tx.toPhone ?? null, fromOperator: tx.operator ?? null, toOperator: tx.toOperator ?? null, amount: tx.amount, errorCode: "WEBHOOK_PAYOUT_ERROR", errorDetail: String(payoutErr), stage: "Retrait webhook (exception)" });
       }
     } else if (status === "cancelled" || status === "failed") {
       await db.update(transactionsTable).set({ status: "failed" }).where(eq(transactionsTable.paydunyaToken, token));
@@ -68040,6 +68081,7 @@ async function runStartupMigration() {
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paydunya_token TEXT`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payout_sent BOOLEAN NOT NULL DEFAULT FALSE`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INTEGER`);
+    await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_note TEXT`);
     await run(client, `
       CREATE TABLE IF NOT EXISTS qr_codes (
         id             SERIAL PRIMARY KEY,

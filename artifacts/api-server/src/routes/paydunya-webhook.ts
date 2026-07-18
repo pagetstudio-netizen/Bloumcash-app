@@ -7,7 +7,7 @@ import type { DisburseStatus } from "../lib/paydunya";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
 import { requireWebhookSecret } from "../middleware/webhook-auth";
-import { notifyPayment } from "../lib/telegram";
+import { notifyPayment, notifyPaymentError } from "../lib/telegram";
 
 const router: IRouter = Router();
 
@@ -176,28 +176,28 @@ router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
           }
 
         } else {
-          /* Payout refusé — le payin a réussi mais le retrait a échoué.
-             Marquer payout_failed pour intervention manuelle. */
+          const realDetail = payoutResult.message ?? "Retrait refusé";
           await db
             .update(transactionsTable)
-            .set({ status: "payout_failed" })
+            .set({ status: "payout_failed", adminNote: `[WEBHOOK_PAYOUT_REFUSED] ${realDetail}` })
             .where(eq(transactionsTable.reference, tx.reference));
-
           req.log.error(
             { reference: tx.reference, message: payoutResult.message },
             "PayDunya webhook: payout refusé après payin confirmé — INTERVENTION MANUELLE REQUISE"
           );
+          notifyPaymentError({ reference: tx.reference, fromPhone: tx.fromPhone ?? null, toPhone: tx.toPhone ?? null, fromOperator: tx.operator ?? null, toOperator: tx.toOperator ?? null, amount: tx.amount, errorCode: "WEBHOOK_PAYOUT_REFUSED", errorDetail: realDetail, stage: "Retrait webhook (refusé)" });
         }
       } catch (payoutErr) {
+        const realDetail = String(payoutErr);
         await db
           .update(transactionsTable)
-          .set({ status: "payout_failed" })
+          .set({ status: "payout_failed", adminNote: `[WEBHOOK_PAYOUT_ERROR] ${realDetail}` })
           .where(eq(transactionsTable.reference, tx.reference));
-
         req.log.error(
           { err: payoutErr, reference: tx.reference },
           "PayDunya webhook: erreur payout après payin confirmé — INTERVENTION MANUELLE REQUISE"
         );
+        notifyPaymentError({ reference: tx.reference, fromPhone: tx.fromPhone ?? null, toPhone: tx.toPhone ?? null, fromOperator: tx.operator ?? null, toOperator: tx.toOperator ?? null, amount: tx.amount, errorCode: "WEBHOOK_PAYOUT_ERROR", errorDetail: String(payoutErr), stage: "Retrait webhook (exception)" });
       }
 
     /* ──────────────────────────────────────────────────────────────────────────

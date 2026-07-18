@@ -23,6 +23,7 @@ interface Tx {
   userId: number | null;
   paydunyaToken: string | null;
   payoutSent: boolean;
+  adminNote: string | null;
   createdAt: string;
 }
 
@@ -171,6 +172,15 @@ function DetailModal({ tx, onClose, onUpdated }: { tx: TxDetail; onClose: () => 
             <Row label="Type"             value={fmtType(tx.type)} />
             <Row label="Date"             value={new Date(tx.createdAt).toLocaleString("fr-FR")} />
             {tx.description && <Row label="Description" value={tx.description} />}
+            {tx.adminNote && (
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                  <span className="text-xs font-semibold text-red-700 uppercase tracking-wide">Note admin (erreur interne)</span>
+                </div>
+                <p className="text-xs text-red-800 font-mono break-all whitespace-pre-wrap">{tx.adminNote}</p>
+              </div>
+            )}
           </div>
 
           {/* ── Changer statut ── */}

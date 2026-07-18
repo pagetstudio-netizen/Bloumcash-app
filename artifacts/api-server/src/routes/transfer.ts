@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { notifyPayment } from "../lib/telegram";
+import { notifyPayment, notifyPaymentError } from "../lib/telegram";
 import { db } from "@workspace/db";
 import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable, adminSettingsTable } from "@workspace/db";
 import { eq, and, ilike } from "drizzle-orm";
@@ -12,6 +12,9 @@ import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
 
 const router: IRouter = Router();
+
+/** Message générique retourné à l'utilisateur — jamais le vrai problème technique */
+const GENERIC_USER_ERROR = "Une erreur s'est produite. Réessayez plus tard.";
 
 /** Mapping interne → nom en DB pour la table operatorsConfigTable */
 const OPERATOR_DB_NAME: Record<string, string> = {
@@ -166,15 +169,20 @@ router.post("/transfer", requireUser, async (req, res) => {
         );
       } catch (err) {
         const isGpErr = err instanceof gomboplus.GomboPlusError;
-        const msg  = isGpErr ? err.message : "Erreur lors de la demande de paiement GomboPlus.";
-        const code = isGpErr ? err.code    : "GP_CASHIN_ERROR";
-        req.log.error({ err, code }, "GomboPlus cashin — échec");
-        res.status(502).json({ error: msg, code });
+        const realDetail = isGpErr ? `[${(err as gomboplus.GomboPlusError).code}] ${(err as gomboplus.GomboPlusError).message}` : String(err);
+        req.log.error({ err }, "GomboPlus cashin — échec");
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP] ${realDetail}` }).catch(() => {});
+        notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_CASHIN_ERROR", errorDetail: realDetail, stage: "Initiation paiement" });
+        res.status(502).json({ error: GENERIC_USER_ERROR });
         return;
       }
 
       if (!cashinResult.success) {
-        res.status(402).json({ error: cashinResult.message, code: "GP_PAYMENT_REFUSED" });
+        const realDetail = cashinResult.message ?? "Paiement refusé";
+        req.log.warn({ reference }, "GomboPlus cashin refusé");
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP_REFUSED] ${realDetail}` }).catch(() => {});
+        notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_PAYMENT_REFUSED", errorDetail: realDetail, stage: "Initiation paiement (refusé)" });
+        res.status(402).json({ error: GENERIC_USER_ERROR });
         return;
       }
 
@@ -253,10 +261,11 @@ router.post("/transfer", requireUser, async (req, res) => {
       );
     } catch (err) {
       const isPduErr = err instanceof paydunya.PaydunyaError;
-      const msg  = isPduErr ? err.message : "Erreur lors de la création de l'invoice PayDunya.";
-      const code = isPduErr ? err.code    : "INVOICE_ERROR";
-      req.log.error({ err, code }, "Invoice creation failed");
-      res.status(502).json({ error: msg, code });
+      const realDetail = isPduErr ? `[${(err as paydunya.PaydunyaError).code}] ${(err as paydunya.PaydunyaError).message}` : String(err);
+      req.log.error({ err }, "Invoice creation failed");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[INVOICE_CREATE] ${realDetail}` }).catch(() => {});
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "INVOICE_ERROR", errorDetail: realDetail, stage: "Création facture" });
+      res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
     }
 
@@ -270,15 +279,20 @@ router.post("/transfer", requireUser, async (req, res) => {
       );
     } catch (err) {
       const isPduErr = err instanceof paydunya.PaydunyaError;
-      const msg  = isPduErr ? err.message : "Erreur lors de la demande de paiement mobile money.";
-      const code = isPduErr ? err.code    : "CHARGE_ERROR";
-      req.log.error({ err, code }, "Charge failed");
-      res.status(502).json({ error: msg, code });
+      const realDetail = isPduErr ? `[${(err as paydunya.PaydunyaError).code}] ${(err as paydunya.PaydunyaError).message}` : String(err);
+      req.log.error({ err }, "Charge failed");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_ERROR] ${realDetail}` }).catch(() => {});
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "CHARGE_ERROR", errorDetail: realDetail, stage: "Envoi demande paiement" });
+      res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
     }
 
     if (!chargeResult.success) {
-      res.status(402).json({ error: chargeResult.message, code: "PAYMENT_REFUSED" });
+      const realDetail = chargeResult.message ?? "Paiement refusé";
+      req.log.warn({ reference }, "Charge refusée");
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_REFUSED] ${realDetail}` }).catch(() => {});
+      notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYMENT_REFUSED", errorDetail: realDetail, stage: "Envoi demande paiement (refusé)" });
+      res.status(402).json({ error: GENERIC_USER_ERROR });
       return;
     }
 
@@ -344,12 +358,16 @@ router.post("/transfer", requireUser, async (req, res) => {
                 }
               }
             } else {
-              await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+              const realDetail = payoutResult.message ?? "Retrait refusé";
+              await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_REFUSED] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
               req.log.error({ reference, msg: payoutResult.message }, "Payout Moov refusé après encaissement confirmé — INTERVENTION MANUELLE REQUISE");
+              notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_REFUSED", errorDetail: realDetail, stage: "Retrait (refusé)" });
             }
           } catch (payoutErr) {
-            await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, reference));
+            const realDetail = String(payoutErr);
+            await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_ERROR] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
             req.log.error({ err: payoutErr, reference }, "Erreur payout Moov — INTERVENTION MANUELLE REQUISE");
+            notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_ERROR", errorDetail: realDetail, stage: "Retrait (erreur technique)" });
           }
         }
 

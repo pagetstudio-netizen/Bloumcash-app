@@ -18,6 +18,7 @@ export const transactionsTable = pgTable("transactions", {
   userId: integer("user_id"),
   paydunyaToken: text("paydunya_token"),
   payoutSent: boolean("payout_sent").default(false).notNull(),
+  adminNote: text("admin_note"),           // Détail interne — jamais exposé à l'utilisateur
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

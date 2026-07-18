@@ -306,9 +306,7 @@ export default function Transfert() {
           showModal({
             type: "error",
             title: "Transfert échoué",
-            message: data.status === "payout_failed"
-              ? "Le paiement a été reçu mais le versement au destinataire a échoué. Contactez le support."
-              : "Le transfert a échoué ou a été annulé. Veuillez réessayer.",
+            message: "Une erreur s'est produite. Réessayez plus tard.",
           });
         }
       } catch {
@@ -381,12 +379,10 @@ export default function Transfert() {
     } catch (err: unknown) {
       if (pollRef.current) clearInterval(pollRef.current);
       setStep("step2");
-      const apiErr = err as { data?: { error?: string }; message?: string };
-      const msg = apiErr?.data?.error ?? apiErr?.message ?? "Une erreur est survenue lors du transfert. Veuillez réessayer.";
       showModal({
         type: "error",
         title: "Transfert échoué",
-        message: msg,
+        message: "Une erreur s'est produite. Réessayez plus tard.",
       });
     } finally {
       isSubmittingRef.current = false;

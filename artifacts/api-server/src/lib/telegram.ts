@@ -167,6 +167,30 @@ export function notifyPayment(tx: {
   ).catch((err) => logger.error({ err }, "🤖 Telegram notifyPayment échec"));
 }
 
+export function notifyPaymentError(opts: {
+  reference: string;
+  fromPhone: string | null;
+  toPhone: string | null;
+  fromOperator: string | null;
+  toOperator: string | null;
+  amount: number;
+  errorCode: string;
+  errorDetail: string;
+  stage: string;
+}): void {
+  sendToGroup(
+    `❌ <b>ERREUR PAIEMENT</b>\n\n` +
+    `📋 Réf : <code>${esc(opts.reference)}</code>\n` +
+    `📍 Étape : ${esc(opts.stage)}\n` +
+    `💰 Montant : <b>${fmt(opts.amount)} FCFA</b>\n` +
+    `📤 De : ${esc(opts.fromPhone ?? "?")} (${esc(opts.fromOperator ?? "?")})\n` +
+    `📥 Vers : ${esc(opts.toPhone ?? "?")} (${esc(opts.toOperator ?? "?")})\n` +
+    `🔴 Code : <code>${esc(opts.errorCode)}</code>\n` +
+    `📝 Détail : ${esc(opts.errorDetail)}\n` +
+    `🕐 ${togoDt()}`
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyPaymentError échec"));
+}
+
 export function notifyFeedback(fb: {
   type: string;
   title: string;

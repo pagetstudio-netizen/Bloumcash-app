@@ -73,6 +73,7 @@ export async function runStartupMigration(): Promise<void> {
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paydunya_token TEXT`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payout_sent BOOLEAN NOT NULL DEFAULT FALSE`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INTEGER`);
+    await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_note TEXT`);
 
     /* ─── TABLE qr_codes ──────────────────────────────────────── */
     await run(client, `
