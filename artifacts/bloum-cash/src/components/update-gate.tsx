@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, RefreshCw } from "lucide-react";
+import { Download } from "lucide-react";
+import { CloudUpdateIcon } from "@/components/ui/cloud-update-icon";
 import { APP_VERSION, isVersionOlder } from "@/lib/app-version";
 
 interface UpdateConfig {
@@ -26,7 +27,7 @@ function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
       style={{ background: "#ffffff" }}
     >
       <div className="w-24 h-24 rounded-3xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mb-6">
-        <RefreshCw className="w-12 h-12" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
+        <CloudUpdateIcon className="w-12 h-12" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
       </div>
       <h1 className="text-xl font-bold text-gray-900 mb-2">
         {config.updateTitle || "Mise à jour disponible"}
@@ -86,7 +87,7 @@ function OptionalUpdateModal({
       >
         <div className="px-7 pt-8 pb-6 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-3xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mb-5">
-            <RefreshCw className="w-9 h-9" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
+            <CloudUpdateIcon className="w-9 h-9" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
           </div>
           <h2 className="text-lg font-bold text-gray-900 mb-2 leading-tight">
             {config.updateTitle || "Mise à jour disponible"}

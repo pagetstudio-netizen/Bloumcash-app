@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Save, Loader2, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
+import { CloudUpdateIcon } from "@/components/ui/cloud-update-icon";
 import AdminLayout, { adminFetch } from "./layout";
 
 type UpdateMode = "disabled" | "optional" | "mandatory";
