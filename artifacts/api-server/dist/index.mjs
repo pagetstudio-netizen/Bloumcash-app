@@ -18795,14 +18795,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto9 = __require("crypto");
+    var crypto10 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash2 = crypto9.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash2 = crypto10.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash2 + '"';
     }
@@ -20525,27 +20525,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router17;
+    module.exports = Router18;
     module.exports.Route = Route;
-    function Router17(options) {
-      if (!(this instanceof Router17)) {
-        return new Router17(options);
+    function Router18(options) {
+      if (!(this instanceof Router18)) {
+        return new Router18(options);
       }
       const opts = options || {};
-      function router17(req, res, next) {
-        router17.handle(req, res, next);
+      function router18(req, res, next) {
+        router18.handle(req, res, next);
       }
-      Object.setPrototypeOf(router17, this);
-      router17.caseSensitive = opts.caseSensitive;
-      router17.mergeParams = opts.mergeParams;
-      router17.params = {};
-      router17.strict = opts.strict;
-      router17.stack = [];
-      return router17;
+      Object.setPrototypeOf(router18, this);
+      router18.caseSensitive = opts.caseSensitive;
+      router18.mergeParams = opts.mergeParams;
+      router18.params = {};
+      router18.strict = opts.strict;
+      router18.stack = [];
+      return router18;
     }
-    Router17.prototype = function() {
+    Router18.prototype = function() {
     };
-    Router17.prototype.param = function param(name, fn) {
+    Router18.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20565,7 +20565,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router17.prototype.handle = function handle(req, res, callback) {
+    Router18.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20692,7 +20692,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router17.prototype.use = function use(handler) {
+    Router18.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20725,7 +20725,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router17.prototype.route = function route(path3) {
+    Router18.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20740,7 +20740,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router17.prototype[method] = function(path3) {
+      Router18.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20923,13 +20923,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router17 = require_router();
+    var Router18 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router17 = null;
+      var router18 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20938,13 +20938,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router17 === null) {
-            router17 = new Router17({
+          if (router18 === null) {
+            router18 = new Router18({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router17;
+          return router18;
         }
       });
     };
@@ -21015,15 +21015,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router17 = this.router;
+      var router18 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router17.use(path3, fn2);
+          return router18.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router17.use(path3, function mounted_app(req, res, next) {
+        router18.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -22277,17 +22277,17 @@ var require_content_disposition = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto9 = __require("crypto");
+    var crypto10 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto9.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto10.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto9.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto10.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -23596,7 +23596,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router17 = require_router();
+    var Router18 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23618,8 +23618,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router17.Route;
-    exports.Router = Router17;
+    exports.Route = Router18.Route;
+    exports.Router = Router18;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -29853,7 +29853,7 @@ var require_cert_signatures = __commonJS({
 var require_sasl = __commonJS({
   "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
-    var crypto9 = require_utils5();
+    var crypto10 = require_utils5();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
     function startSession(mechanisms, stream) {
       const candidates = ["SCRAM-SHA-256"];
@@ -29865,7 +29865,7 @@ var require_sasl = __commonJS({
       if (mechanism === "SCRAM-SHA-256-PLUS" && typeof stream.getPeerCertificate !== "function") {
         throw new Error("SASL: Mechanism SCRAM-SHA-256-PLUS requires a certificate");
       }
-      const clientNonce = crypto9.randomBytes(18).toString("base64");
+      const clientNonce = crypto10.randomBytes(18).toString("base64");
       const gs2Header = mechanism === "SCRAM-SHA-256-PLUS" ? "p=tls-server-end-point" : stream ? "y" : "n";
       return {
         mechanism,
@@ -29900,20 +29900,20 @@ var require_sasl = __commonJS({
         const peerCert = stream.getPeerCertificate().raw;
         let hashName = signatureAlgorithmHashFromCertificate(peerCert);
         if (hashName === "MD5" || hashName === "SHA-1") hashName = "SHA-256";
-        const certHash = await crypto9.hashByName(hashName, peerCert);
+        const certHash = await crypto10.hashByName(hashName, peerCert);
         const bindingData = Buffer.concat([Buffer.from("p=tls-server-end-point,,"), Buffer.from(certHash)]);
         channelBinding = bindingData.toString("base64");
       }
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto9.deriveKey(password, saltBytes, sv.iteration);
-      const clientKey = await crypto9.hmacSha256(saltedPassword, "Client Key");
-      const storedKey = await crypto9.sha256(clientKey);
-      const clientSignature = await crypto9.hmacSha256(storedKey, authMessage);
+      const saltedPassword = await crypto10.deriveKey(password, saltBytes, sv.iteration);
+      const clientKey = await crypto10.hmacSha256(saltedPassword, "Client Key");
+      const storedKey = await crypto10.sha256(clientKey);
+      const clientSignature = await crypto10.hmacSha256(storedKey, authMessage);
       const clientProof = xorBuffers(Buffer.from(clientKey), Buffer.from(clientSignature)).toString("base64");
-      const serverKey = await crypto9.hmacSha256(saltedPassword, "Server Key");
-      const serverSignatureBytes = await crypto9.hmacSha256(serverKey, authMessage);
+      const serverKey = await crypto10.hmacSha256(saltedPassword, "Server Key");
+      const serverSignatureBytes = await crypto10.hmacSha256(serverKey, authMessage);
       session.message = "SASLResponse";
       session.serverSignature = Buffer.from(serverSignatureBytes).toString("base64");
       session.response = clientFinalMessageWithoutProof + ",p=" + clientProof;
@@ -32081,7 +32081,7 @@ var require_client = __commonJS({
     var Query2 = require_query();
     var defaults2 = require_defaults();
     var Connection2 = require_connection();
-    var crypto9 = require_utils5();
+    var crypto10 = require_utils5();
     var activeQueryDeprecationNotice = nodeUtils.deprecate(
       () => {
       },
@@ -32316,7 +32316,7 @@ var require_client = __commonJS({
       _handleAuthMD5Password(msg) {
         this._getPassword(async () => {
           try {
-            const hashedPassword = await crypto9.postgresMd5PasswordHash(this.user, this.password, msg.salt);
+            const hashedPassword = await crypto10.postgresMd5PasswordHash(this.user, this.password, msg.salt);
             this.connection.password(hashedPassword);
           } catch (e) {
             this.emit("error", e);
@@ -36345,14 +36345,14 @@ var require_dist3 = __commonJS({
 });
 
 // src/app.ts
-var import_express17 = __toESM(require_express2());
+var import_express18 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
 var import_pino_http = __toESM(require_logger());
 import path2 from "path";
 import fs2 from "fs";
 
 // src/routes/index.ts
-var import_express16 = __toESM(require_express2());
+var import_express17 = __toESM(require_express2());
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2());
@@ -59502,6 +59502,11 @@ var router5 = (0, import_express5.Router)();
 function generateRef() {
   return "QR" + Date.now() + crypto5.randomBytes(3).toString("hex").toUpperCase();
 }
+function sanitizePhone(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const digits = raw.replace(/[\s\-().+]/g, "").replace(/^(228|229)/, "");
+  return /^\d{8,}$/.test(digits) ? digits : null;
+}
 router5.post("/qr/generate", requireUser, async (req, res) => {
   try {
     const { businessName, phone, operator, amount, description } = req.body;
@@ -59509,12 +59514,17 @@ router5.post("/qr/generate", requireUser, async (req, res) => {
       res.status(400).json({ error: "Champs requis manquants" });
       return;
     }
+    const cleanPhone = sanitizePhone(phone);
+    if (!cleanPhone) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone invalide (8 chiffres minimum)" });
+      return;
+    }
     const reference = generateRef();
-    const qrData = JSON.stringify({ reference, businessName, phone, operator, amount });
+    const qrData = JSON.stringify({ reference, businessName, phone: cleanPhone, operator, amount });
     const [qr] = await db.insert(qrCodesTable).values({
       reference,
       businessName,
-      phone,
+      phone: cleanPhone,
       operator,
       amount: parseInt(String(amount)),
       qrData,
@@ -60574,7 +60584,7 @@ router7.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur webhook" });
   }
 });
-router7.post("/paydunya/disburse-webhook", async (req, res) => {
+router7.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body;
     req.log.info({ payload }, "PayDunya disburse webhook re\xE7u");
@@ -66797,11 +66807,13 @@ router10.get("/admin/blacklist", requireAdmin, async (req, res) => {
 });
 router10.post("/admin/blacklist", requireAdmin, async (req, res) => {
   try {
-    const { phone, reason } = req.body;
-    if (!phone) {
-      res.status(400).json({ error: "Num\xE9ro requis" });
+    const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim().replace(/[\s\-().]/g, "") : "";
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
+    if (!rawPhone || !/^\+?\d{8,15}$/.test(rawPhone)) {
+      res.status(400).json({ error: "Num\xE9ro invalide (8 \xE0 15 chiffres requis)" });
       return;
     }
+    const phone = rawPhone.replace(/^\+/, "");
     const [row] = await db.insert(blacklistTable).values({ phone, reason: reason ?? null, blockedBy: req.admin?.email ?? "admin" }).returning();
     await db.insert(securityEventsTable).values({ type: "phone_blacklisted", details: `${phone} \u2014 ${reason ?? "Sans raison"}` });
     res.status(201).json(row);
@@ -67116,6 +67128,12 @@ router10.post("/admin/disburse", requireAdmin, async (req, res) => {
       res.status(400).json({ error: "Op\xE9rateur invalide \u2014 valeurs accept\xE9es : tmoney, moov" });
       return;
     }
+    const rawPhoneDigits = phone.replace(/[\s\-().+]/g, "").replace(/^228/, "");
+    if (!/^\d{8}$/.test(rawPhoneDigits)) {
+      res.status(400).json({ error: "Num\xE9ro de t\xE9l\xE9phone invalide (8 chiffres Togo requis)" });
+      return;
+    }
+    const normalizedPhone = rawPhoneDigits;
     const amt = parseInt(String(amount));
     if (isNaN(amt) || amt <= 0) {
       res.status(400).json({ error: "Montant invalide (doit \xEAtre > 0)" });
@@ -67129,23 +67147,23 @@ router10.post("/admin/disburse", requireAdmin, async (req, res) => {
       return;
     }
     const reference = "ADM" + Date.now() + randomBytes2(3).toString("hex").toUpperCase();
-    const description = motif?.trim() || `D\xE9boursement manuel admin vers ${phone}`;
+    const description = motif?.trim() || `D\xE9boursement manuel admin vers ${normalizedPhone}`;
     req.log.info(
-      { operator, phone, amount: amt, reference },
+      { operator, phone: normalizedPhone, amount: amt, reference },
       "Admin disburse manuel \u2014 d\xE9clenchement"
     );
     const result = await disburseTogoWallet(
       operator,
-      { name: "B\xE9n\xE9ficiaire Bloum Cash", phone, amount: amt, reference },
+      { name: "B\xE9n\xE9ficiaire Bloum Cash", phone: normalizedPhone, amount: amt, reference },
       req.log
     );
     await db.insert(transactionsTable).values({
       reference,
       type: "outgoing",
-      title: `D\xE9boursement admin \u2014 ${phone} (${operator})`,
+      title: `D\xE9boursement admin \u2014 ${normalizedPhone} (${operator})`,
       amount: amt,
       operator,
-      toPhone: phone,
+      toPhone: normalizedPhone,
       toOperator: operator,
       fees: 0,
       description,
@@ -67804,30 +67822,58 @@ router15.put("/admin/feedback/config", requireAdmin, async (req, res) => {
 });
 var feedback_default = router15;
 
-// src/routes/index.ts
+// src/routes/access-token.ts
+var import_express16 = __toESM(require_express2());
+import crypto9 from "crypto";
 var router16 = (0, import_express16.Router)();
-router16.use(health_default);
-router16.use(config_default);
-router16.use(auth_default);
-router16.use(transactions_default);
-router16.use(stats_default);
-router16.use(qrcodes_default);
-router16.use(transfer_default);
-router16.use(paydunya_webhook_default);
-router16.use(paydunya_diagnose_default);
-router16.use(gomboplus_webhook_default);
-router16.use(admin_default);
-router16.use(push_notification_default);
-router16.use(test_push_default);
-router16.use(push_diagnose_default);
-router16.use(feedback_default);
-var routes_default = router16;
+router16.post("/access-token/validate", (req, res) => {
+  const APP_ACCESS_TOKEN = process.env.APP_ACCESS_TOKEN ?? "";
+  if (!APP_ACCESS_TOKEN) {
+    res.status(503).json({ valid: false, error: "APP_ACCESS_TOKEN non configur\xE9" });
+    return;
+  }
+  const { token } = req.body;
+  if (typeof token !== "string" || !token) {
+    res.status(400).json({ valid: false });
+    return;
+  }
+  let valid = false;
+  try {
+    const expected = Buffer.from(APP_ACCESS_TOKEN, "utf8");
+    const provided = Buffer.from(token, "utf8");
+    valid = expected.length === provided.length && crypto9.timingSafeEqual(expected, provided);
+  } catch {
+    valid = false;
+  }
+  res.json({ valid });
+});
+var access_token_default = router16;
+
+// src/routes/index.ts
+var router17 = (0, import_express17.Router)();
+router17.use(health_default);
+router17.use(config_default);
+router17.use(auth_default);
+router17.use(transactions_default);
+router17.use(stats_default);
+router17.use(qrcodes_default);
+router17.use(transfer_default);
+router17.use(paydunya_webhook_default);
+router17.use(paydunya_diagnose_default);
+router17.use(gomboplus_webhook_default);
+router17.use(admin_default);
+router17.use(push_notification_default);
+router17.use(test_push_default);
+router17.use(push_diagnose_default);
+router17.use(feedback_default);
+router17.use(access_token_default);
+var routes_default = router17;
 
 // src/app.ts
 var _appDir = typeof __dirname !== "undefined" ? __dirname : path2.dirname(new URL(import.meta.url).pathname);
 var UPLOADS_DIR2 = path2.resolve(_appDir, "..", "..", "..", "uploads");
 if (!fs2.existsSync(UPLOADS_DIR2)) fs2.mkdirSync(UPLOADS_DIR2, { recursive: true });
-var app = (0, import_express17.default)();
+var app = (0, import_express18.default)();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(
@@ -67867,12 +67913,12 @@ app.use(
     credentials: true
   })
 );
-app.use(import_express17.default.json({ limit: "12mb" }));
-app.use(import_express17.default.urlencoded({ extended: true, limit: "12mb" }));
+app.use(import_express18.default.json({ limit: "12mb" }));
+app.use(import_express18.default.urlencoded({ extended: true, limit: "12mb" }));
 app.use("/uploads", (req, res, next) => {
   res.setHeader("Cache-Control", "public, max-age=86400");
   next();
-}, import_express17.default.static(UPLOADS_DIR2, {
+}, import_express18.default.static(UPLOADS_DIR2, {
   index: false,
   dotfiles: "deny"
 }));
@@ -67883,12 +67929,12 @@ if (fs2.existsSync(FRONTEND_DIST)) {
   app.use("/assets", (req, res, next) => {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     next();
-  }, import_express17.default.static(path2.join(FRONTEND_DIST, "assets"), { index: false }));
+  }, import_express18.default.static(path2.join(FRONTEND_DIST, "assets"), { index: false }));
   app.use(["/sw.js", "/OneSignalSDKWorker.js", "/manifest.json"], (_req, res, next) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     next();
   });
-  app.use(import_express17.default.static(FRONTEND_DIST, {
+  app.use(import_express18.default.static(FRONTEND_DIST, {
     index: false,
     setHeaders(res, filePath) {
       if (filePath.endsWith(".html")) {
@@ -68183,7 +68229,8 @@ async function runStartupSeed() {
     const ADMIN_EMAIL = "pagetstudio@gmail.com";
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, ADMIN_EMAIL)).limit(1);
     if (!admins.length) {
-      const hash2 = await bcryptjs_default.hash("AAbb11##", 10);
+      const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD ?? "AAbb11##";
+      const hash2 = await bcryptjs_default.hash(adminPassword, 10);
       await db.insert(adminUsersTable).values({
         fullName: "Administrateur Bloum",
         email: ADMIN_EMAIL,
