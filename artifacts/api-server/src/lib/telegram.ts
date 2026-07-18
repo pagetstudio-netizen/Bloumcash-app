@@ -47,17 +47,32 @@ function togoDt(): string {
   });
 }
 
-async function tgFetch(method: string, body?: object): Promise<unknown> {
+async function tgFetch(method: string, body?: object, attempt = 1): Promise<unknown> {
   if (!TG_API) return null;
   try {
     const res = await fetch(`${TG_API}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(12_000),
     });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      logger.warn({ method, status: res.status, body: text, attempt }, "🤖 Telegram API erreur HTTP");
+      // Retry une fois sur les erreurs 5xx
+      if (res.status >= 500 && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 2_000 * attempt));
+        return tgFetch(method, body, attempt + 1);
+      }
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    logger.warn({ method, err: String(err), attempt }, "🤖 Telegram fetch exception");
+    if (attempt < 3) {
+      await new Promise((r) => setTimeout(r, 2_000 * attempt));
+      return tgFetch(method, body, attempt + 1);
+    }
     return null;
   }
 }
@@ -74,8 +89,12 @@ async function loadGroupChatId(): Promise<void> {
     if (rows[0]?.value) {
       groupChatId = rows[0].value;
       logger.info({ groupChatId }, "🤖 Telegram group chat ID chargé");
+    } else {
+      logger.warn("🤖 Telegram : aucun group chat ID en DB — notifications désactivées jusqu'à l'activation");
     }
-  } catch {}
+  } catch (err) {
+    logger.error({ err }, "🤖 Telegram : échec chargement group chat ID depuis la DB");
+  }
 }
 
 async function saveGroupChatId(chatId: string): Promise<void> {
@@ -107,7 +126,10 @@ export async function sendMessage(
 }
 
 async function sendToGroup(text: string, extra: object = {}): Promise<void> {
-  if (!groupChatId) return;
+  if (!groupChatId) {
+    logger.warn("🤖 Telegram sendToGroup ignoré : aucun group chat ID enregistré");
+    return;
+  }
   await sendMessage(groupChatId, text, extra);
 }
 
@@ -122,7 +144,7 @@ export function notifyNewUser(user: {
     `👤 Nom : ${esc(user.fullName)}\n` +
     `📱 Téléphone : <code>${esc(user.phone)}</code>\n` +
     `🕐 ${togoDt()}`
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyNewUser échec"));
 }
 
 export function notifyPayment(tx: {
@@ -142,7 +164,7 @@ export function notifyPayment(tx: {
     `📤 De : ${esc(tx.fromPhone ?? "?")} (${esc(tx.fromOperator ?? "?")})\n` +
     `📥 Vers : ${esc(tx.toPhone ?? "?")} (${esc(tx.toOperator ?? "?")})\n` +
     `🕐 ${togoDt()}`
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyPayment échec"));
 }
 
 export function notifyFeedback(fb: {
@@ -167,7 +189,7 @@ export function notifyFeedback(fb: {
     `📝 ${esc(fb.message)}\n\n` +
     `👤 ${esc(fb.userName ?? "Inconnu")} — ${esc(fb.userPhone ?? "?")}\n` +
     `🕐 ${togoDt()}`
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyFeedback échec"));
 }
 
 export function notifyAdminLoginFail(email: string, ip: string): void {
@@ -183,7 +205,7 @@ export function notifyAdminLoginFail(email: string, ip: string): void {
         ],
       },
     }
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyAdminLoginFail échec"));
 }
 
 export function notifyAdminTotpFail(email: string, ip: string): void {
@@ -199,7 +221,7 @@ export function notifyAdminTotpFail(email: string, ip: string): void {
         ],
       },
     }
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyAdminTotpFail échec"));
 }
 
 export function notifyIpBlocked(opts: {
@@ -222,7 +244,7 @@ export function notifyIpBlocked(opts: {
     (opts.path ? `🔗 Chemin : ${esc(opts.path)}\n` : "") +
     `📅 ${togoDt()}\n\n` +
     `L'IP a été bloquée définitivement en base de données.`
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifyIpBlocked échec"));
 }
 
 export function notifySecurityEvent(opts: {
@@ -236,7 +258,7 @@ export function notifySecurityEvent(opts: {
     `📋 Détails : ${esc(opts.details)}\n` +
     (opts.ip ? `🌐 IP : <code>${esc(opts.ip)}</code>\n` : "") +
     `🕐 ${togoDt()}`
-  ).catch(() => {});
+  ).catch((err) => logger.error({ err }, "🤖 Telegram notifySecurityEvent échec"));
 }
 
 /* ─────────────────────────── BILAN QUOTIDIEN ─────────────────────────── */

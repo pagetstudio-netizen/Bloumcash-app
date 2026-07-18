@@ -57954,17 +57954,31 @@ function togoDt() {
     minute: "2-digit"
   });
 }
-async function tgFetch(method, body) {
+async function tgFetch(method, body, attempt = 1) {
   if (!TG_API) return null;
   try {
     const res = await fetch(`${TG_API}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(1e4)
+      signal: AbortSignal.timeout(12e3)
     });
+    if (!res.ok) {
+      const text2 = await res.text().catch(() => "");
+      logger.warn({ method, status: res.status, body: text2, attempt }, "\u{1F916} Telegram API erreur HTTP");
+      if (res.status >= 500 && attempt < 3) {
+        await new Promise((r) => setTimeout(r, 2e3 * attempt));
+        return tgFetch(method, body, attempt + 1);
+      }
+      return null;
+    }
     return await res.json();
-  } catch {
+  } catch (err) {
+    logger.warn({ method, err: String(err), attempt }, "\u{1F916} Telegram fetch exception");
+    if (attempt < 3) {
+      await new Promise((r) => setTimeout(r, 2e3 * attempt));
+      return tgFetch(method, body, attempt + 1);
+    }
     return null;
   }
 }
@@ -57974,8 +57988,11 @@ async function loadGroupChatId() {
     if (rows[0]?.value) {
       groupChatId = rows[0].value;
       logger.info({ groupChatId }, "\u{1F916} Telegram group chat ID charg\xE9");
+    } else {
+      logger.warn("\u{1F916} Telegram : aucun group chat ID en DB \u2014 notifications d\xE9sactiv\xE9es jusqu'\xE0 l'activation");
     }
-  } catch {
+  } catch (err) {
+    logger.error({ err }, "\u{1F916} Telegram : \xE9chec chargement group chat ID depuis la DB");
   }
 }
 async function saveGroupChatId(chatId) {
@@ -57997,7 +58014,10 @@ async function sendMessage(chatId, text2, extra = {}) {
   });
 }
 async function sendToGroup(text2, extra = {}) {
-  if (!groupChatId) return;
+  if (!groupChatId) {
+    logger.warn("\u{1F916} Telegram sendToGroup ignor\xE9 : aucun group chat ID enregistr\xE9");
+    return;
+  }
   await sendMessage(groupChatId, text2, extra);
 }
 function notifyNewUser(user) {
@@ -58007,8 +58027,7 @@ function notifyNewUser(user) {
 \u{1F464} Nom : ${esc2(user.fullName)}
 \u{1F4F1} T\xE9l\xE9phone : <code>${esc2(user.phone)}</code>
 \u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyNewUser \xE9chec"));
 }
 function notifyPayment(tx) {
   sendToGroup(
@@ -58020,8 +58039,7 @@ function notifyPayment(tx) {
 \u{1F4E4} De : ${esc2(tx.fromPhone ?? "?")} (${esc2(tx.fromOperator ?? "?")})
 \u{1F4E5} Vers : ${esc2(tx.toPhone ?? "?")} (${esc2(tx.toOperator ?? "?")})
 \u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyPayment \xE9chec"));
 }
 function notifyFeedback(fb) {
   const typeIcon = fb.type === "bug" ? "\u{1F41B}" : fb.type === "suggestion" ? "\u{1F4A1}" : "\u{1F4AC}";
@@ -58034,8 +58052,7 @@ function notifyFeedback(fb) {
 
 \u{1F464} ${esc2(fb.userName ?? "Inconnu")} \u2014 ${esc2(fb.userPhone ?? "?")}
 \u{1F550} ${togoDt()}`
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyFeedback \xE9chec"));
 }
 function notifyAdminLoginFail(email3, ip) {
   sendToGroup(
@@ -58051,8 +58068,7 @@ function notifyAdminLoginFail(email3, ip) {
         ]
       }
     }
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyAdminLoginFail \xE9chec"));
 }
 function notifyAdminTotpFail(email3, ip) {
   sendToGroup(
@@ -58068,8 +58084,7 @@ function notifyAdminTotpFail(email3, ip) {
         ]
       }
     }
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyAdminTotpFail \xE9chec"));
 }
 function notifyIpBlocked(opts) {
   const title = opts.auto ? "\u{1F50D} VPN/PROXY BLOQU\xC9 AUTOMATIQUEMENT" : "\u{1F6AB} IP BLOQU\xC9E";
@@ -58084,8 +58099,7 @@ function notifyIpBlocked(opts) {
 ` : "") + `\u{1F4C5} ${togoDt()}
 
 L'IP a \xE9t\xE9 bloqu\xE9e d\xE9finitivement en base de donn\xE9es.`
-  ).catch(() => {
-  });
+  ).catch((err) => logger.error({ err }, "\u{1F916} Telegram notifyIpBlocked \xE9chec"));
 }
 async function sendDailyReport() {
   if (!groupChatId) return;
