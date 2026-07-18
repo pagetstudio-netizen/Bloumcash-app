@@ -386,3 +386,8 @@ input, textarea, [contenteditable] {
     inset: -1px;
   }
 }
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}

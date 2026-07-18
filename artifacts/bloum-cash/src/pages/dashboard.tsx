@@ -16,6 +16,44 @@ import moovLogo from "@assets/op-moov_1780731707633.png";
 
 
 interface DashBanner { id: number; title: string | null; imageUrl: string; actionType: string; actionUrl: string | null; }
+
+/** Bannière avec skeleton shimmer — l'image s'affiche d'un coup une fois chargée */
+function BannerSlide({ banner, index, hasAction, onClick }: {
+  banner: DashBanner; index: number; hasAction: boolean; onClick: () => void;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div
+      onClick={hasAction ? onClick : undefined}
+      className="flex-shrink-0 w-full snap-center overflow-hidden relative"
+      style={{ height: "190px", cursor: hasAction ? "pointer" : "default", background: "#1a3fc4" }}
+    >
+      {/* Shimmer skeleton visible tant que l'image n'est pas chargée */}
+      {!loaded && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(90deg, #1a3fc4 25%, #2b50e8 50%, #1a3fc4 75%)",
+            backgroundSize: "200% 100%",
+            animation: "shimmer 1.4s infinite",
+          }}
+        />
+      )}
+      <img
+        src={banner.imageUrl}
+        alt={banner.title ?? `Bannière ${index + 1}`}
+        className="w-full h-full transition-opacity duration-300"
+        style={{ objectFit: "cover", objectPosition: "center center", opacity: loaded ? 1 : 0 }}
+        draggable={false}
+        loading={index === 0 ? "eager" : "lazy"}
+        decoding="async"
+        fetchPriority={index === 0 ? "high" : "low"}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
 const LOCAL_BANNERS: DashBanner[] = [
   { id: -1, title: "Bannière 1", imageUrl: "/banners/banner1.jpg", actionType: "none", actionUrl: null },
   { id: -2, title: "Bannière 2", imageUrl: "/banners/banner2.jpg", actionType: "none", actionUrl: null },
@@ -267,34 +305,17 @@ export default function Dashboard() {
         >
           {banners.map((banner, i) => {
             const hasAction = banner.actionType === "page" || banner.actionType === "link";
-            const handleBannerClick = () => {
-              if (banner.actionType === "page" && banner.actionUrl) {
-                setLocation(banner.actionUrl);
-              } else if (banner.actionType === "link" && banner.actionUrl) {
-                window.open(banner.actionUrl, "_blank", "noopener,noreferrer");
-              }
-            };
             return (
-              <div
+              <BannerSlide
                 key={banner.id}
-                onClick={hasAction ? handleBannerClick : undefined}
-                className="flex-shrink-0 w-full snap-center bg-[#1a3fc4] overflow-hidden"
-                style={{
-                  height: "190px",
-                  cursor: hasAction ? "pointer" : "default",
+                banner={banner}
+                index={i}
+                hasAction={hasAction}
+                onClick={() => {
+                  if (banner.actionType === "page" && banner.actionUrl) setLocation(banner.actionUrl);
+                  else if (banner.actionType === "link" && banner.actionUrl) window.open(banner.actionUrl, "_blank", "noopener,noreferrer");
                 }}
-              >
-                <img
-                  src={banner.imageUrl}
-                  alt={banner.title ?? `Bannière ${i + 1}`}
-                  className="w-full h-full"
-                  style={{ objectFit: "cover", objectPosition: "center center" }}
-                  draggable={false}
-                  loading={i === 0 ? "eager" : "lazy"}
-                  decoding="async"
-                  fetchPriority={i === 0 ? "high" : "low"}
-                />
-              </div>
+              />
             );
           })}
         </div>
