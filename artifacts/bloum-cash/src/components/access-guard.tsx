@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-const SECRET_TOKEN = "99935673AaAbb11";
+// Le token n'est PLUS stocké dans le bundle frontend.
+// La validation se fait côté serveur via /api/access-token/validate
+// (compare contre la variable d'env APP_ACCESS_TOKEN).
 const STORAGE_KEY = "bloum_app_access";
 
 function PageUnavailable() {
@@ -59,14 +61,35 @@ export function AccessGuard({ children }: { children: React.ReactNode }) {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("access");
 
-    if (tokenFromUrl === SECRET_TOKEN) {
-      localStorage.setItem(STORAGE_KEY, "granted");
-      params.delete("access");
-      const newSearch = params.toString();
-      const newUrl =
-        window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
-      window.history.replaceState(null, "", newUrl);
-      setHasAccess(true);
+    if (tokenFromUrl) {
+      // Valider côté serveur — le token n'est jamais comparé dans le bundle JS
+      fetch("/api/access-token/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenFromUrl }),
+      })
+        .then((r) => (r.ok ? r.json() : { valid: false }))
+        .then((data: { valid: boolean }) => {
+          if (data.valid) {
+            localStorage.setItem(STORAGE_KEY, "granted");
+            params.delete("access");
+            const newSearch = params.toString();
+            const newUrl =
+              window.location.pathname +
+              (newSearch ? "?" + newSearch : "") +
+              window.location.hash;
+            window.history.replaceState(null, "", newUrl);
+            setHasAccess(true);
+          } else {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            setHasAccess(saved === "granted");
+          }
+        })
+        .catch(() => {
+          // En cas d'erreur réseau, vérifier le cache local
+          const saved = localStorage.getItem(STORAGE_KEY);
+          setHasAccess(saved === "granted");
+        });
       return;
     }
 

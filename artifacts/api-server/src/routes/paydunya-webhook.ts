@@ -252,7 +252,7 @@ router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
  * POST /api/paydunya/disburse-webhook
  * Appelé par PayDunya quand le statut d'un déboursement change.
  */
-router.post("/paydunya/disburse-webhook", async (req, res) => {
+router.post("/paydunya/disburse-webhook", requireWebhookSecret, async (req, res) => {
   try {
     const payload = req.body as Record<string, unknown>;
     req.log.info({ payload }, "PayDunya disburse webhook reçu");

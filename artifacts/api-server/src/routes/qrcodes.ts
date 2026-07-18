@@ -13,6 +13,13 @@ function generateRef(): string {
   return "QR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 }
 
+/** Normalise un numéro de téléphone : supprime tout sauf les chiffres, vérifie 8 chiffres minimum. */
+function sanitizePhone(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  const digits = raw.replace(/[\s\-().+]/g, "").replace(/^(228|229)/, ""); // retire préfixes TG/BJ
+  return /^\d{8,}$/.test(digits) ? digits : null;
+}
+
 router.post("/qr/generate", requireUser, async (req, res) => {
   try {
     const { businessName, phone, operator, amount, description } = req.body;
@@ -21,15 +28,21 @@ router.post("/qr/generate", requireUser, async (req, res) => {
       return;
     }
 
+    const cleanPhone = sanitizePhone(phone);
+    if (!cleanPhone) {
+      res.status(400).json({ error: "Numéro de téléphone invalide (8 chiffres minimum)" });
+      return;
+    }
+
     const reference = generateRef();
-    const qrData = JSON.stringify({ reference, businessName, phone, operator, amount });
+    const qrData = JSON.stringify({ reference, businessName, phone: cleanPhone, operator, amount });
 
     const [qr] = await db
       .insert(qrCodesTable)
       .values({
         reference,
         businessName,
-        phone,
+        phone: cleanPhone,
         operator,
         amount: parseInt(String(amount)),
         qrData,

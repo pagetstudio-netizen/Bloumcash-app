@@ -760,8 +760,13 @@ router.get("/admin/blacklist", requireAdmin, async (req, res) => {
 
 router.post("/admin/blacklist", requireAdmin, async (req, res) => {
   try {
-    const { phone, reason } = req.body;
-    if (!phone) { res.status(400).json({ error: "Numéro requis" }); return; }
+    const rawPhone = typeof req.body.phone === "string" ? req.body.phone.trim().replace(/[\s\-().]/g, "") : "";
+    const reason = typeof req.body.reason === "string" ? req.body.reason.trim().slice(0, 500) : null;
+    if (!rawPhone || !/^\+?\d{8,15}$/.test(rawPhone)) {
+      res.status(400).json({ error: "Numéro invalide (8 à 15 chiffres requis)" });
+      return;
+    }
+    const phone = rawPhone.replace(/^\+/, ""); // stockage sans le +
     const [row] = await db.insert(blacklistTable).values({ phone, reason: reason ?? null, blockedBy: (req as any).admin?.email ?? "admin" }).returning();
     await db.insert(securityEventsTable).values({ type: "phone_blacklisted", details: `${phone} — ${reason ?? "Sans raison"}` });
     res.status(201).json(row);
@@ -1051,6 +1056,14 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
       return;
     }
 
+    // Validation numéro Togo (8 chiffres, préfixe 7x ou 9x)
+    const rawPhoneDigits = phone.replace(/[\s\-().+]/g, "").replace(/^228/, "");
+    if (!/^\d{8}$/.test(rawPhoneDigits)) {
+      res.status(400).json({ error: "Numéro de téléphone invalide (8 chiffres Togo requis)" });
+      return;
+    }
+    const normalizedPhone = rawPhoneDigits;
+
     const amt = parseInt(String(amount));
     if (isNaN(amt) || amt <= 0) {
       res.status(400).json({ error: "Montant invalide (doit être > 0)" });
@@ -1066,16 +1079,16 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
     }
 
     const reference = "ADM" + Date.now() + randomBytes(3).toString("hex").toUpperCase();
-    const description = motif?.trim() || `Déboursement manuel admin vers ${phone}`;
+    const description = motif?.trim() || `Déboursement manuel admin vers ${normalizedPhone}`;
 
     req.log.info(
-      { operator, phone, amount: amt, reference },
+      { operator, phone: normalizedPhone, amount: amt, reference },
       "Admin disburse manuel — déclenchement"
     );
 
     const result = await paydunya.disburseTogoWallet(
       operator,
-      { name: "Bénéficiaire Bloum Cash", phone, amount: amt, reference },
+      { name: "Bénéficiaire Bloum Cash", phone: normalizedPhone, amount: amt, reference },
       req.log
     );
 
@@ -1083,10 +1096,10 @@ router.post("/admin/disburse", requireAdmin, async (req, res) => {
     await db.insert(transactionsTable).values({
       reference,
       type: "outgoing",
-      title: `Déboursement admin — ${phone} (${operator})`,
+      title: `Déboursement admin — ${normalizedPhone} (${operator})`,
       amount: amt,
       operator,
-      toPhone: phone,
+      toPhone: normalizedPhone,
       toOperator: operator,
       fees: 0,
       description,

@@ -14,6 +14,7 @@ import testPushRouter from "./test-push";
 import pushDiagnoseRouter from "./push-diagnose";
 import configRouter from "./config";
 import feedbackRouter from "./feedback";
+import accessTokenRouter from "./access-token";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(pushNotificationRouter);
 router.use(testPushRouter);
 router.use(pushDiagnoseRouter);
 router.use(feedbackRouter);
+router.use(accessTokenRouter);
 
 export default router;

@@ -14,7 +14,9 @@ export async function runStartupSeed() {
     const ADMIN_EMAIL = "pagetstudio@gmail.com";
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, ADMIN_EMAIL)).limit(1);
     if (!admins.length) {
-      const hash = await bcrypt.hash("AAbb11##", 10);
+      // Utiliser ADMIN_DEFAULT_PASSWORD si défini, sinon fallback (à changer en prod)
+      const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD ?? "AAbb11##";
+      const hash = await bcrypt.hash(adminPassword, 10);
       await db.insert(adminUsersTable).values({
         fullName: "Administrateur Bloum",
         email: ADMIN_EMAIL,
