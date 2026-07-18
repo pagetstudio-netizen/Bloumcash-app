@@ -20,11 +20,20 @@ const IMAGES_TO_PRELOAD = [
   "/banners/bloum-cash-banner-transfert.jpg",
 ];
 
-function preloadImages(urls: string[]): void {
-  urls.forEach((src) => {
-    const img = new Image();
-    img.src = src;
-  });
+/** Précharge les images et attend que toutes soient chargées (ou timeout). */
+function preloadImages(urls: string[]): Promise<void> {
+  const promises = urls.map(
+    (src) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // on continue même si une image échoue
+        img.src = src;
+      }),
+  );
+  // Timeout de sécurité : on ne bloque jamais plus de 5s
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 5000));
+  return Promise.race([Promise.all(promises).then(() => {}), timeout]);
 }
 
 export default function Splash() {
@@ -35,10 +44,25 @@ export default function Splash() {
   useEffect(() => {
     // Marquer le splash comme vu pour que SplashRedirect ne boucle pas
     sessionStorage.setItem("splashShown", "1");
-    preloadImages(IMAGES_TO_PRELOAD);
+
+    let rafId: number;
+    let navigated = false;
+
+    // Lance le preload ET la barre de progression en parallèle
+    const imagesReady = preloadImages(IMAGES_TO_PRELOAD);
 
     const start = performance.now();
-    let rafId: number;
+    let progressDone = false;
+
+    const navigate = () => {
+      if (navigated) return;
+      navigated = true;
+      if (isAuthenticated) {
+        setLocation("/dashboard");
+      } else {
+        setLocation("/onboarding");
+      }
+    };
 
     const frame = (now: number) => {
       const elapsed = now - start;
@@ -48,15 +72,14 @@ export default function Splash() {
       if (pct < 100) {
         rafId = requestAnimationFrame(frame);
       } else {
-        setTimeout(() => {
-          if (isAuthenticated) {
-            setLocation("/dashboard");
-          } else {
-            setLocation("/onboarding");
-          }
-        }, 200);
+        progressDone = true;
+        // La barre est finie — on attend que les images soient prêtes avant de naviguer
+        imagesReady.then(() => setTimeout(navigate, 200));
       }
     };
+
+    // Si les images se chargent avant la fin de la barre, on attend quand même la barre
+    imagesReady.then(() => { if (progressDone) navigate(); });
 
     rafId = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(rafId);

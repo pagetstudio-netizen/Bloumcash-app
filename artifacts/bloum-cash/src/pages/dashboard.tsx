@@ -402,11 +402,30 @@ export default function Dashboard() {
 }
 
 function ActionBtn({ imgSrc, label, to }: { imgSrc: string; label: string; to: string }) {
+  const [loaded, setLoaded] = useState(false);
   return (
     <Link href={to}>
       <div className="flex flex-col items-center gap-3 cursor-pointer group w-[72px]">
-        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors overflow-hidden p-1">
-          <img src={imgSrc} alt={label} className="w-10 h-10 object-contain" />
+        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors overflow-hidden p-1 relative">
+          {/* Skeleton shimmer tant que l'icône n'est pas chargée */}
+          {!loaded && (
+            <div
+              className="absolute inset-0 rounded-2xl"
+              style={{
+                background: "linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%)",
+                backgroundSize: "200% 100%",
+                animation: "shimmer 1.2s infinite",
+              }}
+            />
+          )}
+          <img
+            src={imgSrc}
+            alt={label}
+            className="w-10 h-10 object-contain transition-opacity duration-200"
+            style={{ opacity: loaded ? 1 : 0 }}
+            onLoad={() => setLoaded(true)}
+            onError={() => setLoaded(true)}
+          />
         </div>
         <span className="text-xs font-medium text-foreground text-center">{label}</span>
       </div>
