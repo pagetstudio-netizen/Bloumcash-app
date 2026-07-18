@@ -8,16 +8,14 @@ const IMAGES_TO_PRELOAD = [
   "/logo-512.png",
   "/logo-bloum.png",
   "/onboarding-collage.png",
-  "/icon-historique.png",
-  "/icon-plus.png",
-  "/icon-promotion.png",
-  "/icon-transfert.png",
   "/nodata.png",
   "/banners/banner1.jpg",
   "/banners/banner2.jpg",
   "/banners/banner3.jpg",
   "/banners/bloum-cash-banner-avis.jpg",
   "/banners/bloum-cash-banner-transfert.jpg",
+  // Les icônes Promotions/Transférer/Historique/Plus sont importées dans le
+  // bundle Vite → disponibles instantanément, pas besoin de preload réseau.
 ];
 
 /** Précharge les images et attend que toutes soient chargées (ou timeout). */

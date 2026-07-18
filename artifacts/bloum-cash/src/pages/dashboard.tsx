@@ -13,6 +13,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGetRecentTransactions } from "@workspace/api-client-react";
 import tmoneyLogo from "@assets/op-tmoney_1780731707604.jpeg";
 import moovLogo from "@assets/op-moov_1780731707633.png";
+import iconPromotion from "@/assets/icon-promotion.png";
+import iconTransfert from "@/assets/icon-transfert.png";
+import iconHistorique from "@/assets/icon-historique.png";
+import iconPlus from "@/assets/icon-plus.png";
 
 
 interface DashBanner { id: number; title: string | null; imageUrl: string; actionType: string; actionUrl: string | null; }
@@ -287,10 +291,10 @@ export default function Dashboard() {
 
       {/* ── CARTE 4 BOUTONS — fixe ── */}
       <div className="flex-shrink-0 bg-card mx-4 mt-4 rounded-2xl shadow-sm border border-border p-4 flex justify-between items-start z-20">
-        <ActionBtn imgSrc="/icon-promotion.png" label="Promotions" to="/promotions" />
-        <ActionBtn imgSrc="/icon-transfert.png" label="Transférer" to="/transfert" />
-        <ActionBtn imgSrc="/icon-historique.png" label="Historique" to="/historique" />
-        <ActionBtn imgSrc="/icon-plus.png" label="Plus" to="/plus" />
+        <ActionBtn imgSrc={iconPromotion} label="Promotions" to="/promotions" />
+        <ActionBtn imgSrc={iconTransfert} label="Transférer" to="/transfert" />
+        <ActionBtn imgSrc={iconHistorique} label="Historique" to="/historique" />
+        <ActionBtn imgSrc={iconPlus} label="Plus" to="/plus" />
       </div>
 
       {/* ── CAROUSEL D'IMAGES — fixe, défilement horizontal ── */}
@@ -402,29 +406,17 @@ export default function Dashboard() {
 }
 
 function ActionBtn({ imgSrc, label, to }: { imgSrc: string; label: string; to: string }) {
-  const [loaded, setLoaded] = useState(false);
   return (
     <Link href={to}>
       <div className="flex flex-col items-center gap-3 cursor-pointer group w-[72px]">
-        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors overflow-hidden p-1 relative">
-          {/* Skeleton shimmer tant que l'icône n'est pas chargée */}
-          {!loaded && (
-            <div
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background: "linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%)",
-                backgroundSize: "200% 100%",
-                animation: "shimmer 1.2s infinite",
-              }}
-            />
-          )}
+        <div className="w-14 h-14 rounded-2xl bg-muted group-hover:bg-primary/10 flex items-center justify-center transition-colors overflow-hidden p-1">
+          {/* Chargées en cache pendant le splash → affichage instantané */}
           <img
             src={imgSrc}
             alt={label}
-            className="w-10 h-10 object-contain transition-opacity duration-200"
-            style={{ opacity: loaded ? 1 : 0 }}
-            onLoad={() => setLoaded(true)}
-            onError={() => setLoaded(true)}
+            className="w-10 h-10 object-contain"
+            loading="eager"
+            decoding="sync"
           />
         </div>
         <span className="text-xs font-medium text-foreground text-center">{label}</span>
