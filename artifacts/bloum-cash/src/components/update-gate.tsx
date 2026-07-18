@@ -163,6 +163,9 @@ export function UpdateGate() {
   const [dismissed, setDismissed] = useState(false);
   const config = cachedConfig;
 
+  // Les routes admin ne sont jamais bloquées par la gate de mise à jour
+  if (window.location.pathname.startsWith("/admin")) return null;
+
   if (!config || config.updateMode === "disabled" || !config.minRequiredVersion) return null;
 
   // Mode "mandatory" sans lien de mise à jour configuré = config invalide côté admin.

@@ -193,7 +193,9 @@ function AppGated() {
 
   // Tant que /api/config n'a pas répondu, on ne rend aucune route — évite
   // qu'un utilisateur navigue avant qu'un mode "obligatoire" soit détecté.
-  if (checking) return null;
+  // Exception : les routes /admin ne sont jamais bloquées.
+  const isAdminRoute = window.location.pathname.startsWith("/admin");
+  if (checking && !isAdminRoute) return null;
 
   return (
     <>
