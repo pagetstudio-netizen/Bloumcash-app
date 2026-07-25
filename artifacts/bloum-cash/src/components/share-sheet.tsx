@@ -3,22 +3,36 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Copy, Check } from "lucide-react";
 
 const DEFAULT_SHARE_URL = "https://bloumcash.com/télécharger";
+const DEFAULT_SHARE_MESSAGE = "Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇";
 
-function buildShareText(url: string) {
-  return `Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇\n${url}`;
+function buildShareText(message: string, url: string) {
+  return `${message}\n${url}`;
 }
 
-function useShareUrl() {
-  const [shareUrl, setShareUrl] = useState(DEFAULT_SHARE_URL);
+interface ShareSettings {
+  shareUrl: string;
+  shareMessage: string;
+}
+
+function useShareSettings(): ShareSettings {
+  const [settings, setSettings] = useState<ShareSettings>({
+    shareUrl: DEFAULT_SHARE_URL,
+    shareMessage: DEFAULT_SHARE_MESSAGE,
+  });
   useEffect(() => {
     fetch("/api/public-settings")
       .then(r => r.ok ? r.json() : null)
-      .then((d: { app_share_url?: string } | null) => {
-        if (d?.app_share_url) setShareUrl(d.app_share_url);
+      .then((d: { app_share_url?: string; app_share_message?: string } | null) => {
+        if (d) {
+          setSettings({
+            shareUrl: d.app_share_url || DEFAULT_SHARE_URL,
+            shareMessage: d.app_share_message || DEFAULT_SHARE_MESSAGE,
+          });
+        }
       })
       .catch(() => {});
   }, []);
-  return shareUrl;
+  return settings;
 }
 
 function getPlatforms(shareUrl: string, shareText: string) { return [
@@ -111,8 +125,8 @@ interface ShareSheetProps {
 
 export default function ShareSheet({ open, onClose }: ShareSheetProps) {
   const [copied, setCopied] = useState(false);
-  const shareUrl = useShareUrl();
-  const shareText = buildShareText(shareUrl);
+  const { shareUrl, shareMessage } = useShareSettings();
+  const shareText = buildShareText(shareMessage, shareUrl);
   const platforms = getPlatforms(shareUrl, shareText);
 
   const handleCopy = async () => {

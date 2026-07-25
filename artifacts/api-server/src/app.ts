@@ -120,10 +120,10 @@ if (fs.existsSync(FRONTEND_DIST)) {
 /* ── Middleware d'erreur global ── */
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   const status = (err as any).status ?? (err as any).statusCode ?? 500;
-  const message = err.message || "Erreur serveur interne";
-  logger.error({ err: message, stack: err.stack, url: req.url, method: req.method }, "Erreur Express non gérée");
+  // Loguer le détail côté serveur mais ne jamais exposer le message interne au client
+  logger.error({ err: err.message, stack: err.stack, url: req.url, method: req.method }, "Erreur Express non gérée");
   if (!res.headersSent) {
-    res.status(status).json({ success: false, message });
+    res.status(status).json({ success: false, error: "Erreur serveur interne" });
   }
 });
 

@@ -40,6 +40,8 @@ export default function AdminUpdates() {
         update_title: settings.update_title ?? "",
         update_message: settings.update_message ?? "",
         update_button_enabled: settings.update_button_enabled ?? "true",
+        update_changelog_title: settings.update_changelog_title ?? "",
+        update_changelog_body: settings.update_changelog_body ?? "",
       };
       const r = await adminFetch("/admin/settings", { method: "PUT", body: JSON.stringify(payload) });
       if (r.ok) showToast("Paramètres de mise à jour sauvegardés !");
@@ -177,6 +179,34 @@ export default function AdminUpdates() {
                     value={settings.update_message ?? ""}
                     onChange={(e) => set("update_message", e.target.value)}
                     rows={3}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Changelog — texte "Cette mise à jour inclut" */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h3 className="font-semibold text-gray-800 mb-1 text-sm">Contenu « Cette mise à jour inclut »</h3>
+              <p className="text-xs text-gray-400 mb-4">Texte affiché dans l'encart en bas de l'écran de mise à jour obligatoire.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Titre du changelog</label>
+                  <input
+                    type="text"
+                    value={settings.update_changelog_title ?? ""}
+                    onChange={(e) => set("update_changelog_title", e.target.value)}
+                    placeholder="Sécurité & performances"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Description du changelog</label>
+                  <textarea
+                    value={settings.update_changelog_body ?? ""}
+                    onChange={(e) => set("update_changelog_body", e.target.value)}
+                    rows={4}
+                    placeholder="Corrections de sécurité, améliorations de stabilité et optimisations générales de l'application."
                     className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   />
                 </div>

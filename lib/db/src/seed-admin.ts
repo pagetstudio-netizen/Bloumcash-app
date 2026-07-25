@@ -25,18 +25,22 @@ async function seed() {
   console.log("🌱 Seeding admin data…");
 
   // Admin user
-  const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, "pagetstudio@gmail.com")).limit(1);
-  if (!existing.length) {
-    await db.insert(adminUsersTable).values({
-      fullName: "Administrateur Bloum",
-      email: "pagetstudio@gmail.com",
-      passwordHash: "$2b$10$b59vZt8XuCMLqko327X75uKxYLzUKA9LFVKgeZRaeqb6bEYI6ASdO",
-      role: "superadmin",
-    });
-    console.log("✅ Admin user créé: pagetstudio@gmail.com");
+  // Le mot de passe admin est lu depuis ADMIN_DEFAULT_PASSWORD (jamais codé en dur)
+  const adminEmail    = "pagetstudio@gmail.com";
+  const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+  if (!adminPassword) {
+    console.warn("⚠️  ADMIN_DEFAULT_PASSWORD non défini — hash admin non mis à jour");
   } else {
-    await db.update(adminUsersTable).set({ passwordHash: "$2b$10$b59vZt8XuCMLqko327X75uKxYLzUKA9LFVKgeZRaeqb6bEYI6ASdO" }).where(eq(adminUsersTable.email, "pagetstudio@gmail.com"));
-    console.log("✅ Admin user mis à jour");
+    const bcrypt = await import("bcryptjs");
+    const hash   = await bcrypt.hash(adminPassword, 10);
+    const existing = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, adminEmail)).limit(1);
+    if (!existing.length) {
+      await db.insert(adminUsersTable).values({ fullName: "Administrateur Bloum", email: adminEmail, passwordHash: hash, role: "superadmin" });
+      console.log("✅ Admin user créé");
+    } else {
+      await db.update(adminUsersTable).set({ passwordHash: hash }).where(eq(adminUsersTable.email, adminEmail));
+      console.log("✅ Admin user mis à jour");
+    }
   }
 
   // Countries
@@ -62,8 +66,8 @@ async function seed() {
   ];
   for (const op of operators) {
     await db.insert(operatorsConfigTable).values(op).onConflictDoNothing();
-    console.log(`✅ Opérateur: ${op.name} (${op.countryCode})`);
   }
+  console.log(`✅ Opérateurs configurés`);
 
   // Default settings
   const defaults = [

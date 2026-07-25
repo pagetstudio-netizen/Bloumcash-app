@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit from "express-rate-limit";
 import { notifyPayment, notifyPaymentError } from "../lib/telegram";
 import { db } from "@workspace/db";
 import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable, adminSettingsTable } from "@workspace/db";
@@ -12,6 +13,28 @@ import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
 
 const router: IRouter = Router();
+
+/* ── Rate limiter transfert — 8 tentatives / 10 min par IP ── */
+const transferLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
+  message: { error: "Trop de tentatives de transfert. Réessayez dans 10 minutes." },
+  skipSuccessfulRequests: false,
+});
+
+/** Validation numéro Togo : 8 chiffres, préfixes TMoney (70-79) ou Moov (90-99) */
+function normalizeTogoPhone(raw: string): string | null {
+  let digits = String(raw).replace(/[\s\-().]/g, "");
+  if (digits.startsWith("+228")) digits = digits.slice(4);
+  else if (digits.startsWith("228")) digits = digits.slice(3);
+  if (!/^\d{8}$/.test(digits)) return null;
+  const prefix = parseInt(digits.slice(0, 2), 10);
+  if ((prefix >= 70 && prefix <= 79) || (prefix >= 90 && prefix <= 99)) return digits;
+  return null;
+}
 
 /** Message générique retourné à l'utilisateur — jamais le vrai problème technique */
 const GENERIC_USER_ERROR = "Une erreur s'est produite. Réessayez plus tard.";
@@ -80,7 +103,7 @@ router.post("/transfer/fees", requireUser, async (req, res) => {
   }
 });
 
-router.post("/transfer", requireUser, async (req, res) => {
+router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
   try {
     const {
       fromOperator,
@@ -97,8 +120,28 @@ router.post("/transfer", requireUser, async (req, res) => {
       return;
     }
 
+    /* ── Validation numéros de téléphone (protection injection + format) ── */
+    const normalizedFrom = normalizeTogoPhone(String(fromPhone));
+    const normalizedTo   = normalizeTogoPhone(String(toPhone));
+    if (!normalizedFrom) {
+      res.status(400).json({ error: "Numéro expéditeur invalide. Format attendu : 8 chiffres Togo (TMoney 7x ou Moov 9x)." });
+      return;
+    }
+    if (!normalizedTo) {
+      res.status(400).json({ error: "Numéro destinataire invalide. Format attendu : 8 chiffres Togo (TMoney 7x ou Moov 9x)." });
+      return;
+    }
+
+    /* ── Validation opérateurs ── */
+    const validOperators = ["tmoney", "moov"];
+    if (!validOperators.includes(String(fromOperator).toLowerCase()) ||
+        !validOperators.includes(String(toOperator).toLowerCase())) {
+      res.status(400).json({ error: "Opérateur invalide." });
+      return;
+    }
+
     const amt = parseInt(String(amount));
-    if (isNaN(amt) || amt <= 0) {
+    if (isNaN(amt) || amt <= 0 || amt > 5_000_000) {
       res.status(400).json({ error: "Montant invalide" });
       return;
     }
@@ -108,8 +151,8 @@ router.post("/transfer", requireUser, async (req, res) => {
     const reference =
       "TR" + Date.now() + crypto.randomBytes(3).toString("hex").toUpperCase();
 
-    const name  = payerName  ?? "Client Bloum Cash";
-    const email = payerEmail ?? `${fromPhone.replace(/\D/g, "")}@bloumcash.tg`;
+    const name  = payerName  ? String(payerName).trim().slice(0, 100) : "Client Bloum Cash";
+    const email = payerEmail ? String(payerEmail).trim().slice(0, 254) : `${normalizedFrom}@bloumcash.tg`;
 
     const currentUser = extractUser(req);
     const userId = currentUser?.id ?? null;

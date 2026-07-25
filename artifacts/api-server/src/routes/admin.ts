@@ -118,8 +118,9 @@ const ALLOWED_SETTING_KEYS = new Set([
   "maintenance_mode", "withdrawals_enabled",
   "facebook_url", "instagram_url", "telegram_url", "tiktok_url", "whatsapp_url", "youtube_url",
   "update_mode", "min_required_version", "update_download_url", "update_title", "update_message",
-  "update_button_enabled",
+  "update_button_enabled", "update_changelog_title", "update_changelog_body",
   "app_share_url",
+  "app_share_message",
 ]);
 
 /* ─────────────────────────── AUTH TOTP ─────────────────────────── */
@@ -867,17 +868,19 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   update_message: "Une nouvelle version est disponible. Veuillez mettre à jour pour continuer à utiliser l'application.",
   update_button_enabled: "true",
   app_share_url: "https://bloumcash.com/télécharger",
+  app_share_message: "Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇",
 };
 
 /* ── Public settings (pas d'auth requise) ── */
 router.get("/public-settings", async (req, res) => {
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url')`
+      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url','app_share_message')`
     );
     const out: Record<string, string> = {
       facebook_url: "", whatsapp_url: "", youtube_url: "", support_phone: "", support_email: "",
       app_share_url: "https://bloumcash.com/télécharger",
+      app_share_message: "Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇",
     };
     for (const row of rows) out[row.key] = row.value;
     res.json(out);

@@ -1,11 +1,14 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const _userSecretFallback = "bloum-cash-user-secret-2026-yR7nQ";
-if (!process.env.USER_JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("USER_JWT_SECRET env var must be set in production");
+if (!process.env.USER_JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("USER_JWT_SECRET env var must be set in production");
+  }
+  // En développement : secret aléatoire à chaque démarrage (invalide les tokens entre redémarrages)
+  process.env.USER_JWT_SECRET = require("crypto").randomBytes(32).toString("hex");
 }
-const USER_SECRET = process.env.USER_JWT_SECRET ?? _userSecretFallback;
+const USER_SECRET = process.env.USER_JWT_SECRET;
 
 export interface UserTokenPayload {
   id: number;

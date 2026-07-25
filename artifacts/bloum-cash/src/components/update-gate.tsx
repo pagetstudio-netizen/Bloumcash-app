@@ -10,6 +10,8 @@ interface UpdateConfig {
   updateTitle?: string;
   updateMessage?: string;
   updateButtonEnabled?: boolean;
+  updateChangelogTitle?: string;
+  updateChangelogBody?: string;
 }
 
 const DISMISS_KEY = "bloum_update_dismissed_version";
@@ -26,11 +28,11 @@ function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
       className="fixed inset-0 z-[10000] flex flex-col"
       style={{ background: "#141414" }}
     >
-      {/* Contenu scrollable centré */}
-      <div className="flex-1 flex flex-col items-center justify-center px-7 pt-12 pb-4">
+      {/* Contenu — overflow-hidden pour que le bouton en bas reste toujours visible, sans scroll */}
+      <div className="flex-1 overflow-hidden flex flex-col items-center justify-center px-7 pt-10 pb-4">
         {/* Icône — grand cercle bleu dégradé */}
         <div
-          className="w-28 h-28 rounded-full flex items-center justify-center mb-8 shadow-2xl"
+          className="w-28 h-28 rounded-full flex items-center justify-center mb-8 shadow-2xl flex-shrink-0"
           style={{
             background: "linear-gradient(145deg, #2b50e8 0%, #1a3fc4 55%, #1230a0 100%)",
             boxShadow: "0 8px 40px rgba(43,80,232,0.45)",
@@ -76,21 +78,24 @@ function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
           <div className="flex-1 h-px" style={{ background: "#2a2a2a" }} />
         </div>
 
-        {/* Description de la mise à jour */}
+        {/* Description de la mise à jour — texte configurable depuis l'admin */}
         <div
-          className="w-full rounded-2xl px-5 py-4"
+          className="w-full rounded-2xl px-5 py-4 mb-4"
           style={{ background: "#1f1f1f" }}
         >
-          <p className="text-sm font-semibold text-white mb-1">Sécurité &amp; performances</p>
+          <p className="text-sm font-semibold text-white mb-1">
+            {config.updateChangelogTitle || "Sécurité & performances"}
+          </p>
           <p className="text-xs text-gray-400 leading-relaxed">
-            Corrections de sécurité, améliorations de stabilité et optimisations générales de l'application.
+            {config.updateChangelogBody ||
+              "Corrections de sécurité, améliorations de stabilité et optimisations générales de l'application."}
           </p>
         </div>
       </div>
 
-      {/* Bouton pill — ancré en bas, masqué si l'admin le désactive */}
+      {/* Bouton pill — toujours visible, ancré en bas hors de la zone scrollable */}
       {config.updateButtonEnabled !== false && (
-        <div className="px-6 pb-10 pt-4">
+        <div className="flex-shrink-0 px-6 pb-10 pt-4" style={{ background: "#141414" }}>
           <button
             onClick={() => goToUpdate(config.updateDownloadUrl || "")}
             className="w-full py-4 rounded-full font-bold text-base text-gray-900 bg-white active:scale-95 transition-transform shadow-lg"

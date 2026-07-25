@@ -1,11 +1,14 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const _adminSecretFallback = "bloum-cash-admin-secret-2026-xK9mP";
-if (!process.env.ADMIN_JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("ADMIN_JWT_SECRET env var must be set in production");
+if (!process.env.ADMIN_JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ADMIN_JWT_SECRET env var must be set in production");
+  }
+  // En développement : secret aléatoire à chaque démarrage (invalide les tokens entre redémarrages)
+  process.env.ADMIN_JWT_SECRET = require("crypto").randomBytes(32).toString("hex");
 }
-const ADMIN_SECRET = process.env.ADMIN_JWT_SECRET ?? _adminSecretFallback;
+const ADMIN_SECRET = process.env.ADMIN_JWT_SECRET;
 
 export interface AdminTokenPayload {
   id: number;

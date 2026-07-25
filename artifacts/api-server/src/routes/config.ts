@@ -12,6 +12,8 @@ const UPDATE_KEYS = [
   "update_title",
   "update_message",
   "update_button_enabled",
+  "update_changelog_title",
+  "update_changelog_body",
 ] as const;
 
 const UPDATE_DEFAULTS: Record<(typeof UPDATE_KEYS)[number], string> = {
@@ -21,6 +23,8 @@ const UPDATE_DEFAULTS: Record<(typeof UPDATE_KEYS)[number], string> = {
   update_title: "Mise à jour disponible",
   update_message: "Une nouvelle version est disponible. Veuillez mettre à jour pour continuer à utiliser l'application.",
   update_button_enabled: "true",
+  update_changelog_title: "Sécurité & performances",
+  update_changelog_body: "Corrections de sécurité, améliorations de stabilité et optimisations générales de l'application.",
 };
 
 /**
@@ -33,7 +37,7 @@ router.get("/config", async (_req, res) => {
   const update = { ...UPDATE_DEFAULTS };
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('update_mode','min_required_version','update_download_url','update_title','update_message','update_button_enabled')`
+      sql`key IN ('update_mode','min_required_version','update_download_url','update_title','update_message','update_button_enabled','update_changelog_title','update_changelog_body')`
     );
     for (const row of rows) {
       if ((UPDATE_KEYS as readonly string[]).includes(row.key)) {
@@ -52,6 +56,8 @@ router.get("/config", async (_req, res) => {
     updateTitle: update.update_title,
     updateMessage: update.update_message,
     updateButtonEnabled: update.update_button_enabled !== "false",
+    updateChangelogTitle: update.update_changelog_title,
+    updateChangelogBody: update.update_changelog_body,
   });
 });
 

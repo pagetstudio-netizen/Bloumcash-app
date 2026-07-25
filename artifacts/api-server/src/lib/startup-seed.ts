@@ -14,16 +14,19 @@ export async function runStartupSeed() {
     const ADMIN_EMAIL = "pagetstudio@gmail.com";
     const admins = await db.select().from(adminUsersTable).where(eq(adminUsersTable.email, ADMIN_EMAIL)).limit(1);
     if (!admins.length) {
-      // Utiliser ADMIN_DEFAULT_PASSWORD si défini, sinon fallback (à changer en prod)
-      const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD ?? "AAbb11##";
-      const hash = await bcrypt.hash(adminPassword, 10);
-      await db.insert(adminUsersTable).values({
-        fullName: "Administrateur Bloum",
-        email: ADMIN_EMAIL,
-        passwordHash: hash,
-        role: "superadmin",
-      });
-      logger.info("✅ Admin user créé: " + ADMIN_EMAIL);
+      const adminPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+      if (!adminPassword) {
+        logger.warn("⚠️ ADMIN_DEFAULT_PASSWORD non défini — compte admin non créé. Définissez cette variable pour initialiser l'admin.");
+      } else {
+        const hash = await bcrypt.hash(adminPassword, 10);
+        await db.insert(adminUsersTable).values({
+          fullName: "Administrateur Bloum",
+          email: ADMIN_EMAIL,
+          passwordHash: hash,
+          role: "superadmin",
+        });
+        logger.info("✅ Admin user créé: " + ADMIN_EMAIL);
+      }
     }
 
     // Countries

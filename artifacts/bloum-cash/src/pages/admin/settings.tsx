@@ -33,7 +33,8 @@ const SECTIONS = [
   {
     title: "Recommandation",
     fields: [
-      { key: "app_share_url", label: "Lien de téléchargement (affiché dans le message de recommandation)", type: "url" },
+      { key: "app_share_url", label: "Lien de téléchargement", type: "url" },
+      { key: "app_share_message", label: "Texte du message de recommandation", type: "textarea" },
     ],
   },
 ];
@@ -130,15 +131,35 @@ export default function AdminSettings() {
                   {section.fields.map(({ key, label, type }) => (
                     <div key={key}>
                       <label className="text-xs font-medium text-gray-600 mb-1 block">{label}</label>
-                      <input
-                        type={type}
-                        value={settings[key] ?? ""}
-                        onChange={e => set(key, e.target.value)}
-                        step={type === "number" ? "0.1" : undefined}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      {type === "textarea" ? (
+                        <textarea
+                          value={settings[key] ?? ""}
+                          onChange={e => set(key, e.target.value)}
+                          rows={4}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                        />
+                      ) : (
+                        <input
+                          type={type}
+                          value={settings[key] ?? ""}
+                          onChange={e => set(key, e.target.value)}
+                          step={type === "number" ? "0.1" : undefined}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      )}
                     </div>
                   ))}
+                  {/* Aperçu du message de recommandation */}
+                  {section.title === "Recommandation" && (
+                    <div className="mt-2">
+                      <p className="text-xs font-medium text-gray-600 mb-1">Aperçu du message</p>
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                        {(settings["app_share_message"] || "Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇") +
+                          "\n" +
+                          (settings["app_share_url"] || "https://bloumcash.com/télécharger")}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
