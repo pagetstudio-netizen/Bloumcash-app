@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download } from "lucide-react";
 import { CloudUpdateIcon } from "@/components/ui/cloud-update-icon";
 import { APP_VERSION, isVersionOlder } from "@/lib/app-version";
 
@@ -10,6 +9,7 @@ interface UpdateConfig {
   updateDownloadUrl?: string;
   updateTitle?: string;
   updateMessage?: string;
+  updateButtonEnabled?: boolean;
 }
 
 const DISMISS_KEY = "bloum_update_dismissed_version";
@@ -23,39 +23,82 @@ function goToUpdate(url: string) {
 function MandatoryUpdateScreen({ config }: { config: UpdateConfig }) {
   return (
     <div
-      className="fixed inset-0 z-[10000] flex flex-col items-center justify-center px-8 text-center"
-      style={{ background: "#ffffff" }}
+      className="fixed inset-0 z-[10000] flex flex-col"
+      style={{ background: "#141414" }}
     >
-      <div className="w-24 h-24 rounded-3xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mb-6">
-        <CloudUpdateIcon className="w-12 h-12" style={{ color: "#2b50e8" }} strokeWidth={1.8} />
-      </div>
-      <h1 className="text-xl font-bold text-gray-900 mb-2">
-        {config.updateTitle || "Mise à jour disponible"}
-      </h1>
-      <p className="text-sm text-gray-500 leading-relaxed max-w-xs mb-6">
-        {config.updateMessage ||
-          "Une nouvelle version est disponible. Veuillez mettre à jour pour continuer à utiliser l'application."}
-      </p>
-
-      <div className="flex items-center gap-6 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-3 mb-8">
-        <div className="text-center">
-          <div className="text-[10px] font-semibold text-gray-400 tracking-wide">VOTRE VERSION</div>
-          <div className="text-sm font-bold text-red-500">v{APP_VERSION}</div>
+      {/* Contenu scrollable centré */}
+      <div className="flex-1 flex flex-col items-center justify-center px-7 pt-12 pb-4">
+        {/* Icône — grand cercle bleu dégradé */}
+        <div
+          className="w-28 h-28 rounded-full flex items-center justify-center mb-8 shadow-2xl"
+          style={{
+            background: "linear-gradient(145deg, #2b50e8 0%, #1a3fc4 55%, #1230a0 100%)",
+            boxShadow: "0 8px 40px rgba(43,80,232,0.45)",
+          }}
+        >
+          <CloudUpdateIcon className="w-14 h-14" style={{ color: "#ffffff" }} strokeWidth={1.6} />
         </div>
-        <div className="w-px h-8 bg-gray-200" />
-        <div className="text-center">
-          <div className="text-[10px] font-semibold text-gray-400 tracking-wide">REQUISE</div>
-          <div className="text-sm font-bold text-green-600">v{config.minRequiredVersion}</div>
+
+        {/* Titre */}
+        <h1 className="text-[2rem] font-extrabold text-white text-center leading-tight mb-3">
+          {config.updateTitle || "Mise à jour\ndisponible"}
+        </h1>
+
+        {/* Message */}
+        <p className="text-[0.9rem] text-gray-400 text-center leading-relaxed mb-8 max-w-xs">
+          {config.updateMessage ||
+            "Une nouvelle version est requise pour continuer à utiliser l'application."}
+        </p>
+
+        {/* Bloc infos version */}
+        <div
+          className="w-full rounded-2xl px-5 py-4 mb-3"
+          style={{ background: "#1f1f1f" }}
+        >
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Version actuelle</span>
+              <span className="font-semibold text-red-400">v{APP_VERSION}</span>
+            </div>
+            <div className="w-full h-px" style={{ background: "#2a2a2a" }} />
+            <div className="flex justify-between">
+              <span className="text-gray-500">Version requise</span>
+              <span className="font-semibold text-green-400">v{config.minRequiredVersion}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Séparateur "Cette mise à jour inclut" */}
+        <div className="w-full flex items-center gap-3 mt-2 mb-3">
+          <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">
+            Cette mise à jour inclut
+          </span>
+          <div className="flex-1 h-px" style={{ background: "#2a2a2a" }} />
+        </div>
+
+        {/* Description de la mise à jour */}
+        <div
+          className="w-full rounded-2xl px-5 py-4"
+          style={{ background: "#1f1f1f" }}
+        >
+          <p className="text-sm font-semibold text-white mb-1">Sécurité &amp; performances</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Corrections de sécurité, améliorations de stabilité et optimisations générales de l'application.
+          </p>
         </div>
       </div>
 
-      <button
-        onClick={() => goToUpdate(config.updateDownloadUrl || "")}
-        className="flex items-center justify-center gap-2 w-full max-w-xs py-3.5 rounded-xl font-bold text-sm text-white shadow-lg active:scale-95 transition-transform"
-        style={{ background: "linear-gradient(90deg, #1a3fc4, #2b50e8)" }}
-      >
-        <Download className="w-4 h-4" /> Mettre à jour maintenant
-      </button>
+      {/* Bouton pill — ancré en bas, masqué si l'admin le désactive */}
+      {config.updateButtonEnabled !== false && (
+        <div className="px-6 pb-10 pt-4">
+          <button
+            onClick={() => goToUpdate(config.updateDownloadUrl || "")}
+            className="w-full py-4 rounded-full font-bold text-base text-gray-900 bg-white active:scale-95 transition-transform shadow-lg"
+          >
+            Mettre à jour
+          </button>
+        </div>
+      )}
     </div>
   );
 }

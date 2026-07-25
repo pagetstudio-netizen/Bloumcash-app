@@ -30,6 +30,12 @@ const SECTIONS = [
       { key: "tiktok_url", label: "TikTok URL", type: "url" },
     ],
   },
+  {
+    title: "Recommandation",
+    fields: [
+      { key: "app_share_url", label: "Lien de téléchargement (affiché dans le message de recommandation)", type: "url" },
+    ],
+  },
 ];
 
 const TOGGLES = [

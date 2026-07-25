@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Save, Loader2, RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
-import { CloudUpdateIcon } from "@/components/ui/cloud-update-icon";
 import AdminLayout, { adminFetch } from "./layout";
 
 type UpdateMode = "disabled" | "optional" | "mandatory";
@@ -40,6 +39,7 @@ export default function AdminUpdates() {
         update_download_url: settings.update_download_url ?? "",
         update_title: settings.update_title ?? "",
         update_message: settings.update_message ?? "",
+        update_button_enabled: settings.update_button_enabled ?? "true",
       };
       const r = await adminFetch("/admin/settings", { method: "PUT", body: JSON.stringify(payload) });
       if (r.ok) showToast("Paramètres de mise à jour sauvegardés !");
@@ -125,17 +125,37 @@ export default function AdminUpdates() {
               <p className="text-xs text-gray-400 mt-1.5">Les utilisateurs avec une version inférieure verront la notification.</p>
             </div>
 
-            {/* Lien de téléchargement */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h3 className="font-semibold text-gray-800 mb-4 text-sm">Lien de téléchargement</h3>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">URL Play Store / App Store / page externe</label>
-              <input
-                type="url"
-                value={settings.update_download_url ?? ""}
-                onChange={(e) => set("update_download_url", e.target.value)}
-                placeholder="https://play.google.com/store/apps/details?id=..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            {/* Lien de téléchargement + bouton */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+              <h3 className="font-semibold text-gray-800 mb-1 text-sm">Bouton de mise à jour</h3>
+
+              {/* Toggle afficher/masquer le bouton */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-gray-800">Afficher le bouton</div>
+                  <div className="text-xs text-gray-400">Si désactivé, le bouton est masqué sur l'écran de mise à jour</div>
+                </div>
+                <button
+                  onClick={() => set("update_button_enabled", (settings.update_button_enabled ?? "true") === "true" ? "false" : "true")}
+                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${(settings.update_button_enabled ?? "true") === "true" ? "bg-blue-600" : "bg-gray-200"}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${(settings.update_button_enabled ?? "true") === "true" ? "translate-x-6" : "translate-x-0.5"}`} />
+                </button>
+              </div>
+
+              {/* URL — visible seulement si le bouton est activé */}
+              {(settings.update_button_enabled ?? "true") === "true" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">URL Play Store / App Store / page externe</label>
+                  <input
+                    type="url"
+                    value={settings.update_download_url ?? ""}
+                    onChange={(e) => set("update_download_url", e.target.value)}
+                    placeholder="https://play.google.com/store/apps/details?id=..."
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Message affiché */}

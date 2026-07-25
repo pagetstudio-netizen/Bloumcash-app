@@ -118,6 +118,8 @@ const ALLOWED_SETTING_KEYS = new Set([
   "maintenance_mode", "withdrawals_enabled",
   "facebook_url", "instagram_url", "telegram_url", "tiktok_url", "whatsapp_url", "youtube_url",
   "update_mode", "min_required_version", "update_download_url", "update_title", "update_message",
+  "update_button_enabled",
+  "app_share_url",
 ]);
 
 /* ─────────────────────────── AUTH TOTP ─────────────────────────── */
@@ -863,20 +865,23 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   update_download_url: "",
   update_title: "Mise à jour disponible",
   update_message: "Une nouvelle version est disponible. Veuillez mettre à jour pour continuer à utiliser l'application.",
+  update_button_enabled: "true",
+  app_share_url: "https://bloumcash.com/télécharger",
 };
 
 /* ── Public settings (pas d'auth requise) ── */
 router.get("/public-settings", async (req, res) => {
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email')`
+      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url')`
     );
     const out: Record<string, string> = {
       facebook_url: "", whatsapp_url: "", youtube_url: "", support_phone: "", support_email: "",
+      app_share_url: "https://bloumcash.com/télécharger",
     };
     for (const row of rows) out[row.key] = row.value;
     res.json(out);
-  } catch { res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "" }); }
+  } catch { res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "", app_share_url: "https://bloumcash.com/télécharger" }); }
 });
 
 router.get("/admin/settings", requireAdmin, async (req, res) => {

@@ -66,7 +66,6 @@ const LOCAL_BANNERS: DashBanner[] = [
 
 interface SocialLinks { facebook_url: string; whatsapp_url: string; youtube_url: string; }
 
-const SHARE_TEXT = `Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇\nhttps://bloumcash.com/télécharger`;
 
 export default function Dashboard() {
   const { isAuthenticated, user, logout } = useAuth();

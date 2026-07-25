@@ -66123,7 +66123,9 @@ var ALLOWED_SETTING_KEYS = /* @__PURE__ */ new Set([
   "min_required_version",
   "update_download_url",
   "update_title",
-  "update_message"
+  "update_message",
+  "update_button_enabled",
+  "app_share_url"
 ]);
 var TOTP_PENDING_TTL_MS = 5 * 60 * 1e3;
 router10.post("/admin/auth/login", adminLoginLimiter, async (req, res) => {
@@ -66987,24 +66989,27 @@ var DEFAULT_SETTINGS = {
   min_required_version: "1.0.0",
   update_download_url: "",
   update_title: "Mise \xE0 jour disponible",
-  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application."
+  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application.",
+  update_button_enabled: "true",
+  app_share_url: "https://bloumcash.com/t\xE9l\xE9charger"
 };
 router10.get("/public-settings", async (req, res) => {
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email')`
+      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url')`
     );
     const out = {
       facebook_url: "",
       whatsapp_url: "",
       youtube_url: "",
       support_phone: "",
-      support_email: ""
+      support_email: "",
+      app_share_url: "https://bloumcash.com/t\xE9l\xE9charger"
     };
     for (const row of rows) out[row.key] = row.value;
     res.json(out);
   } catch {
-    res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "" });
+    res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "", app_share_url: "https://bloumcash.com/t\xE9l\xE9charger" });
   }
 });
 router10.get("/admin/settings", requireAdmin, async (req, res) => {
@@ -67726,20 +67731,22 @@ var UPDATE_KEYS = [
   "min_required_version",
   "update_download_url",
   "update_title",
-  "update_message"
+  "update_message",
+  "update_button_enabled"
 ];
 var UPDATE_DEFAULTS = {
   update_mode: "disabled",
   min_required_version: "1.0.0",
   update_download_url: "",
   update_title: "Mise \xE0 jour disponible",
-  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application."
+  update_message: "Une nouvelle version est disponible. Veuillez mettre \xE0 jour pour continuer \xE0 utiliser l'application.",
+  update_button_enabled: "true"
 };
 router14.get("/config", async (_req, res) => {
   const update = { ...UPDATE_DEFAULTS };
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('update_mode','min_required_version','update_download_url','update_title','update_message')`
+      sql`key IN ('update_mode','min_required_version','update_download_url','update_title','update_message','update_button_enabled')`
     );
     for (const row of rows) {
       if (UPDATE_KEYS.includes(row.key)) {
@@ -67754,7 +67761,8 @@ router14.get("/config", async (_req, res) => {
     minRequiredVersion: update.min_required_version,
     updateDownloadUrl: update.update_download_url,
     updateTitle: update.update_title,
-    updateMessage: update.update_message
+    updateMessage: update.update_message,
+    updateButtonEnabled: update.update_button_enabled !== "false"
   });
 });
 var config_default = router14;
