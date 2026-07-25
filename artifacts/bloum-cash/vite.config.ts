@@ -90,11 +90,11 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: `http://localhost:${process.env.API_PORT ?? "3001"}`,
         changeOrigin: true,
       },
       "/uploads": {
-        target: "http://localhost:3001",
+        target: `http://localhost:${process.env.API_PORT ?? "3001"}`,
         changeOrigin: true,
       },
     },
