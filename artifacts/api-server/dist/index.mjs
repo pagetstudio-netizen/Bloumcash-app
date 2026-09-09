@@ -68195,8 +68195,6 @@ var router17 = (0, import_express17.Router)();
 var VERIFICATION_WINDOW_MS = 10 * 60 * 1e3;
 var MAX_VERIFICATION_REQUESTS = 3;
 var MAX_VERIFICATION_ATTEMPTS = 5;
-var verificationRequests = /* @__PURE__ */ new Map();
-var verificationAttempts = /* @__PURE__ */ new Map();
 function sha256(value) {
   return crypto10.createHash("sha256").update(value).digest("hex");
 }
@@ -68226,16 +68224,50 @@ function firstString(...values) {
   }
   return "";
 }
-function canRequestVerification(key) {
-  const now = Date.now();
-  const current = verificationRequests.get(key);
-  if (!current || now - current.startedAt >= VERIFICATION_WINDOW_MS) {
-    verificationRequests.set(key, { startedAt: now, count: 1 });
-    return true;
-  }
-  if (current.count >= MAX_VERIFICATION_REQUESTS) return false;
-  current.count += 1;
-  return true;
+async function consumeVerificationRequest(senderPhone) {
+  const result = await pool.query(
+    `UPDATE whatsapp_conversations
+     SET verification_request_count = CASE
+           WHEN verification_request_window_started_at IS NULL
+             OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
+           THEN 1
+           ELSE verification_request_count + 1
+         END,
+         verification_request_window_started_at = CASE
+           WHEN verification_request_window_started_at IS NULL
+             OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
+           THEN NOW()
+           ELSE verification_request_window_started_at
+         END,
+         updated_at = NOW()
+     WHERE whatsapp_phone = $1
+       AND (
+         verification_request_window_started_at IS NULL
+         OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
+         OR verification_request_count < $3
+       )
+     RETURNING verification_request_count`,
+    [senderPhone, VERIFICATION_WINDOW_MS, MAX_VERIFICATION_REQUESTS]
+  );
+  return result.rowCount > 0;
+}
+async function incrementVerificationAttempt(senderPhone) {
+  const result = await pool.query(
+    `UPDATE whatsapp_conversations
+     SET verification_attempts = verification_attempts + 1, updated_at = NOW()
+     WHERE whatsapp_phone = $1
+     RETURNING verification_attempts`,
+    [senderPhone]
+  );
+  return Number(result.rows[0]?.verification_attempts ?? 0);
+}
+async function resetVerificationAttempts(senderPhone) {
+  await pool.query(
+    `UPDATE whatsapp_conversations
+     SET verification_attempts = 0, updated_at = NOW()
+     WHERE whatsapp_phone = $1`,
+    [senderPhone]
+  );
 }
 function parseInboundPayload(payload) {
   const data = payload.data;
@@ -68304,8 +68336,7 @@ async function getOrCreateConversation(whatsappPhone) {
   return created;
 }
 async function sendPhoneVerification(senderPhone, accountPhone, action = "account") {
-  const requestKey = `${senderPhone}:${accountPhone}`;
-  if (!canRequestVerification(requestKey)) {
+  if (!await consumeVerificationRequest(senderPhone)) {
     await sendConvessaMessage(
       senderPhone,
       "Trop de demandes de code. R\xE9essayez dans quelques minutes."
@@ -68325,7 +68356,7 @@ Ne le partagez avec personne.`
     pendingCodeExpiresAt: new Date(Date.now() + 10 * 60 * 1e3),
     state: action === "transfer" ? "awaiting_transfer_code" : "awaiting_phone_code"
   });
-  verificationAttempts.delete(senderPhone);
+  await resetVerificationAttempts(senderPhone);
   await sendConvessaMessage(
     senderPhone,
     "Un code de v\xE9rification vient d'\xEAtre envoy\xE9 sur le num\xE9ro indiqu\xE9. R\xE9pondez ici avec le code \xE0 6 chiffres."
@@ -68451,15 +68482,14 @@ async function handleInboundMessage(req, senderPhone, text2) {
     const expected = conversation.pendingCodeHash;
     const expiresAt = conversation.pendingCodeExpiresAt?.getTime() ?? 0;
     if (!expected || !expiresAt || expiresAt <= Date.now() || code.length !== 6 || sha256(code) !== expected) {
-      const attempts = (verificationAttempts.get(senderPhone) ?? 0) + 1;
-      verificationAttempts.set(senderPhone, attempts);
+      const attempts = await incrementVerificationAttempt(senderPhone);
       if (attempts >= MAX_VERIFICATION_ATTEMPTS) {
-        verificationAttempts.delete(senderPhone);
         await updateConversation(senderPhone, {
           pendingCodeHash: null,
           pendingCodeExpiresAt: null,
           state: "menu"
         });
+        await resetVerificationAttempts(senderPhone);
         await sendConvessaMessage(
           senderPhone,
           "Trop d'essais incorrects. La v\xE9rification est annul\xE9e. R\xE9pondez 0 pour recommencer."
@@ -68478,6 +68508,7 @@ async function handleInboundMessage(req, senderPhone, text2) {
     }
     const accountPhone = conversation.accountPhone;
     const transferRequested = conversation.state === "awaiting_transfer_code";
+    await resetVerificationAttempts(senderPhone);
     await updateConversation(senderPhone, {
       pendingCodeHash: null,
       pendingCodeExpiresAt: null,
@@ -68875,6 +68906,9 @@ async function runStartupMigration() {
         state                   TEXT NOT NULL DEFAULT 'welcome',
         pending_code_hash       TEXT,
         pending_code_expires_at TIMESTAMP,
+        verification_attempts   INTEGER NOT NULL DEFAULT 0,
+        verification_request_count INTEGER NOT NULL DEFAULT 0,
+        verification_request_window_started_at TIMESTAMP,
         pending_token_hash      TEXT,
         pending_token_expires_at TIMESTAMP,
         last_inbound_id         TEXT,
@@ -68885,6 +68919,9 @@ async function runStartupMigration() {
     `);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS pending_code_hash TEXT`);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS pending_code_expires_at TIMESTAMP`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_attempts INTEGER NOT NULL DEFAULT 0`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_count INTEGER NOT NULL DEFAULT 0`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_window_started_at TIMESTAMP`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_user_id ON whatsapp_conversations (user_id)`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_pending_token ON whatsapp_conversations (pending_token_hash)`);
     await run(client, `
