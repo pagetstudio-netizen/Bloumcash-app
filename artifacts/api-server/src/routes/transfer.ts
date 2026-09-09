@@ -2,7 +2,14 @@ import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { notifyPayment, notifyPaymentError } from "../lib/telegram";
 import { db } from "@workspace/db";
-import { transactionsTable, usersTable, blacklistTable, operatorsConfigTable, adminSettingsTable } from "@workspace/db";
+import {
+  transactionsTable,
+  usersTable,
+  blacklistTable,
+  operatorsConfigTable,
+  adminSettingsTable,
+  whatsappConversationsTable,
+} from "@workspace/db";
 import { eq, and, ilike } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
@@ -11,6 +18,7 @@ import { extractUser, requireUser } from "../middleware/user-auth";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
+import { sendConvessaMessage } from "../lib/convessa";
 
 const router: IRouter = Router();
 
@@ -36,8 +44,52 @@ function normalizeTogoPhone(raw: string): string | null {
   return null;
 }
 
+function operatorForTogoPhone(phone: string): "tmoney" | "moov" | null {
+  const prefix = Number(phone.slice(0, 2));
+  if (prefix >= 70 && prefix <= 79) return "tmoney";
+  if (prefix >= 90 && prefix <= 99) return "moov";
+  return null;
+}
+
 /** Message générique retourné à l'utilisateur — jamais le vrai problème technique */
 const GENERIC_USER_ERROR = "Une erreur s'est produite. Réessayez plus tard.";
+
+async function notifyWhatsappTransfer(
+  userId: number | null,
+  status: "success" | "failed",
+  amount: number,
+  reference: string,
+  toPhone?: string | null,
+): Promise<void> {
+  if (!userId) return;
+  try {
+    const conversations = await db
+      .select({ whatsappPhone: whatsappConversationsTable.whatsappPhone })
+      .from(whatsappConversationsTable)
+      .where(eq(whatsappConversationsTable.userId, userId));
+    if (!conversations.length) return;
+
+    const message = status === "success"
+      ? [
+          "✅ Transfert Bloum Cash confirmé.",
+          `Montant : ${formatAmount(amount)}`,
+          `Destinataire : ${toPhone ?? "—"}`,
+          `Référence : ${reference}`,
+        ].join("\n")
+      : [
+          "❌ Votre transfert Bloum Cash a échoué.",
+          `Montant : ${formatAmount(amount)}`,
+          `Référence : ${reference}`,
+          "Vous pouvez réessayer depuis la page sécurisée.",
+        ].join("\n");
+
+    await Promise.allSettled(
+      conversations.map(({ whatsappPhone }) => sendConvessaMessage(whatsappPhone, message)),
+    );
+  } catch {
+    // Une panne de notification WhatsApp ne doit jamais modifier le résultat du transfert.
+  }
+}
 
 /** Mapping interne → nom en DB pour la table operatorsConfigTable */
 const OPERATOR_DB_NAME: Record<string, string> = {
@@ -159,7 +211,11 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
 
     /* ── Vérification statut utilisateur + blacklist ── */
     if (userId) {
-      const [userRow] = await db.select({ status: usersTable.status }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      const [userRow] = await db
+        .select({ status: usersTable.status, phone: usersTable.phone })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
       if (userRow?.status === "banned") {
         res.status(403).json({ error: "Votre compte est banni. Contactez le support.", code: "ACCOUNT_BANNED" });
         return;
@@ -168,8 +224,25 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
         res.status(403).json({ error: "Votre compte est temporairement suspendu.", code: "ACCOUNT_SUSPENDED" });
         return;
       }
+      if (currentUser?.channel === "whatsapp" && userRow?.phone !== normalizedFrom) {
+        res.status(403).json({
+          error: "Le numéro expéditeur doit être le numéro Bloum Cash vérifié.",
+          code: "VERIFIED_PHONE_REQUIRED",
+        });
+        return;
+      }
+      if (
+        currentUser?.channel === "whatsapp" &&
+        operatorForTogoPhone(normalizedFrom) !== String(fromOperator).toLowerCase()
+      ) {
+        res.status(400).json({
+          error: "L'opérateur ne correspond pas au numéro Bloum Cash vérifié.",
+          code: "VERIFIED_OPERATOR_REQUIRED",
+        });
+        return;
+      }
     }
-    const blRows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, fromPhone)).limit(1);
+    const blRows = await db.select().from(blacklistTable).where(eq(blacklistTable.phone, normalizedFrom)).limit(1);
     if (blRows.length) {
       res.status(403).json({ error: "Escroquerie détectée. Accès refusé. Bye.", code: "PHONE_BLACKLISTED" });
       return;
@@ -196,6 +269,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
           status: "success", payoutSent: true, userId,
         });
         notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+        await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
         res.status(201).json({
           success: true,
           message: "Transfert effectué (mode démo — GomboPlus non configuré)",
@@ -281,6 +355,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
         status: "success", payoutSent: true, userId,
       });
       notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+      await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
       res.status(201).json({
         success: true,
         message: "Transfert effectué (mode démo — PayDunya non configuré)",
@@ -394,6 +469,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
               await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, reference));
               req.log.info({ reference, toOperator, toPhone }, "✅ Payout Moov→TMoney OK après confirmation encaissement");
               notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+              await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
               if (userId) {
                 const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
                 if (userRows[0]?.email) {
@@ -405,12 +481,14 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
               await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_REFUSED] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
               req.log.error({ reference, msg: payoutResult.message }, "Payout Moov refusé après encaissement confirmé — INTERVENTION MANUELLE REQUISE");
               notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_REFUSED", errorDetail: realDetail, stage: "Retrait (refusé)" });
+              await notifyWhatsappTransfer(userId, "failed", amt, reference, toPhone);
             }
           } catch (payoutErr) {
             const realDetail = String(payoutErr);
             await db.update(transactionsTable).set({ status: "payout_failed", adminNote: `[PAYOUT_ERROR] ${realDetail}` }).where(eq(transactionsTable.reference, reference));
             req.log.error({ err: payoutErr, reference }, "Erreur payout Moov — INTERVENTION MANUELLE REQUISE");
             notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYOUT_ERROR", errorDetail: realDetail, stage: "Retrait (erreur technique)" });
+            await notifyWhatsappTransfer(userId, "failed", amt, reference, toPhone);
           }
         }
 
@@ -517,6 +595,7 @@ router.get("/transfer/:reference/status", requireUser, async (req, res) => {
                       sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirmé ✅", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a été confirmé.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
                     }
                   }
+                await notifyWhatsappTransfer(tx.userId, "success", tx.amount, tx.reference, tx.toPhone);
                 } else {
                   await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
                   tx.status = "payout_failed";
@@ -538,6 +617,7 @@ router.get("/transfer/:reference/status", requireUser, async (req, res) => {
                 sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert échoué ❌", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu être effectué.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
               }
             }
+              await notifyWhatsappTransfer(tx.userId, "failed", tx.amount, tx.reference, tx.toPhone);
           }
         } catch {
           /* ignore — on retourne le statut actuel en DB */
@@ -572,6 +652,7 @@ router.get("/transfer/:reference/status", requireUser, async (req, res) => {
                       sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert confirmé ✅", message: `Votre transfert de ${formatAmount(tx.amount)} vers ${tx.toPhone ?? "destinataire"} a été confirmé.`, data: { type: "transfer_confirmed", reference: tx.reference } }, req.log);
                     }
                   }
+                await notifyWhatsappTransfer(tx.userId, "success", tx.amount, tx.reference, tx.toPhone);
                 } else {
                   await db.update(transactionsTable).set({ status: "payout_failed" }).where(eq(transactionsTable.reference, tx.reference));
                   tx.status = "payout_failed";
@@ -594,6 +675,7 @@ router.get("/transfer/:reference/status", requireUser, async (req, res) => {
                 sendPushNotification({ externalUserId: userRows[0].email, title: "Transfert échoué ❌", message: `Votre transfert de ${formatAmount(tx.amount)} n'a pas pu être effectué.`, data: { type: "transfer_failed", reference: tx.reference } }, req.log);
               }
             }
+              await notifyWhatsappTransfer(tx.userId, "failed", tx.amount, tx.reference, tx.toPhone);
           }
         } catch {
           /* ignore */

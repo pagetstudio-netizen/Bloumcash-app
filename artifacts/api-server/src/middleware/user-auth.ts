@@ -13,6 +13,7 @@ const USER_SECRET = process.env.USER_JWT_SECRET;
 export interface UserTokenPayload {
   id: number;
   email: string;
+  channel?: "whatsapp";
   iat: number;
 }
 

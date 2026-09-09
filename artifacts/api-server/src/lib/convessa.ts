@@ -155,3 +155,10 @@ export function getWhatsappOnboardingUrl(token: string): string | null {
   const base = configuredBase || (devDomain ? `https://${devDomain}` : null);
   return base ? `${base}/whatsapp-register?token=${encodeURIComponent(token)}` : null;
 }
+
+export function getWhatsappTransferUrl(token: string): string | null {
+  const configuredBase = process.env.APP_BASE_URL?.replace(/\/+$/, "");
+  const devDomain = process.env.REPLIT_DEV_DOMAIN;
+  const base = configuredBase || (devDomain ? `https://${devDomain}` : null);
+  return base ? `${base}/whatsapp-transfer?token=${encodeURIComponent(token)}` : null;
+}

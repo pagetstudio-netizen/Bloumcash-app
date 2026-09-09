@@ -15,6 +15,7 @@ import pushDiagnoseRouter from "./push-diagnose";
 import configRouter from "./config";
 import feedbackRouter from "./feedback";
 import accessTokenRouter from "./access-token";
+import convessaWebhookRouter from "./convessa-webhook";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(testPushRouter);
 router.use(pushDiagnoseRouter);
 router.use(feedbackRouter);
 router.use(accessTokenRouter);
+router.use(convessaWebhookRouter);
 
 export default router;

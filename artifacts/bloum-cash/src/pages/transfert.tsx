@@ -250,7 +250,7 @@ function OpModal({
 /*  Page principale                                                   */
 /* ────────────────────────────────────────────────────────────────── */
 export default function Transfert() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
   const { showModal } = useModal();
   const createTransfer = useCreateTransfer();
@@ -269,10 +269,20 @@ export default function Transfert() {
   const [opStatuses, setOpStatuses] = useState<OpStatus[]>(DEFAULT_OP_STATUSES);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isSubmittingRef = useRef(false);
+  const whatsappMode = new URLSearchParams(window.location.search).get("whatsapp") === "1";
 
   useEffect(() => {
     if (!isAuthenticated) setLocation("/login");
   }, [isAuthenticated, setLocation]);
+
+  useEffect(() => {
+    if (!whatsappMode || !user?.phone) return;
+    const verifiedPhone = user.phone.replace(/\D/g, "");
+    setFromPhone(verifiedPhone);
+    const prefix = Number(verifiedPhone.slice(0, 2));
+    if (prefix >= 70 && prefix <= 79) setFromOp("tmoney");
+    if (prefix >= 90 && prefix <= 99) setFromOp("moov");
+  }, [user?.phone, whatsappMode]);
 
   /* Charger le statut des opérateurs depuis l'API */
   useEffect(() => {
@@ -356,11 +366,12 @@ export default function Transfert() {
     /* Afficher le modal immédiatement */
     setStep("processing");
     try {
+      const verifiedFromPhone = whatsappMode ? (user?.phone ?? "") : fromPhone;
       const result = await createTransfer.mutateAsync({
         data: {
           fromOperator: fromOp as "tmoney" | "moov",
           toOperator: toOp as "tmoney" | "moov",
-          fromPhone: fromPhone.replace(/\s/g, ""),
+          fromPhone: verifiedFromPhone.replace(/\s/g, ""),
           toPhone: toPhone.replace(/\s/g, ""),
           amount: amountNum,
         },
@@ -793,7 +804,7 @@ export default function Transfert() {
                 <span className="text-[18px] leading-none">🇹🇬</span>
                 <span className="text-[13px] font-medium text-gray-500">+228</span>
                 <span className="text-gray-400 text-sm mx-0.5">·</span>
-                <input
+                  <input
                   type="tel"
                   inputMode="numeric"
                   value={fromPhone}
@@ -801,6 +812,7 @@ export default function Transfert() {
                   placeholder="Votre numéro"
                   maxLength={11}
                   autoComplete="off"
+                  readOnly={whatsappMode}
                   className="flex-1 bg-transparent text-[13px] font-semibold text-gray-800 placeholder:text-gray-400 placeholder:font-normal focus:outline-none min-w-0"
                   style={{ userSelect: "text", WebkitUserSelect: "text", touchAction: "manipulation", pointerEvents: "auto" }}
                 />

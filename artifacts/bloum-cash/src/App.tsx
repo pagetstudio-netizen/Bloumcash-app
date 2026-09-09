@@ -17,6 +17,8 @@ import AppGate from "@/pages/app-gate";
 import Onboarding from "@/pages/onboarding";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
+import WhatsappRegister from "@/pages/whatsapp-register";
+import WhatsappTransfer from "@/pages/whatsapp-transfer";
 import ForgotPin from "@/pages/forgot-pin";
 import Dashboard from "@/pages/dashboard";
 import Encaisser from "@/pages/encaisser";
@@ -112,7 +114,8 @@ function SplashRedirect() {
     const isSplash = location === "/splash";
     const isLanding = location === "/";
     const isOnboarding = location === "/onboarding";
-    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash || isLanding || isOnboarding) return;
+    const isWhatsappRoute = location.startsWith("/whatsapp-");
+    if (isAdminRoute || isPaymentRoute || isAppGate || isSplash || isLanding || isOnboarding || isWhatsappRoute) return;
 
     const shown = sessionStorage.getItem("splashShown");
     if (!shown) {
@@ -157,6 +160,8 @@ function Router() {
         <Route path="/splash" component={Splash} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/whatsapp-register" component={WhatsappRegister} />
+        <Route path="/whatsapp-transfer" component={WhatsappTransfer} />
         <Route path="/forgot-pin" component={ForgotPin} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/encaisser" component={Encaisser} />
