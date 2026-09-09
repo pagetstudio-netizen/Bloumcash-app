@@ -49,6 +49,26 @@ export async function runStartupMigration(): Promise<void> {
     await run(client, `ALTER TABLE users ADD COLUMN IF NOT EXISTS operator TEXT`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_onesignal_external_user_id ON users (onesignal_external_user_id)`);
 
+    /* ─── TABLE whatsapp_conversations ────────────────────────── */
+    await run(client, `
+      CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+        id                       SERIAL PRIMARY KEY,
+        whatsapp_phone          TEXT UNIQUE NOT NULL,
+        account_phone           TEXT,
+        user_id                 INTEGER,
+        full_name               TEXT,
+        state                   TEXT NOT NULL DEFAULT 'welcome',
+        pending_token_hash      TEXT,
+        pending_token_expires_at TIMESTAMP,
+        last_inbound_id         TEXT,
+        last_message_at         TIMESTAMP,
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at              TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_user_id ON whatsapp_conversations (user_id)`);
+    await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_pending_token ON whatsapp_conversations (pending_token_hash)`);
+
     /* ─── TABLE transactions ──────────────────────────────────── */
     await run(client, `
       CREATE TABLE IF NOT EXISTS transactions (
