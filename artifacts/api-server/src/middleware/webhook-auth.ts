@@ -5,6 +5,8 @@
  *  - WEBHOOK_SECRET est la valeur recommandée.
  *  - APP_ACCESS_TOKEN est accepté en secours pour les installations qui
  *    utilisent déjà ce secret pour le portail privé.
+ *  - Convessa ne permettant pas de définir un header personnalisé, le même
+ *    secret peut être transmis dans l'URL avec `?token=...`.
  *  - Si aucun secret n'est configuré, le webhook est refusé (fail closed).
  *
  * Configuration Plesk / Replit :
@@ -41,11 +43,17 @@ export function requireWebhookSecret(
     typeof authorization === "string" && authorization.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length).trim()
       : "";
+  const queryToken =
+    typeof req.query.token === "string"
+      ? req.query.token
+      : typeof req.query.secret === "string"
+        ? req.query.secret
+        : "";
   const provided =
     (req.headers["x-webhook-secret"] as string | undefined) ??
     (req.headers["x-access-token"] as string | undefined) ??
     bearer ??
-    "";
+    queryToken;
 
   const expected = Buffer.from(WEBHOOK_SECRET);
   const actual   = Buffer.from(provided);

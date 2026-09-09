@@ -60732,7 +60732,8 @@ function requireWebhookSecret(req, res, next) {
   }
   const authorization = req.headers.authorization;
   const bearer = typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
-  const provided = req.headers["x-webhook-secret"] ?? req.headers["x-access-token"] ?? bearer ?? "";
+  const queryToken = typeof req.query.token === "string" ? req.query.token : typeof req.query.secret === "string" ? req.query.secret : "";
+  const provided = req.headers["x-webhook-secret"] ?? req.headers["x-access-token"] ?? bearer ?? queryToken;
   const expected = Buffer.from(WEBHOOK_SECRET);
   const actual = Buffer.from(provided);
   if (actual.length !== expected.length || !crypto7.timingSafeEqual(actual, expected)) {
