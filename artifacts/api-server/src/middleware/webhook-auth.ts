@@ -2,10 +2,10 @@
  * Middleware de vérification des webhooks entrants.
  *
  * Stratégie :
- *  - Si WEBHOOK_SECRET est défini dans l'environnement, le header
- *    `X-Webhook-Secret` de la requête DOIT correspondre.
- *  - Si WEBHOOK_SECRET n'est PAS défini, on autorise la requête MAIS
- *    on émet un warning dans les logs pour rappeler de configurer le secret.
+ *  - WEBHOOK_SECRET est la valeur recommandée.
+ *  - APP_ACCESS_TOKEN est accepté en secours pour les installations qui
+ *    utilisent déjà ce secret pour le portail privé.
+ *  - Si aucun secret n'est configuré, le webhook est refusé (fail closed).
  *
  * Configuration Plesk / Replit :
  *   WEBHOOK_SECRET=<valeur-aléatoire-forte>
@@ -17,7 +17,10 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET ?? "";
+const WEBHOOK_SECRET =
+  process.env.WEBHOOK_SECRET?.trim() ||
+  process.env.APP_ACCESS_TOKEN?.trim() ||
+  "";
 
 export function requireWebhookSecret(
   req: Request,
@@ -25,16 +28,24 @@ export function requireWebhookSecret(
   next: NextFunction,
 ): void {
   if (!WEBHOOK_SECRET) {
-    req.log.warn(
+    req.log.error(
       { path: req.path },
-      "WEBHOOK_SECRET non défini — webhook accepté sans vérification. " +
-      "Configurez la variable WEBHOOK_SECRET pour sécuriser les callbacks.",
+      "Webhook refusé : WEBHOOK_SECRET ou APP_ACCESS_TOKEN non configuré",
     );
-    next();
+    res.status(503).json({ error: "Webhook non configuré" });
     return;
   }
 
-  const provided = (req.headers["x-webhook-secret"] as string | undefined) ?? "";
+  const authorization = req.headers.authorization;
+  const bearer =
+    typeof authorization === "string" && authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length).trim()
+      : "";
+  const provided =
+    (req.headers["x-webhook-secret"] as string | undefined) ??
+    (req.headers["x-access-token"] as string | undefined) ??
+    bearer ??
+    "";
 
   const expected = Buffer.from(WEBHOOK_SECRET);
   const actual   = Buffer.from(provided);

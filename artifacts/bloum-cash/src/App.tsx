@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { AppModalProvider } from "@/components/app-modal";
 import { UpdateGate, useUpdateCheck } from "@/components/update-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { AccessGuard } from "@/components/access-guard";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import React from "react";
 
@@ -202,7 +203,7 @@ function AppGated() {
   const isAdminRoute = window.location.pathname.startsWith("/admin");
   if (checking && !isAdminRoute) return null;
 
-  return (
+  const app = (
     <>
       <UpdateGate />
       <WouterRouter base="">
@@ -210,6 +211,14 @@ function AppGated() {
       </WouterRouter>
     </>
   );
+
+  // Les liens temporaires WhatsApp constituent déjà leur propre contrôle
+  // d'accès et doivent rester ouvrables sans le portail principal.
+  const isWhatsappSecureRoute =
+    window.location.pathname === "/whatsapp-register" ||
+    window.location.pathname === "/whatsapp-transfer";
+
+  return isWhatsappSecureRoute ? app : <AccessGuard>{app}</AccessGuard>;
 }
 
 function App() {

@@ -60720,17 +60720,19 @@ var import_express7 = __toESM(require_express2());
 
 // src/middleware/webhook-auth.ts
 import crypto7 from "crypto";
-var WEBHOOK_SECRET = process.env.WEBHOOK_SECRET ?? "";
+var WEBHOOK_SECRET = process.env.WEBHOOK_SECRET?.trim() || process.env.APP_ACCESS_TOKEN?.trim() || "";
 function requireWebhookSecret(req, res, next) {
   if (!WEBHOOK_SECRET) {
-    req.log.warn(
+    req.log.error(
       { path: req.path },
-      "WEBHOOK_SECRET non d\xE9fini \u2014 webhook accept\xE9 sans v\xE9rification. Configurez la variable WEBHOOK_SECRET pour s\xE9curiser les callbacks."
+      "Webhook refus\xE9 : WEBHOOK_SECRET ou APP_ACCESS_TOKEN non configur\xE9"
     );
-    next();
+    res.status(503).json({ error: "Webhook non configur\xE9" });
     return;
   }
-  const provided = req.headers["x-webhook-secret"] ?? "";
+  const authorization = req.headers.authorization;
+  const bearer = typeof authorization === "string" && authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length).trim() : "";
+  const provided = req.headers["x-webhook-secret"] ?? req.headers["x-access-token"] ?? bearer ?? "";
   const expected = Buffer.from(WEBHOOK_SECRET);
   const actual = Buffer.from(provided);
   if (actual.length !== expected.length || !crypto7.timingSafeEqual(actual, expected)) {
@@ -68602,7 +68604,7 @@ async function handleInboundMessage(req, senderPhone, text2) {
   await sendWelcomeMessage(senderPhone);
   await updateConversation(senderPhone, { state: "menu" });
 }
-router17.post("/webhooks/convessa", async (req, res) => {
+router17.post("/webhooks/convessa", requireWebhookSecret, async (req, res) => {
   const payload = req.body;
   const event = typeof payload.event === "string" ? payload.event : "";
   if (event === "message.sent" || event === "message.failed" || event === "message.delivered") {
@@ -68838,6 +68840,9 @@ if (fs3.existsSync(FRONTEND_DIST)) {
       }
     }
   }));
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "Route API introuvable" });
+  });
   app.get("/{*path}", (_req, res) => {
     const indexPath = path3.join(FRONTEND_DIST, "index.html");
     if (fs3.existsSync(indexPath)) {

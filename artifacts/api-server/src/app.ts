@@ -105,6 +105,11 @@ if (fs.existsSync(FRONTEND_DIST)) {
     },
   }));
 
+  // Ne jamais laisser une URL /api inconnue tomber dans le fallback SPA.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "Route API introuvable" });
+  });
+
   /* SPA fallback — toujours index.html sans cache */
   app.get("/{*path}", (_req, res) => {
     const indexPath = path.join(FRONTEND_DIST, "index.html");
