@@ -9,3 +9,4 @@
 - [Force-update gate](force-update-gate.md) — app-wide update gate reuses admin_settings + /api/config; mandatory mode must gate pre-router render and be rejected server-side if URL/version missing.
 - [Package firewall](orval-package-firewall.md) — the imported Orval version was blocked by Replit’s package firewall; use an available newer release when the lockfile install fails.
 - [WhatsApp verification limits](whatsapp-verification-limits.md) — verification request and attempt counters are persisted and updated atomically in PostgreSQL for multi-instance safety.
+- [Convessa webhook URL](convessa-webhook-url.md) — keep the exact POST callback URL; browser GET/API unknown paths must not fall through to the SPA.
