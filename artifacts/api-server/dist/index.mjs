@@ -68249,7 +68249,7 @@ async function consumeVerificationRequest(senderPhone) {
      RETURNING verification_request_count`,
     [senderPhone, VERIFICATION_WINDOW_MS, MAX_VERIFICATION_REQUESTS]
   );
-  return result.rowCount > 0;
+  return (result.rowCount ?? 0) > 0;
 }
 async function incrementVerificationAttempt(senderPhone) {
   const result = await pool.query(
