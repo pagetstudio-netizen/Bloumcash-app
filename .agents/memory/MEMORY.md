@@ -7,3 +7,4 @@
 - [Vite build env vars](vite-build-env.md) — PORT/BASE_PATH are only needed for dev/preview; made optional with fallbacks so `pnpm build` works without env vars.
 - [OneSignal auth header](onesignal-auth.md) — OneSignal REST API v1 requires `Authorization: Key <key>` NOT `Basic <key>`; `Basic` causes silent 401 rejections.
 - [Force-update gate](force-update-gate.md) — app-wide update gate reuses admin_settings + /api/config; mandatory mode must gate pre-router render and be rejected server-side if URL/version missing.
+- [Package firewall](orval-package-firewall.md) — the imported Orval version was blocked by Replit’s package firewall; use an available newer release when the lockfile install fails.
