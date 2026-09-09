@@ -96,15 +96,3 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
-
-[userenv]
-
-[userenv.shared]
-LOG_LEVEL = "info"
-NODE_ENV = "development"
-PAYDUNYA_SANDBOX = "false"
-PAYDUNYA_STORE_NAME = "Bloum Cash"
-PAYDUNYA_STORE_PHONE = "+22892299772"
-APP_BASE_URL = "https://app.wendysapp.sbs"
-PAYDUNYA_CALLBACK_URL = "https://app.wendysapp.sbs"
-CONVESSA_API_URL = "https://convessa.epac-uac-optica-chapter.bj"
