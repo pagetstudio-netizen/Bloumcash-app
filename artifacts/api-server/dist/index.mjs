@@ -68605,7 +68605,7 @@ async function handleInboundMessage(req, senderPhone, text2) {
   await sendWelcomeMessage(senderPhone);
   await updateConversation(senderPhone, { state: "menu" });
 }
-router17.post("/webhooks/convessa", requireWebhookSecret, async (req, res) => {
+router17.post("/webhooks/convessa", async (req, res) => {
   const payload = req.body;
   const event = typeof payload.event === "string" ? payload.event : "";
   if (event === "message.sent" || event === "message.failed" || event === "message.delivered") {

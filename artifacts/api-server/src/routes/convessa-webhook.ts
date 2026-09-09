@@ -17,7 +17,6 @@ import {
   sendWelcomeMessage,
   toConvessaPhone,
 } from "../lib/convessa";
-import { requireWebhookSecret } from "../middleware/webhook-auth";
 
 const router: IRouter = Router();
 
@@ -535,7 +534,7 @@ async function handleInboundMessage(
 }
 
 /* Convessa appelle cette URL pour les messages entrants et les statuts sortants. */
-router.post("/webhooks/convessa", requireWebhookSecret, async (req, res) => {
+router.post("/webhooks/convessa", async (req, res) => {
   const payload = req.body as Record<string, unknown>;
   const event = typeof payload.event === "string" ? payload.event : "";
 
