@@ -10,6 +10,7 @@ export const transactionsTable = pgTable("transactions", {
   amount: integer("amount").notNull(),
   status: text("status").notNull().default("pending"),
   operator: text("operator").notNull(),
+  channel: text("channel").default("web").notNull(),
   fromPhone: text("from_phone"),
   toPhone: text("to_phone"),
   toOperator: text("to_operator"),

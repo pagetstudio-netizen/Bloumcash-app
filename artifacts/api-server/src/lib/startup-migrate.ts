@@ -47,6 +47,7 @@ export async function runStartupMigration(): Promise<void> {
     await run(client, `ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Togo'`);
     await run(client, `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP`);
     await run(client, `ALTER TABLE users ADD COLUMN IF NOT EXISTS operator TEXT`);
+    await run(client, `ALTER TABLE users ADD COLUMN IF NOT EXISTS registration_channel TEXT NOT NULL DEFAULT 'web'`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_onesignal_external_user_id ON users (onesignal_external_user_id)`);
 
     /* ─── TABLE whatsapp_conversations ────────────────────────── */
@@ -107,6 +108,7 @@ export async function runStartupMigration(): Promise<void> {
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payout_sent BOOLEAN NOT NULL DEFAULT FALSE`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INTEGER`);
     await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS admin_note TEXT`);
+    await run(client, `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'web'`);
 
     /* ─── TABLE qr_codes ──────────────────────────────────────── */
     await run(client, `

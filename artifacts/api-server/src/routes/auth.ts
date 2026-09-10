@@ -59,6 +59,13 @@ function normalizeTogoPhone(raw: string): string | null {
   return null;
 }
 
+function operatorForPhone(phone: string): "tmoney" | "moov" | null {
+  const prefix = Number(phone.slice(0, 2));
+  if (prefix >= 70 && prefix <= 79) return "tmoney";
+  if (prefix >= 90 && prefix <= 99) return "moov";
+  return null;
+}
+
 function phoneToEmail(phone: string): string {
   return `${phone}@users.bloumcash.app`;
 }
@@ -168,7 +175,7 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
     const email = phoneToEmail(phone);
     const hashedPin = await bcrypt.hash(pin, 12);
     const [user] = await db.insert(usersTable)
-      .values({ fullName: resolvedName, email, pin: hashedPin, phone, onesignalExternalUserId: email, village, city, region, country })
+      .values({ fullName: resolvedName, email, pin: hashedPin, phone, operator: operatorForPhone(phone), registrationChannel: "web", onesignalExternalUserId: email, village, city, region, country })
       .returning();
 
     const token = signUserToken({ id: user.id, email: user.email });

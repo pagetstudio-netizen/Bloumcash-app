@@ -9,6 +9,7 @@ export const usersTable = pgTable("users", {
   pin: text("pin").notNull(),
   phone: text("phone"),
   operator: text("operator"),
+  registrationChannel: text("registration_channel").default("web").notNull(),
   status: text("status").default("active").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at"),
