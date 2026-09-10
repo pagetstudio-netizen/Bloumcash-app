@@ -248,6 +248,25 @@ async function claimInboundMessage(
   return (result.rowCount ?? 0) > 0;
 }
 
+const inboundLocks = new Map<string, Promise<void>>();
+
+async function withInboundLock(
+  whatsappPhone: string,
+  task: () => Promise<void>,
+): Promise<void> {
+  const previous = inboundLocks.get(whatsappPhone) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(task);
+  inboundLocks.set(whatsappPhone, current);
+
+  try {
+    await current;
+  } finally {
+    if (inboundLocks.get(whatsappPhone) === current) {
+      inboundLocks.delete(whatsappPhone);
+    }
+  }
+}
+
 async function getOrCreateConversation(whatsappPhone: string) {
   const existing = await getConversation(whatsappPhone);
   if (existing) return existing;
@@ -905,18 +924,25 @@ router.post("/webhooks/convessa", async (req, res) => {
   }
 
   try {
-    await getOrCreateConversation(inbound.from);
-    if (inbound.id && !(await claimInboundMessage(inbound.from, inbound.id))) {
+    let duplicate = false;
+    await withInboundLock(inbound.from, async () => {
+      await getOrCreateConversation(inbound.from);
+      if (inbound.id && !(await claimInboundMessage(inbound.from, inbound.id))) {
+        duplicate = true;
+        return;
+      }
+      if (!inbound.id) {
+        await updateConversation(inbound.from, {
+          lastInboundId: null,
+          lastMessageAt: new Date(),
+        });
+      }
+      await handleInboundMessage(req, inbound.from, inbound.text);
+    });
+    if (duplicate) {
       res.json({ received: true, duplicate: true });
       return;
     }
-    if (!inbound.id) {
-      await updateConversation(inbound.from, {
-        lastInboundId: null,
-        lastMessageAt: new Date(),
-      });
-    }
-    await handleInboundMessage(req, inbound.from, inbound.text);
     res.json({ received: true });
   } catch (error) {
     if (error instanceof ConvessaError) {
