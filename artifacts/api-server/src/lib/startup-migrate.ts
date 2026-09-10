@@ -76,6 +76,9 @@ export async function runStartupMigration(): Promise<void> {
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_attempts INTEGER NOT NULL DEFAULT 0`);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_count INTEGER NOT NULL DEFAULT 0`);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_window_started_at TIMESTAMP`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_recipient_operator TEXT`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_recipient_phone TEXT`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_sender_operator TEXT`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_user_id ON whatsapp_conversations (user_id)`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_pending_token ON whatsapp_conversations (pending_token_hash)`);
 

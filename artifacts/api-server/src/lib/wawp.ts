@@ -153,6 +153,38 @@ export async function sendWawpList(
   });
 }
 
+export async function sendOperatorChoiceMenu(
+  to: string,
+  mode: "recipient" | "sender",
+): Promise<WawpSendResponse> {
+  const recipientMode = mode === "recipient";
+  return sendWawpList(to, {
+    title: recipientMode ? "Opérateur du bénéficiaire" : "Votre opérateur",
+    description: recipientMode
+      ? "Sélectionnez l'opérateur qui recevra l'argent."
+      : "Sélectionnez l'opérateur utilisé pour envoyer l'argent.",
+    footer: "Bloum Cash — Togo",
+    button: "Choisir un opérateur",
+    sections: [
+      {
+        title: "Opérateurs au Togo",
+        rows: [
+          {
+            title: "TMoney",
+            rowId: "tmoney",
+            description: "Recevoir ou envoyer avec TMoney",
+          },
+          {
+            title: "Moov Money",
+            rowId: "moov",
+            description: "Recevoir ou envoyer avec Moov Money",
+          },
+        ],
+      },
+    ],
+  });
+}
+
 export async function sendWelcomeMessage(to: string): Promise<WawpSendResponse> {
   const welcomeText = [
     "Bonjour 👋",

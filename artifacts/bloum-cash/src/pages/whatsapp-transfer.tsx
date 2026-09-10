@@ -28,6 +28,11 @@ export default function WhatsappTransfer() {
       .then(async (response) => {
         const data = await response.json() as {
           token?: string;
+          transfer?: {
+            senderOperator?: "tmoney" | "moov" | null;
+            recipientOperator?: "tmoney" | "moov" | null;
+            recipientPhone?: string | null;
+          };
           user?: { id: string; fullName: string; email: string; phone?: string | null };
           error?: string;
         };
@@ -38,7 +43,11 @@ export default function WhatsappTransfer() {
         login({ ...data.user, phone: data.user.phone ?? "" }, data.token);
         setStatus("success");
         setMessage("Votre session sécurisée est prête. Ouverture du transfert…");
-        window.setTimeout(() => setLocation("/transfert?whatsapp=1"), 700);
+        const params = new URLSearchParams({ whatsapp: "1" });
+        if (data.transfer?.senderOperator) params.set("fromOperator", data.transfer.senderOperator);
+        if (data.transfer?.recipientOperator) params.set("toOperator", data.transfer.recipientOperator);
+        if (data.transfer?.recipientPhone) params.set("toPhone", data.transfer.recipientPhone);
+        window.setTimeout(() => setLocation(`/transfert?${params.toString()}`), 700);
       })
       .catch((error: unknown) => {
         if (cancelled) return;

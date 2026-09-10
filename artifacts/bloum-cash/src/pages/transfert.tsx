@@ -273,10 +273,13 @@ export default function Transfert() {
   const createTransfer = useCreateTransfer();
   const waNumber = useWhatsAppSupportNumber();
 
-  const [fromOp, setFromOp] = useState<Operator>("tmoney");
-  const [toOp,   setToOp]   = useState<Operator>("moov");
+  const transferParams = new URLSearchParams(window.location.search);
+  const initialFromOp = transferParams.get("fromOperator") === "moov" ? "moov" : "tmoney";
+  const initialToOp = transferParams.get("toOperator") === "tmoney" ? "tmoney" : "moov";
+  const [fromOp, setFromOp] = useState<Operator>(initialFromOp);
+  const [toOp,   setToOp]   = useState<Operator>(initialToOp);
   const [fromPhone, setFromPhone] = useState("");
-  const [toPhone, setToPhone] = useState("");
+  const [toPhone, setToPhone] = useState(transferParams.get("toPhone") ?? "");
   const [amount,  setAmount]  = useState("");
   const [step,    setStep]    = useState<Step>("step1");
   const [modalFor, setModalFor] = useState<"from" | "to" | null>(null);
@@ -294,6 +297,8 @@ export default function Transfert() {
 
   useEffect(() => {
     if (!whatsappMode || !user?.phone) return;
+    const selectedFromOperator = transferParams.get("fromOperator");
+    if (selectedFromOperator === "tmoney" || selectedFromOperator === "moov") return;
     const verifiedPhone = user.phone.replace(/\D/g, "");
     setFromPhone(verifiedPhone);
     const prefix = Number(verifiedPhone.slice(0, 2));

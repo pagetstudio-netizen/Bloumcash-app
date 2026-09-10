@@ -60063,6 +60063,32 @@ async function sendWawpList(to, message) {
     message
   });
 }
+async function sendOperatorChoiceMenu(to, mode) {
+  const recipientMode = mode === "recipient";
+  return sendWawpList(to, {
+    title: recipientMode ? "Op\xE9rateur du b\xE9n\xE9ficiaire" : "Votre op\xE9rateur",
+    description: recipientMode ? "S\xE9lectionnez l'op\xE9rateur qui recevra l'argent." : "S\xE9lectionnez l'op\xE9rateur utilis\xE9 pour envoyer l'argent.",
+    footer: "Bloum Cash \u2014 Togo",
+    button: "Choisir un op\xE9rateur",
+    sections: [
+      {
+        title: "Op\xE9rateurs au Togo",
+        rows: [
+          {
+            title: "TMoney",
+            rowId: "tmoney",
+            description: "Recevoir ou envoyer avec TMoney"
+          },
+          {
+            title: "Moov Money",
+            rowId: "moov",
+            description: "Recevoir ou envoyer avec Moov Money"
+          }
+        ]
+      }
+    ]
+  });
+}
 async function sendWelcomeMessage(to) {
   const welcomeText = [
     "Bonjour \u{1F44B}",
@@ -68279,13 +68305,8 @@ import crypto10 from "node:crypto";
 init_user_auth();
 var router17 = (0, import_express17.Router)();
 var VERIFICATION_WINDOW_MS = 10 * 60 * 1e3;
-var MAX_VERIFICATION_REQUESTS = 3;
-var MAX_VERIFICATION_ATTEMPTS = 5;
 function sha256(value) {
   return crypto10.createHash("sha256").update(value).digest("hex");
-}
-function createCode() {
-  return String(crypto10.randomInt(1e5, 1e6));
 }
 function createToken() {
   return crypto10.randomBytes(32).toString("base64url");
@@ -68300,6 +68321,20 @@ function normalizeAccountPhone(raw) {
     return digits;
   }
   return null;
+}
+function parseOperatorChoice(value) {
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized.includes("tmoney") || normalized.includes("mixx") || normalized.includes("yas")) {
+    return "tmoney";
+  }
+  if (normalized.includes("moov")) return "moov";
+  return null;
+}
+function operatorForPhone(phone) {
+  return Number(phone.slice(0, 2)) >= 90 ? "moov" : "tmoney";
+}
+function validPassword(value) {
+  return /^\d{4,20}$/.test(value.trim());
 }
 function normalizeInboundText(value) {
   return typeof value === "string" ? value.trim().slice(0, 1e3) : "";
@@ -68326,57 +68361,15 @@ function firstSenderAddress(...values) {
 function asRecord(value) {
   return value && typeof value === "object" ? value : void 0;
 }
-async function consumeVerificationRequest(senderPhone) {
-  const result = await pool.query(
-    `UPDATE whatsapp_conversations
-     SET verification_request_count = CASE
-           WHEN verification_request_window_started_at IS NULL
-             OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
-           THEN 1
-           ELSE verification_request_count + 1
-         END,
-         verification_request_window_started_at = CASE
-           WHEN verification_request_window_started_at IS NULL
-             OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
-           THEN NOW()
-           ELSE verification_request_window_started_at
-         END,
-         updated_at = NOW()
-     WHERE whatsapp_phone = $1
-       AND (
-         verification_request_window_started_at IS NULL
-         OR verification_request_window_started_at <= NOW() - ($2 * INTERVAL '1 millisecond')
-         OR verification_request_count < $3
-       )
-     RETURNING verification_request_count`,
-    [senderPhone, VERIFICATION_WINDOW_MS, MAX_VERIFICATION_REQUESTS]
-  );
-  return (result.rowCount ?? 0) > 0;
-}
-async function incrementVerificationAttempt(senderPhone) {
-  const result = await pool.query(
-    `UPDATE whatsapp_conversations
-     SET verification_attempts = verification_attempts + 1, updated_at = NOW()
-     WHERE whatsapp_phone = $1
-     RETURNING verification_attempts`,
-    [senderPhone]
-  );
-  return Number(result.rows[0]?.verification_attempts ?? 0);
-}
-async function resetVerificationAttempts(senderPhone) {
-  await pool.query(
-    `UPDATE whatsapp_conversations
-     SET verification_attempts = 0, updated_at = NOW()
-     WHERE whatsapp_phone = $1`,
-    [senderPhone]
-  );
-}
 function parseInboundPayload(payload) {
   const data = asRecord(payload.payload);
   const nestedPayload = asRecord(data?.payload);
   const nestedData = asRecord(data?.data);
   const rawData = asRecord(data?._data);
   const messageInfo = asRecord(rawData?.Info);
+  const message = asRecord(rawData?.Message);
+  const listResponseMessage = asRecord(message?.listResponseMessage);
+  const singleSelectReply = asRecord(listResponseMessage?.singleSelectReply);
   const response = asRecord(data?.response) ?? asRecord(payload.response);
   const listResponse = asRecord(data?.listResponse) ?? asRecord(nestedPayload?.listResponse) ?? asRecord(response?.listResponse) ?? asRecord(response?.list_response);
   const buttonResponse = asRecord(data?.buttonResponse) ?? asRecord(nestedPayload?.buttonResponse) ?? asRecord(response?.buttonResponse) ?? asRecord(response?.button_response);
@@ -68396,6 +68389,7 @@ function parseInboundPayload(payload) {
     messageInfo?.Sender
   );
   const text2 = normalizeInboundText(firstString(
+    singleSelectReply?.selectedRowID,
     ...sources.flatMap((source) => [
       source?.body,
       source?.text,
@@ -68447,33 +68441,6 @@ async function getOrCreateConversation(whatsappPhone) {
   }).returning();
   return created;
 }
-async function sendPhoneVerification(senderPhone, accountPhone, action = "account") {
-  if (!await consumeVerificationRequest(senderPhone)) {
-    await sendWawpMessage(
-      senderPhone,
-      "Trop de demandes de code. R\xE9essayez dans quelques minutes."
-    );
-    return;
-  }
-  const code = createCode();
-  await sendWawpMessage(
-    toWawpPhone(accountPhone),
-    `Votre code de v\xE9rification Bloum Cash est : ${code}
-
-Ne le partagez avec personne.`
-  );
-  await updateConversation(senderPhone, {
-    accountPhone,
-    pendingCodeHash: sha256(code),
-    pendingCodeExpiresAt: new Date(Date.now() + 10 * 60 * 1e3),
-    state: action === "transfer" ? "awaiting_transfer_code" : "awaiting_phone_code"
-  });
-  await resetVerificationAttempts(senderPhone);
-  await sendWawpMessage(
-    senderPhone,
-    "Un code de v\xE9rification vient d'\xEAtre envoy\xE9 sur le num\xE9ro indiqu\xE9. R\xE9pondez ici avec le code \xE0 6 chiffres."
-  );
-}
 async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
   const token = createToken();
   const url2 = getWhatsappOnboardingUrl(token);
@@ -68500,7 +68467,7 @@ async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
     ].join("\n")
   );
 }
-async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullName) {
+async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullName, recipientOperator, recipientPhone, senderOperator) {
   const token = createToken();
   const url2 = getWhatsappTransferUrl(token);
   if (!url2) {
@@ -68510,6 +68477,9 @@ async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullN
     userId,
     accountPhone,
     fullName,
+    transferRecipientOperator: recipientOperator,
+    transferRecipientPhone: recipientPhone,
+    transferSenderOperator: senderOperator,
     pendingTokenHash: sha256(token),
     pendingTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1e3),
     state: "awaiting_transfer"
@@ -68527,6 +68497,23 @@ async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullN
     ].join("\n")
   );
 }
+async function beginTransfer(senderPhone, conversation) {
+  if (!conversation.userId || !conversation.accountPhone) {
+    await updateConversation(senderPhone, { state: "menu" });
+    await sendWawpMessage(
+      senderPhone,
+      "Pour effectuer un transfert, vous devez d'abord cr\xE9er un compte. R\xE9pondez 2 pour vous inscrire."
+    );
+    return;
+  }
+  await updateConversation(senderPhone, {
+    state: "awaiting_transfer_recipient_operator",
+    transferRecipientOperator: null,
+    transferRecipientPhone: null,
+    transferSenderOperator: null
+  });
+  await sendOperatorChoiceMenu(senderPhone, "recipient");
+}
 async function handleInboundMessage(req, senderPhone, text2) {
   const conversation = await getOrCreateConversation(senderPhone);
   const normalized = text2.toLowerCase().trim();
@@ -68542,17 +68529,13 @@ async function handleInboundMessage(req, senderPhone, text2) {
   }
   if (conversation.state === "menu") {
     if (normalized === "1" || normalized.includes("transfert") || normalized.includes("transfer")) {
-      await sendWawpMessage(
-        senderPhone,
-        "Tr\xE8s bien. Envoyez le num\xE9ro Bloum Cash v\xE9rifi\xE9 qui servira de compte exp\xE9diteur (format 90 00 00 00)."
-      );
-      await updateConversation(senderPhone, { state: "awaiting_transfer_phone" });
+      await beginTransfer(senderPhone, conversation);
       return;
     }
     if (normalized === "2" || normalized.includes("compte") || normalized.includes("inscri")) {
       await sendWawpMessage(
         senderPhone,
-        "Pour cr\xE9er votre compte, envoyez le num\xE9ro Togo qui sera associ\xE9 \xE0 Bloum Cash (Mixx by Yas ou Moov)."
+        "Votre num\xE9ro : quel num\xE9ro souhaitez-vous utiliser pour vous inscrire ? Envoyez un num\xE9ro Togo \xE0 8 chiffres."
       );
       await updateConversation(senderPhone, { state: "awaiting_account_phone" });
       return;
@@ -68568,12 +68551,12 @@ async function handleInboundMessage(req, senderPhone, text2) {
     await updateConversation(senderPhone, { state: "menu" });
     return;
   }
-  if (conversation.state === "awaiting_account_phone" || conversation.state === "awaiting_transfer_phone") {
+  if (conversation.state === "awaiting_account_phone") {
     const accountPhone = normalizeAccountPhone(text2);
     if (!accountPhone) {
       await sendWawpMessage(
         senderPhone,
-        "Num\xE9ro invalide. Envoyez un num\xE9ro Togo Mixx by Yas ou Moov, par exemple 90 00 00 00."
+        "Num\xE9ro invalide. Envoyez un num\xE9ro Togo \xE0 8 chiffres, par exemple 90 00 00 00."
       );
       return;
     }
@@ -68582,77 +68565,216 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await sendWawpMessage(senderPhone, "Ce num\xE9ro ne peut pas \xEAtre utilis\xE9. Contactez l'assistance Bloum Cash.");
       return;
     }
-    await sendPhoneVerification(
-      senderPhone,
+    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, accountPhone)).limit(1);
+    if (existing.length) {
+      await updateConversation(senderPhone, {
+        accountPhone,
+        userId: existing[0].id,
+        fullName: existing[0].fullName,
+        state: "awaiting_existing_login_confirmation"
+      });
+      await sendWawpMessage(
+        senderPhone,
+        "Ce compte existe d\xE9j\xE0. Souhaitez-vous vous connecter ? R\xE9pondez OUI ou NON."
+      );
+      return;
+    }
+    await updateConversation(senderPhone, {
       accountPhone,
-      conversation.state === "awaiting_transfer_phone" ? "transfer" : "account"
+      state: "awaiting_registration_password"
+    });
+    await sendWawpMessage(
+      senderPhone,
+      "Choisissez maintenant votre mot de passe Bloum Cash (4 \xE0 20 chiffres)."
+    );
+    return;
+  }
+  if (conversation.state === "awaiting_transfer_phone") {
+    await updateConversation(senderPhone, { state: "menu" });
+    await sendWawpMessage(
+      senderPhone,
+      "Ce parcours a chang\xE9. R\xE9pondez 1 pour effectuer un transfert."
+    );
+    return;
+  }
+  if (conversation.state === "awaiting_registration_password") {
+    const password = text2.trim();
+    const accountPhone = conversation.accountPhone;
+    if (!accountPhone || !validPassword(password)) {
+      await sendWawpMessage(
+        senderPhone,
+        "Mot de passe invalide. Choisissez un mot de passe de 4 \xE0 20 chiffres."
+      );
+      return;
+    }
+    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, accountPhone)).limit(1);
+    if (existing.length) {
+      await updateConversation(senderPhone, {
+        userId: existing[0].id,
+        fullName: existing[0].fullName,
+        state: "awaiting_existing_login_confirmation"
+      });
+      await sendWawpMessage(
+        senderPhone,
+        "Ce compte existe d\xE9j\xE0. Souhaitez-vous vous connecter ? R\xE9pondez OUI ou NON."
+      );
+      return;
+    }
+    const fullName = `Utilisateur ${accountPhone.slice(-4)}`;
+    const email3 = `${accountPhone}@users.bloumcash.app`;
+    const [user] = await db.insert(usersTable).values({
+      fullName,
+      email: email3,
+      pin: await bcryptjs_default.hash(password, 12),
+      phone: accountPhone,
+      onesignalExternalUserId: email3,
+      country: "Togo"
+    }).returning();
+    await updateConversation(senderPhone, {
+      userId: user.id,
+      fullName: user.fullName,
+      state: "menu"
+    });
+    await sendWawpMessage(
+      senderPhone,
+      "Votre compte est cr\xE9\xE9 \u2705. Vous pouvez utiliser ce num\xE9ro et ce mot de passe pour vous connecter \xE0 l'application."
+    );
+    await sendWelcomeMessage(senderPhone);
+    return;
+  }
+  if (conversation.state === "awaiting_existing_login_confirmation") {
+    if (/^(oui|yes|o|1)$/i.test(normalized)) {
+      await updateConversation(senderPhone, { state: "awaiting_existing_login_password" });
+      await sendWawpMessage(senderPhone, "Entrez votre mot de passe Bloum Cash.");
+      return;
+    }
+    if (/^(non|no|n|2)$/i.test(normalized)) {
+      await updateConversation(senderPhone, { state: "menu" });
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
+    await sendWawpMessage(senderPhone, "R\xE9pondez OUI pour vous connecter ou NON pour annuler.");
+    return;
+  }
+  if (conversation.state === "awaiting_existing_login_password") {
+    const accountPhone = conversation.accountPhone;
+    const password = text2.trim();
+    if (!accountPhone || !validPassword(password)) {
+      await sendWawpMessage(senderPhone, "Mot de passe incorrect. R\xE9essayez.");
+      return;
+    }
+    const users = await db.select().from(usersTable).where(eq(usersTable.phone, accountPhone)).limit(1);
+    const user = users[0];
+    if (!user || !await bcryptjs_default.compare(password, user.pin)) {
+      await sendWawpMessage(senderPhone, "Mot de passe incorrect. R\xE9essayez.");
+      return;
+    }
+    await updateConversation(senderPhone, {
+      userId: user.id,
+      fullName: user.fullName,
+      state: "menu"
+    });
+    await sendWawpMessage(
+      senderPhone,
+      "Connexion r\xE9ussie \u2705. Vous pouvez utiliser les m\xEAmes identifiants pour vous connecter \xE0 l'application."
+    );
+    await sendWelcomeMessage(senderPhone);
+    return;
+  }
+  if (conversation.state === "awaiting_transfer_recipient_operator") {
+    const recipientOperator = parseOperatorChoice(text2);
+    if (!recipientOperator) {
+      await sendWawpMessage(senderPhone, "S\xE9lectionnez TMoney ou Moov Money dans le menu.");
+      await sendOperatorChoiceMenu(senderPhone, "recipient");
+      return;
+    }
+    await updateConversation(senderPhone, {
+      transferRecipientOperator: recipientOperator,
+      state: "awaiting_transfer_recipient_phone"
+    });
+    await sendWawpMessage(
+      senderPhone,
+      `Envoyez maintenant le num\xE9ro du b\xE9n\xE9ficiaire ${recipientOperator === "tmoney" ? "TMoney" : "Moov Money"} (8 chiffres).`
+    );
+    return;
+  }
+  if (conversation.state === "awaiting_transfer_recipient_phone") {
+    const recipientPhone = normalizeAccountPhone(text2);
+    const recipientOperator = conversation.transferRecipientOperator;
+    if (!recipientPhone) {
+      await sendWawpMessage(senderPhone, "Num\xE9ro b\xE9n\xE9ficiaire invalide. Envoyez un num\xE9ro Togo \xE0 8 chiffres.");
+      return;
+    }
+    if (!recipientOperator || operatorForPhone(recipientPhone) !== recipientOperator) {
+      await sendWawpMessage(
+        senderPhone,
+        `Ce num\xE9ro ne correspond pas \xE0 ${recipientOperator === "tmoney" ? "TMoney" : "Moov Money"}. Envoyez un num\xE9ro du bon op\xE9rateur.`
+      );
+      return;
+    }
+    const blocked = await db.select({ id: blacklistTable.id }).from(blacklistTable).where(eq(blacklistTable.phone, recipientPhone)).limit(1);
+    if (blocked.length) {
+      await sendWawpMessage(senderPhone, "Ce num\xE9ro ne peut pas recevoir de transfert. Contactez l'assistance Bloum Cash.");
+      return;
+    }
+    await updateConversation(senderPhone, {
+      transferRecipientPhone: recipientPhone,
+      state: "awaiting_transfer_sender_operator"
+    });
+    await sendOperatorChoiceMenu(senderPhone, "sender");
+    return;
+  }
+  if (conversation.state === "awaiting_transfer_sender_operator") {
+    const senderOperator = parseOperatorChoice(text2);
+    const recipientOperator = conversation.transferRecipientOperator;
+    if (!senderOperator) {
+      await sendWawpMessage(senderPhone, "S\xE9lectionnez TMoney ou Moov Money dans le menu.");
+      await sendOperatorChoiceMenu(senderPhone, "sender");
+      return;
+    }
+    if (senderOperator === recipientOperator) {
+      await sendWawpMessage(
+        senderPhone,
+        "Le transfert doit \xEAtre effectu\xE9 entre deux op\xE9rateurs diff\xE9rents. Choisissez l'autre op\xE9rateur."
+      );
+      await sendOperatorChoiceMenu(senderPhone, "sender");
+      return;
+    }
+    if (conversation.accountPhone && operatorForPhone(conversation.accountPhone) !== senderOperator) {
+      const accountOperator = operatorForPhone(conversation.accountPhone);
+      await sendWawpMessage(
+        senderPhone,
+        `Votre num\xE9ro enregistr\xE9 correspond \xE0 ${accountOperator === "tmoney" ? "TMoney" : "Moov Money"}. Choisissez cet op\xE9rateur pour continuer.`
+      );
+      await sendOperatorChoiceMenu(senderPhone, "sender");
+      return;
+    }
+    if (!conversation.userId || !conversation.accountPhone || !conversation.transferRecipientPhone || !recipientOperator) {
+      await updateConversation(senderPhone, { state: "menu" });
+      await sendWawpMessage(senderPhone, "La pr\xE9paration a expir\xE9. R\xE9pondez 1 pour recommencer le transfert.");
+      return;
+    }
+    await sendWhatsappTransferLink(
+      senderPhone,
+      conversation.userId,
+      conversation.accountPhone,
+      conversation.fullName ?? `Utilisateur ${conversation.accountPhone.slice(-4)}`,
+      recipientOperator,
+      conversation.transferRecipientPhone,
+      senderOperator
     );
     return;
   }
   if (conversation.state === "awaiting_phone_code" || conversation.state === "awaiting_transfer_code") {
-    const code = text2.replace(/\D/g, "");
-    const expected = conversation.pendingCodeHash;
-    const expiresAt = conversation.pendingCodeExpiresAt?.getTime() ?? 0;
-    if (!expected || !expiresAt || expiresAt <= Date.now() || code.length !== 6 || sha256(code) !== expected) {
-      const attempts = await incrementVerificationAttempt(senderPhone);
-      if (attempts >= MAX_VERIFICATION_ATTEMPTS) {
-        await updateConversation(senderPhone, {
-          pendingCodeHash: null,
-          pendingCodeExpiresAt: null,
-          state: "menu"
-        });
-        await resetVerificationAttempts(senderPhone);
-        await sendWawpMessage(
-          senderPhone,
-          "Trop d'essais incorrects. La v\xE9rification est annul\xE9e. R\xE9pondez 0 pour recommencer."
-        );
-        return;
-      }
-      await sendWawpMessage(senderPhone, "Code invalide ou expir\xE9. Demandez un nouveau code en r\xE9pondant NOUVEAU CODE.");
-      if (normalized === "nouveau code" && conversation.accountPhone) {
-        await sendPhoneVerification(
-          senderPhone,
-          conversation.accountPhone,
-          conversation.state === "awaiting_transfer_code" ? "transfer" : "account"
-        );
-      }
-      return;
-    }
-    const accountPhone = conversation.accountPhone;
-    const transferRequested = conversation.state === "awaiting_transfer_code";
-    await resetVerificationAttempts(senderPhone);
     await updateConversation(senderPhone, {
       pendingCodeHash: null,
       pendingCodeExpiresAt: null,
-      state: transferRequested ? "awaiting_transfer" : "awaiting_name"
+      state: "menu"
     });
-    const existing = await db.select().from(usersTable).where(eq(usersTable.phone, accountPhone)).limit(1);
-    if (existing.length) {
-      const user = existing[0];
-      if (transferRequested) {
-        await sendWhatsappTransferLink(senderPhone, user.id, accountPhone, user.fullName);
-        return;
-      }
-      await updateConversation(senderPhone, {
-        userId: user.id,
-        fullName: user.fullName,
-        state: "ready"
-      });
-      await sendWawpMessage(
-        senderPhone,
-        `Votre compte ${user.fullName} a \xE9t\xE9 v\xE9rifi\xE9. Pour continuer, ouvrez Bloum Cash et connectez-vous avec le num\xE9ro ${accountPhone}.`
-      );
-      return;
-    }
-    if (transferRequested) {
-      await updateConversation(senderPhone, { state: "menu" });
-      await sendWawpMessage(
-        senderPhone,
-        "Aucun compte Bloum Cash n'est associ\xE9 \xE0 ce num\xE9ro. R\xE9pondez 2 pour cr\xE9er un compte, puis r\xE9essayez le transfert."
-      );
-      return;
-    }
-    await sendWawpMessage(senderPhone, "Num\xE9ro v\xE9rifi\xE9 \u2705. Quel est votre nom complet ?");
+    await sendWawpMessage(
+      senderPhone,
+      "Le code OTP n'est plus n\xE9cessaire. R\xE9pondez 2 pour vous inscrire avec votre num\xE9ro et votre mot de passe."
+    );
     return;
   }
   if (conversation.state === "awaiting_name") {
@@ -68701,14 +68823,19 @@ async function handleInboundMessage(req, senderPhone, text2) {
     return;
   }
   if (conversation.state === "ready") {
+    if (normalized === "1" || normalized.includes("transfert") || normalized.includes("transfer")) {
+      await beginTransfer(senderPhone, conversation);
+      return;
+    }
+    if (normalized === "menu") {
+      await updateConversation(senderPhone, { state: "menu" });
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
     await sendWawpMessage(
       senderPhone,
-      "Votre compte est pr\xEAt \u2705. Ouvrez Bloum Cash pour vous connecter. R\xE9pondez MENU pour revoir les options."
+      "Votre compte est connect\xE9 \u2705. R\xE9pondez MENU pour revoir les options ou 1 pour effectuer un transfert."
     );
-    if (normalized === "menu") {
-      await sendWelcomeMessage(senderPhone);
-      await updateConversation(senderPhone, { state: "menu" });
-    }
     return;
   }
   await sendWelcomeMessage(senderPhone);
@@ -68807,6 +68934,11 @@ router17.post("/whatsapp/onboarding/complete", async (req, res) => {
     res.json({
       success: true,
       token: authToken,
+      transfer: {
+        senderOperator: conversation.transferSenderOperator,
+        recipientOperator: conversation.transferRecipientOperator,
+        recipientPhone: conversation.transferRecipientPhone
+      },
       user: {
         id: String(user.id),
         fullName: user.fullName,
@@ -69050,6 +69182,9 @@ async function runStartupMigration() {
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_attempts INTEGER NOT NULL DEFAULT 0`);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_count INTEGER NOT NULL DEFAULT 0`);
     await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS verification_request_window_started_at TIMESTAMP`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_recipient_operator TEXT`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_recipient_phone TEXT`);
+    await run(client, `ALTER TABLE whatsapp_conversations ADD COLUMN IF NOT EXISTS transfer_sender_operator TEXT`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_user_id ON whatsapp_conversations (user_id)`);
     await run(client, `CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_pending_token ON whatsapp_conversations (pending_token_hash)`);
     await run(client, `
