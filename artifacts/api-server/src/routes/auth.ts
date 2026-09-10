@@ -304,11 +304,15 @@ router.post("/auth/change-pin", async (req, res) => {
     }
 
     const { verifyUserToken } = await import("../middleware/user-auth");
-    let payload: { id: number; email: string };
+    let payload: { id: number; email: string; channel?: "whatsapp" };
     try {
       payload = verifyUserToken(token);
     } catch {
       res.status(401).json({ error: "Token invalide ou expiré" });
+      return;
+    }
+    if (payload.channel === "whatsapp") {
+      res.status(403).json({ error: "Cette session est limitée à la page de transfert." });
       return;
     }
 

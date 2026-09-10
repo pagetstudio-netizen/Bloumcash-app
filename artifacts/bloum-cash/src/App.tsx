@@ -1,7 +1,7 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/components/auth-provider";
+import { AuthProvider, useAuth } from "@/components/auth-provider";
 import { AppModalProvider } from "@/components/app-modal";
 import { UpdateGate, useUpdateCheck } from "@/components/update-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -105,6 +105,21 @@ function OnlineGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function WhatsappSessionGuard({ children }: { children: React.ReactNode }) {
+  const [location, setLocation] = useLocation();
+  const { isWhatsappSession } = useAuth();
+  const allowedPath = location === "/transfert" || location === "/whatsapp-transfer";
+
+  React.useEffect(() => {
+    if (isWhatsappSession && !allowedPath) {
+      setLocation("/transfert?whatsapp=1");
+    }
+  }, [allowedPath, isWhatsappSession, setLocation]);
+
+  if (isWhatsappSession && !allowedPath) return null;
+  return <>{children}</>;
+}
+
 function SplashRedirect() {
   const [location, setLocation] = useLocation();
 
@@ -132,7 +147,8 @@ function Router() {
   return (
     <OnlineGuard>
       <SplashRedirect />
-      <Switch>
+      <WhatsappSessionGuard>
+        <Switch>
         {/* Admin routes */}
         <Route path="/admin/login" component={AdminLogin} />
         <Route path="/admin/users" component={AdminUsers} />
@@ -189,7 +205,8 @@ function Router() {
         <Route path="/encaisser/boutiques" component={Boutiques} />
         <Route path="/encaisser/whatsapp" component={EncaisserWhatsApp} />
         <Route component={NotFound} />
-      </Switch>
+        </Switch>
+      </WhatsappSessionGuard>
     </OnlineGuard>
   );
 }

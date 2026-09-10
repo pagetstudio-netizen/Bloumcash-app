@@ -7,11 +7,26 @@ interface AuthState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  isWhatsappSession: boolean;
   login: (user: User, token: string) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
+
+function isWhatsappToken(token: string | null): boolean {
+  if (!token) return false;
+  try {
+    const encodedPayload = token.split(".")[0];
+    if (!encodedPayload) return false;
+    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64 = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(paddedBase64)) as { channel?: string };
+    return payload.channel === "whatsapp";
+  } catch {
+    return false;
+  }
+}
 
 /* ── OneSignal Web SDK (navigateur uniquement, jamais dans Median) ───────── */
 
@@ -161,6 +176,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem("bloum_token");
   });
+  const [isWhatsappSession, setIsWhatsappSession] = useState(() =>
+    isWhatsappToken(localStorage.getItem("bloum_token")),
+  );
 
   /* Au montage : enregistrement push selon l'environnement */
   useEffect(() => {
@@ -174,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /* Si session restaurée depuis localStorage → ré-identifier l'utilisateur */
   useEffect(() => {
     if (!token) return;
+    if (isWhatsappToken(token)) return;
 
     const storedUser = localStorage.getItem("bloum_user");
     const storedEmail = storedUser ? (JSON.parse(storedUser) as User).email : null;
@@ -196,10 +215,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = (userData: User, authToken: string) => {
+    const whatsappSession = isWhatsappToken(authToken);
     setUser(userData);
     setToken(authToken);
+    setIsWhatsappSession(whatsappSession);
     localStorage.setItem("bloum_user", JSON.stringify(userData));
     localStorage.setItem("bloum_token", authToken);
+
+    if (whatsappSession) return;
 
     if (isMedianApp) {
       if (userData.email) {
@@ -215,6 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setIsWhatsappSession(false);
     localStorage.removeItem("bloum_user");
     localStorage.removeItem("bloum_token");
 
@@ -233,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         token,
         isAuthenticated: !!token,
+        isWhatsappSession,
         login,
         logout,
       }}

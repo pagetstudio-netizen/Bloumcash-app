@@ -35549,6 +35549,7 @@ var require_ip_address = __commonJS({
 var user_auth_exports = {};
 __export(user_auth_exports, {
   extractUser: () => extractUser,
+  requireAppUser: () => requireAppUser,
   requireUser: () => requireUser,
   signUserToken: () => signUserToken,
   verifyUserToken: () => verifyUserToken
@@ -35588,6 +35589,15 @@ function requireUser(req, res, next) {
   } catch {
     res.status(401).json({ error: "Token invalide ou expir\xE9" });
   }
+}
+function requireAppUser(req, res, next) {
+  requireUser(req, res, () => {
+    if (req.currentUser?.channel === "whatsapp") {
+      res.status(403).json({ error: "Cette session est limit\xE9e \xE0 la page de transfert." });
+      return;
+    }
+    next();
+  });
 }
 function extractUser(req) {
   const auth = req.headers.authorization ?? "";
@@ -58642,6 +58652,10 @@ router2.post("/auth/change-pin", async (req, res) => {
       res.status(401).json({ error: "Token invalide ou expir\xE9" });
       return;
     }
+    if (payload.channel === "whatsapp") {
+      res.status(403).json({ error: "Cette session est limit\xE9e \xE0 la page de transfert." });
+      return;
+    }
     const users = await db.select().from(usersTable).where(eq(usersTable.id, payload.id)).limit(1);
     if (!users.length) {
       res.status(404).json({ error: "Utilisateur introuvable" });
@@ -58665,7 +58679,7 @@ router2.post("/auth/change-pin", async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router2.patch("/profile/location", requireUser, async (req, res) => {
+router2.patch("/profile/location", requireAppUser, async (req, res) => {
   try {
     const userId = req.currentUser.id;
     const { city, region, country } = req.body;
@@ -58713,7 +58727,7 @@ function formatTransaction(t) {
     description: t.description ?? null
   };
 }
-router3.get("/transactions", requireUser, async (req, res) => {
+router3.get("/transactions", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const { search, filter, period } = req.query;
@@ -58741,7 +58755,7 @@ router3.get("/transactions", requireUser, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router3.get("/transactions/recent", requireUser, async (req, res) => {
+router3.get("/transactions/recent", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const rows = await db.select().from(transactionsTable).where(eq(transactionsTable.userId, userId)).orderBy(desc(transactionsTable.createdAt)).limit(5);
@@ -58751,7 +58765,7 @@ router3.get("/transactions/recent", requireUser, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router3.get("/transactions/:id", requireUser, async (req, res) => {
+router3.get("/transactions/:id", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const id = parseInt(req.params.id);
@@ -58766,7 +58780,7 @@ router3.get("/transactions/:id", requireUser, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router3.post("/transactions", requireUser, async (req, res) => {
+router3.post("/transactions", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;
@@ -58821,7 +58835,7 @@ function getPeriodStart(period) {
     }
   }
 }
-router4.get("/stats/summary", requireUser, async (req, res) => {
+router4.get("/stats/summary", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const period = req.query.period || "month";
@@ -58849,7 +58863,7 @@ router4.get("/stats/summary", requireUser, async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router4.get("/stats/chart", requireUser, async (req, res) => {
+router4.get("/stats/chart", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req).id;
     const period = req.query.period || "month";
@@ -59605,7 +59619,7 @@ function sanitizePhone(raw) {
   const digits = raw.replace(/[\s\-().+]/g, "").replace(/^(228|229)/, "");
   return /^\d{8,}$/.test(digits) ? digits : null;
 }
-router5.post("/qr/generate", requireUser, async (req, res) => {
+router5.post("/qr/generate", requireAppUser, async (req, res) => {
   try {
     const { businessName, phone, operator, amount, description } = req.body;
     if (!businessName || !phone || !operator || !amount) {
@@ -59667,7 +59681,7 @@ router5.get("/qr/:reference", async (req, res) => {
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
-router5.post("/qr/:reference/pay", requireUser, async (req, res) => {
+router5.post("/qr/:reference/pay", requireAppUser, async (req, res) => {
   try {
     const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
     if (!payerPhone || !payerOperator) {
@@ -68016,7 +68030,7 @@ var ONESIGNAL_APP_ID3 = process.env.ONESIGNAL_APP_ID ?? "";
 var ONESIGNAL_API_KEY3 = process.env.ONESIGNAL_API_KEY ?? "";
 var ONESIGNAL_API_URL3 = "https://onesignal.com/api/v1/notifications";
 var TEST_EMAIL = "blousprono@gmail.com";
-router12.post("/test-push-self", requireUser, async (req, res) => {
+router12.post("/test-push-self", requireAppUser, async (req, res) => {
   const user = req.currentUser;
   if (user.email !== TEST_EMAIL) {
     res.status(403).json({ error: "Acc\xE8s non autoris\xE9." });
@@ -68205,7 +68219,7 @@ var feedbackLimiter = rate_limit_default({
   validate: { xForwardedForHeader: false },
   message: { error: "Trop d'envois. R\xE9essayez dans 1 heure." }
 });
-router15.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
+router15.post("/feedback", feedbackLimiter, requireAppUser, async (req, res) => {
   try {
     const userId = req.currentUser.id;
     const { type, title, message } = req.body;
@@ -68546,7 +68560,7 @@ async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
     ].join("\n")
   );
 }
-async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullName, recipientOperator, recipientPhone, senderOperator) {
+async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullName) {
   const token = createToken();
   const url2 = getWhatsappTransferUrl(token);
   if (!url2) {
@@ -68556,9 +68570,11 @@ async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullN
     userId,
     accountPhone,
     fullName,
-    transferRecipientOperator: recipientOperator,
-    transferRecipientPhone: recipientPhone,
-    transferSenderOperator: senderOperator,
+    // Les réponses du parcours WhatsApp ne sont pas conservées après
+    // la création du lien : le client remplira le transfert sur la page.
+    transferRecipientOperator: null,
+    transferRecipientPhone: null,
+    transferSenderOperator: null,
     pendingTokenHash: sha256(token),
     pendingTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1e3),
     state: "awaiting_transfer"
@@ -68568,7 +68584,7 @@ async function sendWhatsappTransferLink(senderPhone, userId, accountPhone, fullN
     [
       `Bonjour ${fullName} ! Votre identit\xE9 Bloum Cash a \xE9t\xE9 v\xE9rifi\xE9e.`,
       "",
-      "Ouvrez ce lien s\xE9curis\xE9 pour pr\xE9parer votre transfert :",
+      "Ouvrez ce lien s\xE9curis\xE9 pour saisir les informations et le montant de votre transfert :",
       url2,
       "",
       "Le lien expire dans 15 minutes et ne peut \xEAtre utilis\xE9 qu'une seule fois.",
@@ -68850,19 +68866,27 @@ Voulez-vous vous d\xE9connecter ? R\xE9pondez OUI ou NON.`
       await sendOperatorChoiceMenu(senderPhone, "sender");
       return;
     }
-    if (!conversation.userId || !conversation.accountPhone || !conversation.transferRecipientPhone || !recipientOperator) {
+    const currentConversation = await getConversation(senderPhone) ?? conversation;
+    let user = currentConversation.userId ? (await db.select().from(usersTable).where(eq(usersTable.id, currentConversation.userId)).limit(1))[0] : void 0;
+    if (!user && currentConversation.accountPhone) {
+      user = (await db.select().from(usersTable).where(eq(usersTable.phone, currentConversation.accountPhone)).limit(1))[0];
+    }
+    if (!user) {
+      user = (await db.select().from(usersTable).where(eq(usersTable.phone, senderPhone)).limit(1))[0];
+    }
+    if (!user?.phone) {
       await updateConversation(senderPhone, { state: "menu" });
-      await sendWawpMessage(senderPhone, "La pr\xE9paration a expir\xE9. R\xE9pondez 1 pour recommencer le transfert.");
+      await sendWawpMessage(
+        senderPhone,
+        "Votre connexion Bloum Cash n'est plus disponible. R\xE9pondez 2 pour vous reconnecter."
+      );
       return;
     }
     await sendWhatsappTransferLink(
       senderPhone,
-      conversation.userId,
-      conversation.accountPhone,
-      conversation.fullName ?? `Utilisateur ${conversation.accountPhone.slice(-4)}`,
-      recipientOperator,
-      conversation.transferRecipientPhone,
-      senderOperator
+      user.id,
+      user.phone,
+      user.fullName
     );
     return;
   }
