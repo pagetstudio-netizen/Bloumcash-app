@@ -10,6 +10,7 @@ import {
   whatsappConversationsTable,
 } from "@workspace/db";
 import { signUserToken } from "../middleware/user-auth";
+import { notifyNewUser } from "../lib/telegram";
 import {
   WawpError as ConvessaError,
   getWhatsappOnboardingUrl,
@@ -581,11 +582,14 @@ async function handleInboundMessage(
         email,
         pin: await bcrypt.hash(password, 12),
         phone: accountPhone,
+        operator: operatorForPhone(accountPhone),
+        registrationChannel: "whatsapp",
         onesignalExternalUserId: email,
         country: "Togo",
       })
       .returning();
 
+    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
     await updateConversation(senderPhone, {
       userId: user.id,
       fullName: user.fullName,
@@ -788,11 +792,14 @@ async function handleInboundMessage(
         email,
         pin: await bcrypt.hash(temporaryPin, 12),
         phone: accountPhone,
+        operator: operatorForPhone(accountPhone),
+        registrationChannel: "whatsapp",
         onesignalExternalUserId: email,
         country: "Togo",
       })
       .returning();
 
+    notifyNewUser({ fullName: user.fullName, phone: user.phone ?? "" });
     await sendPinSetupLink(senderPhone, user.id, accountPhone, fullName);
     return;
   }

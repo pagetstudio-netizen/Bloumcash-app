@@ -155,6 +155,7 @@ export function notifyPayment(tx: {
   toPhone: string | null;
   fromOperator: string | null;
   toOperator: string | null;
+  channel?: string | null;
 }): void {
   sendToGroup(
     `💸 <b>TRANSFERT RÉUSSI</b>\n\n` +
@@ -163,6 +164,7 @@ export function notifyPayment(tx: {
     `💳 Commission : ${fmt(tx.fees ?? 0)} FCFA\n` +
     `📤 De : ${esc(tx.fromPhone ?? "?")} (${esc(tx.fromOperator ?? "?")})\n` +
     `📥 Vers : ${esc(tx.toPhone ?? "?")} (${esc(tx.toOperator ?? "?")})\n` +
+    `📡 Canal : ${tx.channel === "whatsapp" ? "WhatsApp" : "Application"}\n` +
     `🕐 ${togoDt()}`
   ).catch((err) => logger.error({ err }, "🤖 Telegram notifyPayment échec"));
 }

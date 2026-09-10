@@ -12,6 +12,7 @@ interface User {
   email: string;
   phone: string | null;
   operator: string | null;
+  registrationChannel: string;
   status: string;
   balance: number;
   createdAt: string;
@@ -24,6 +25,7 @@ interface UserDetail {
   email: string;
   phone: string | null;
   operator: string | null;
+  registrationChannel: string;
   status: string;
   createdAt: string;
   lastLoginAt: string | null;
@@ -171,6 +173,7 @@ export default function AdminUsers() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Utilisateur</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Téléphone</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Opérateur</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Canal</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Solde</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Statut</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden xl:table-cell">Inscription</th>
@@ -179,9 +182,9 @@ export default function AdminUsers() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
+                  <tr><td colSpan={9} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
                 ) : users.length === 0 ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-gray-400 text-sm">Aucun utilisateur trouvé</td></tr>
+                  <tr><td colSpan={9} className="py-12 text-center text-gray-400 text-sm">Aucun utilisateur trouvé</td></tr>
                 ) : users.map(user => {
                   const st = STATUS_MAP[user.status] ?? STATUS_MAP.active;
                   return (
@@ -196,6 +199,11 @@ export default function AdminUsers() {
                       </td>
                       <td className="px-4 py-3 hidden md:table-cell">
                         <span className="text-xs text-gray-600">{user.operator ?? <span className="text-gray-300">—</span>}</span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${user.registrationChannel === "whatsapp" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                          {user.registrationChannel === "whatsapp" ? "WhatsApp" : "Application"}
+                        </span>
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
                         <span className={`text-sm font-semibold ${user.balance >= 0 ? "text-gray-900" : "text-red-600"}`}>{formatAmount(user.balance)}</span>
@@ -274,6 +282,7 @@ export default function AdminUsers() {
                 { label: "Email", value: detail.email },
                 { label: "Téléphone", value: detail.phone ?? "—" },
                 { label: "Opérateur", value: detail.operator ?? "—" },
+                { label: "Canal d'inscription", value: detail.registrationChannel === "whatsapp" ? "WhatsApp" : "Application" },
                 { label: "Statut", value: STATUS_MAP[detail.status]?.label ?? detail.status },
                 { label: "Solde", value: formatAmount(selectedUser.balance) },
                 { label: "Inscription", value: new Date(detail.createdAt).toLocaleDateString("fr-FR") },

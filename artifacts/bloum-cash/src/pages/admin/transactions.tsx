@@ -15,6 +15,7 @@ interface Tx {
   amount: number;
   status: string;
   operator: string;
+  channel: string;
   fromPhone: string | null;
   toPhone: string | null;
   toOperator: string | null;
@@ -164,6 +165,7 @@ function DetailModal({ tx, onClose, onUpdated }: { tx: TxDetail; onClose: () => 
             <Row label="Destinataire"     value={tx.toPhone ?? "—"} mono />
             <Row label="Opérateur source" value={tx.operator} />
             <Row label="Opérateur dest."  value={tx.toOperator ?? "—"} />
+            <Row label="Canal"             value={tx.channel === "whatsapp" ? "WhatsApp" : "Application"} />
             <Row label="Réf. Bloum Cash"  value={tx.reference} mono />
             {tx.paydunyaToken && (
               <Row label="Réf. PayDunya"  value={tx.paydunyaToken} mono />
@@ -293,8 +295,8 @@ export default function AdminTransactions() {
   const successCount = successTxs.length;
 
   const exportCSV = () => {
-    const headers = ["ID", "Référence", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "De", "Vers", "UserID", "Date"];
-    const rows = txs.map(t => [t.id, t.reference, t.type, `"${t.title}"`, t.amount, t.fees, t.status, t.operator, t.fromPhone ?? "", t.toPhone ?? "", t.userId ?? "", new Date(t.createdAt).toLocaleString("fr-FR")]);
+    const headers = ["ID", "Référence", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "Canal", "De", "Vers", "UserID", "Date"];
+    const rows = txs.map(t => [t.id, t.reference, t.type, `"${t.title}"`, t.amount, t.fees, t.status, t.operator, t.channel, t.fromPhone ?? "", t.toPhone ?? "", t.userId ?? "", new Date(t.createdAt).toLocaleString("fr-FR")]);
     const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -382,16 +384,16 @@ export default function AdminTransactions() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Réf.", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "De → Vers", "Date"].map(h => (
+                  {["Réf.", "Type", "Titre", "Montant", "Commission", "Statut", "Opérateur", "Canal", "De → Vers", "Date"].map(h => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
+                  <tr><td colSpan={10} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></td></tr>
                 ) : txs.length === 0 ? (
-                  <tr><td colSpan={9} className="py-12 text-center text-sm text-gray-400">Aucune transaction</td></tr>
+                  <tr><td colSpan={10} className="py-12 text-center text-sm text-gray-400">Aucune transaction</td></tr>
                 ) : txs.map(t => (
                   <tr key={t.id}
                     onClick={() => openDetail(t)}
@@ -413,6 +415,11 @@ export default function AdminTransactions() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">{t.operator}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${t.channel === "whatsapp" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                        {t.channel === "whatsapp" ? "WhatsApp" : "Application"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap font-mono">{t.fromPhone ?? "—"} → {t.toPhone ?? "—"}</td>
                     <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                       <div>{new Date(t.createdAt).toLocaleDateString("fr-FR")}</div>

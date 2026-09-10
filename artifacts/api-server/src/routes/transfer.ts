@@ -259,6 +259,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
 
     const currentUser = extractUser(req);
     const userId = currentUser?.id ?? null;
+    const transactionChannel = currentUser?.channel ?? "web";
 
     /* ── Vérification statut utilisateur + blacklist ── */
     if (userId) {
@@ -342,9 +343,9 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
           reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
           amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
           fees, description: `Transfert ${fromOperator} → ${toOperator} (GomboPlus démo)`,
-          status: "success", payoutSent: true, userId,
+          status: "success", payoutSent: true, userId, channel: transactionChannel,
         });
-        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+        notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator, channel: transactionChannel });
         await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
         res.status(201).json({
           success: true,
@@ -364,7 +365,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
         const isGpErr = err instanceof gomboplus.GomboPlusError;
         const realDetail = isGpErr ? `[${(err as gomboplus.GomboPlusError).code}] ${(err as gomboplus.GomboPlusError).message}` : String(err);
         req.log.error({ err }, "GomboPlus cashin — échec");
-        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP] ${realDetail}` }).catch(() => {});
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, channel: transactionChannel, adminNote: `[CASHIN_GP] ${realDetail}` }).catch(() => {});
         notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_CASHIN_ERROR", errorDetail: realDetail, stage: "Initiation paiement" });
         res.status(502).json({ error: GENERIC_USER_ERROR });
         return;
@@ -373,7 +374,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
       if (!cashinResult.success) {
         const realDetail = cashinResult.message ?? "Paiement refusé";
         req.log.warn({ reference }, "GomboPlus cashin refusé");
-        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CASHIN_GP_REFUSED] ${realDetail}` }).catch(() => {});
+        await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, channel: transactionChannel, adminNote: `[CASHIN_GP_REFUSED] ${realDetail}` }).catch(() => {});
         notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "GP_PAYMENT_REFUSED", errorDetail: realDetail, stage: "Initiation paiement (refusé)" });
         res.status(402).json({ error: GENERIC_USER_ERROR });
         return;
@@ -387,7 +388,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
           reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
           amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
           fees, description: `Transfert ${fromOperator} → ${toOperator} via GomboPlus`,
-          status: "pending", payoutSent: false, userId,
+          status: "pending", payoutSent: false, userId, channel: transactionChannel,
           paydunyaToken: storedToken,
         });
       } catch (dbErr) {
@@ -428,9 +429,9 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
         reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
         amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
         fees, description: `Transfert ${fromOperator} → ${toOperator}`,
-        status: "success", payoutSent: true, userId,
+        status: "success", payoutSent: true, userId, channel: transactionChannel,
       });
-      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+      notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator, channel: transactionChannel });
       await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
       res.status(201).json({
         success: true,
@@ -457,7 +458,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
       const isPduErr = err instanceof paydunya.PaydunyaError;
       const realDetail = isPduErr ? `[${(err as paydunya.PaydunyaError).code}] ${(err as paydunya.PaydunyaError).message}` : String(err);
       req.log.error({ err }, "Invoice creation failed");
-      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[INVOICE_CREATE] ${realDetail}` }).catch(() => {});
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, channel: transactionChannel, adminNote: `[INVOICE_CREATE] ${realDetail}` }).catch(() => {});
       notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "INVOICE_ERROR", errorDetail: realDetail, stage: "Création facture" });
       res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
@@ -475,7 +476,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
       const isPduErr = err instanceof paydunya.PaydunyaError;
       const realDetail = isPduErr ? `[${(err as paydunya.PaydunyaError).code}] ${(err as paydunya.PaydunyaError).message}` : String(err);
       req.log.error({ err }, "Charge failed");
-      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_ERROR] ${realDetail}` }).catch(() => {});
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, channel: transactionChannel, adminNote: `[CHARGE_ERROR] ${realDetail}` }).catch(() => {});
       notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "CHARGE_ERROR", errorDetail: realDetail, stage: "Envoi demande paiement" });
       res.status(502).json({ error: GENERIC_USER_ERROR });
       return;
@@ -484,7 +485,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
     if (!chargeResult.success) {
       const realDetail = chargeResult.message ?? "Paiement refusé";
       req.log.warn({ reference }, "Charge refusée");
-      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, adminNote: `[CHARGE_REFUSED] ${realDetail}` }).catch(() => {});
+      await db.insert(transactionsTable).values({ reference, type: "outgoing", title: `Transfert vers ${toPhone}`, amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator, fees, description: `Transfert ${fromOperator} → ${toOperator}`, status: "failed", payoutSent: false, userId, channel: transactionChannel, adminNote: `[CHARGE_REFUSED] ${realDetail}` }).catch(() => {});
       notifyPaymentError({ reference, fromPhone, toPhone, fromOperator, toOperator, amount: amt, errorCode: "PAYMENT_REFUSED", errorDetail: realDetail, stage: "Envoi demande paiement (refusé)" });
       res.status(402).json({ error: GENERIC_USER_ERROR });
       return;
@@ -503,7 +504,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
           reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
           amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
           fees, description: `Transfert ${fromOperator} → ${toOperator}`,
-          status: "pending", payoutSent: false, userId,
+          status: "pending", payoutSent: false, userId, channel: transactionChannel,
           paydunyaToken: paymentToken,
         });
       } catch (dbErr) {
@@ -544,7 +545,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
             if (payoutResult.success) {
               await db.update(transactionsTable).set({ status: "success" }).where(eq(transactionsTable.reference, reference));
               req.log.info({ reference, toOperator, toPhone }, "✅ Payout Moov→TMoney OK après confirmation encaissement");
-              notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator });
+              notifyPayment({ reference, amount: amt, fees, fromPhone, toPhone, fromOperator, toOperator, channel: transactionChannel });
               await notifyWhatsappTransfer(userId, "success", amt, reference, toPhone);
               if (userId) {
                 const userRows = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -591,7 +592,7 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
         reference, type: "outgoing", title: `Transfert vers ${toPhone}`,
         amount: amt, operator: fromOperator, fromPhone, toPhone, toOperator,
         fees, description: `Transfert ${fromOperator} → ${toOperator}`,
-        status: "pending", payoutSent: false, userId,
+        status: "pending", payoutSent: false, userId, channel: transactionChannel,
         paydunyaToken: paymentToken,
       });
     } catch (dbErr) {

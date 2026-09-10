@@ -153,6 +153,7 @@ router.post("/paydunya/webhook", requireWebhookSecret, async (req, res) => {
             toPhone: tx.toPhone ?? null,
             fromOperator: tx.operator ?? null,
             toOperator: tx.toOperator ?? null,
+            channel: tx.channel,
           });
 
           /* Notification push à l'expéditeur */

@@ -68,11 +68,6 @@ export default function WhatsappTransfer() {
           {status === "error" ? "Lien indisponible" : status === "success" ? "Transfert sécurisé" : "Bloum Cash"}
         </h1>
         <p style={mutedStyle}>{message}</p>
-        {status === "error" && (
-          <button type="button" style={buttonStyle} onClick={() => setLocation("/login")}>
-            Se connecter autrement
-          </button>
-        )}
       </div>
     </div>
   );
@@ -112,16 +107,4 @@ const mutedStyle: React.CSSProperties = {
   fontSize: 14,
   lineHeight: 1.6,
   textAlign: "center",
-};
-
-const buttonStyle: React.CSSProperties = {
-  width: "100%",
-  height: 52,
-  border: 0,
-  borderRadius: 14,
-  background: "#2d52e8",
-  color: "#fff",
-  fontSize: 16,
-  fontWeight: 700,
-  cursor: "pointer",
 };
