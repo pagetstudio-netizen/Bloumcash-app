@@ -879,16 +879,23 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 router.get("/public-settings", async (req, res) => {
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url','app_share_message')`
+      sql`key IN ('facebook_url','instagram_url','telegram_url','tiktok_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url','app_share_message')`
     );
     const out: Record<string, string> = {
-      facebook_url: "", whatsapp_url: "", youtube_url: "", support_phone: "", support_email: "",
+      facebook_url: "", instagram_url: "", telegram_url: "", tiktok_url: "",
+      whatsapp_url: "", youtube_url: "", support_phone: "", support_email: "",
       app_share_url: "https://bloumcash.com/télécharger",
       app_share_message: "Salut ! Je vous recommande cette super application, elle permet de transférer de l'argent entre TMoney et Moov. Les paiements sont instantanés ! Téléchargez ici 👇",
     };
     for (const row of rows) out[row.key] = row.value;
     res.json(out);
-  } catch { res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "", app_share_url: "https://bloumcash.com/télécharger" }); }
+  } catch {
+    res.json({
+      facebook_url: "", instagram_url: "", telegram_url: "", tiktok_url: "",
+      whatsapp_url: "", youtube_url: "", support_phone: "",
+      app_share_url: "https://bloumcash.com/télécharger",
+    });
+  }
 });
 
 router.get("/admin/settings", requireAdmin, async (req, res) => {

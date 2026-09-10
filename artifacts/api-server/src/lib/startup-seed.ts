@@ -62,18 +62,21 @@ export async function runStartupSeed() {
       { key: "fee_exchange_percent", value: "4" },
       { key: "maintenance_mode", value: "false" },
       { key: "withdrawals_enabled", value: "true" },
+      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
+      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
+      { key: "youtube_url", value: "https://youtube.com/@bloumcash" },
+      { key: "instagram_url", value: "" },
+      { key: "telegram_url", value: "" },
+      { key: "tiktok_url", value: "" },
     ];
     for (const s of defaults) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
       if (!ex.length) { await db.insert(adminSettingsTable).values(s); }
     }
-    // Always enforce current fee values + social links (force-update on every startup)
+    // Keep operational defaults synchronized without overwriting admin-configured social links.
     const feeUpdates = [
       { key: "fee_deposit_percent", value: "5" },
       { key: "fee_withdraw_percent", value: "5" },
-      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
-      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
-      { key: "youtube_url", value: "https://youtube.com/@bloumcash?si=wTxmV34QWgyMxDRq" },
     ];
     for (const s of feeUpdates) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);

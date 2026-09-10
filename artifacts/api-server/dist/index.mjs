@@ -67376,10 +67376,13 @@ var DEFAULT_SETTINGS = {
 router10.get("/public-settings", async (req, res) => {
   try {
     const rows = await db.select().from(adminSettingsTable).where(
-      sql`key IN ('facebook_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url','app_share_message')`
+      sql`key IN ('facebook_url','instagram_url','telegram_url','tiktok_url','whatsapp_url','youtube_url','support_phone','support_email','app_share_url','app_share_message')`
     );
     const out = {
       facebook_url: "",
+      instagram_url: "",
+      telegram_url: "",
+      tiktok_url: "",
       whatsapp_url: "",
       youtube_url: "",
       support_phone: "",
@@ -67390,7 +67393,16 @@ router10.get("/public-settings", async (req, res) => {
     for (const row of rows) out[row.key] = row.value;
     res.json(out);
   } catch {
-    res.json({ facebook_url: "", whatsapp_url: "", youtube_url: "", app_share_url: "https://bloumcash.com/t\xE9l\xE9charger" });
+    res.json({
+      facebook_url: "",
+      instagram_url: "",
+      telegram_url: "",
+      tiktok_url: "",
+      whatsapp_url: "",
+      youtube_url: "",
+      support_phone: "",
+      app_share_url: "https://bloumcash.com/t\xE9l\xE9charger"
+    });
   }
 });
 router10.get("/admin/settings", requireAdmin, async (req, res) => {
@@ -69459,7 +69471,13 @@ async function runStartupSeed() {
       { key: "fee_withdraw_percent", value: "5" },
       { key: "fee_exchange_percent", value: "4" },
       { key: "maintenance_mode", value: "false" },
-      { key: "withdrawals_enabled", value: "true" }
+      { key: "withdrawals_enabled", value: "true" },
+      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
+      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
+      { key: "youtube_url", value: "https://youtube.com/@bloumcash" },
+      { key: "instagram_url", value: "" },
+      { key: "telegram_url", value: "" },
+      { key: "tiktok_url", value: "" }
     ];
     for (const s of defaults2) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
@@ -69469,10 +69487,7 @@ async function runStartupSeed() {
     }
     const feeUpdates = [
       { key: "fee_deposit_percent", value: "5" },
-      { key: "fee_withdraw_percent", value: "5" },
-      { key: "whatsapp_url", value: "https://whatsapp.com/channel/0029VbCMbIu6buMMsZq5zH2U" },
-      { key: "facebook_url", value: "https://www.facebook.com/profile.php?id=61590489849381" },
-      { key: "youtube_url", value: "https://youtube.com/@bloumcash?si=wTxmV34QWgyMxDRq" }
+      { key: "fee_withdraw_percent", value: "5" }
     ];
     for (const s of feeUpdates) {
       const ex = await db.select().from(adminSettingsTable).where(eq(adminSettingsTable.key, s.key)).limit(1);
