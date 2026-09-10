@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { transactionsTable } from "@workspace/db";
 import { and, desc, eq, gte } from "drizzle-orm";
 import crypto from "crypto";
-import { requireUser, extractUser } from "../middleware/user-auth";
+import { requireAppUser, extractUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -41,7 +41,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect) {
   };
 }
 
-router.get("/transactions", requireUser, async (req, res) => {
+router.get("/transactions", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req)!.id;
     const { search, filter, period } = req.query as Record<string, string>;
@@ -85,7 +85,7 @@ router.get("/transactions", requireUser, async (req, res) => {
   }
 });
 
-router.get("/transactions/recent", requireUser, async (req, res) => {
+router.get("/transactions/recent", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req)!.id;
     const rows = await db
@@ -101,7 +101,7 @@ router.get("/transactions/recent", requireUser, async (req, res) => {
   }
 });
 
-router.get("/transactions/:id", requireUser, async (req, res) => {
+router.get("/transactions/:id", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req)!.id;
     const id = parseInt(req.params.id as string);
@@ -121,7 +121,7 @@ router.get("/transactions/:id", requireUser, async (req, res) => {
   }
 });
 
-router.post("/transactions", requireUser, async (req, res) => {
+router.post("/transactions", requireAppUser, async (req, res) => {
   try {
     const userId = extractUser(req)!.id;
     const { type, title, amount, operator, fromPhone, toPhone, description } = req.body;

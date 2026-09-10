@@ -5,7 +5,7 @@ import { usersTable, blacklistTable, verificationCodesTable } from "@workspace/d
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { signUserToken, requireUser } from "../middleware/user-auth";
+import { signUserToken, requireAppUser } from "../middleware/user-auth";
 import { sendPushNotification } from "../lib/onesignal";
 import { sendPinResetSms } from "../lib/africasms";
 import { notifyNewUser } from "../lib/telegram";
@@ -340,7 +340,7 @@ router.post("/auth/change-pin", async (req, res) => {
 });
 
 /* ── Mise à jour localisation automatique ── */
-router.patch("/profile/location", requireUser, async (req, res) => {
+router.patch("/profile/location", requireAppUser, async (req, res) => {
   try {
     const userId = req.currentUser!.id;
     const { city, region, country } = req.body as { city?: string; region?: string; country?: string };

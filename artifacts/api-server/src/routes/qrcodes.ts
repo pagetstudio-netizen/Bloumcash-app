@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import * as paydunya from "../lib/paydunya";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
-import { requireUser } from "../middleware/user-auth";
+import { requireAppUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -20,7 +20,7 @@ function sanitizePhone(raw: unknown): string | null {
   return /^\d{8,}$/.test(digits) ? digits : null;
 }
 
-router.post("/qr/generate", requireUser, async (req, res) => {
+router.post("/qr/generate", requireAppUser, async (req, res) => {
   try {
     const { businessName, phone, operator, amount, description } = req.body;
     if (!businessName || !phone || !operator || !amount) {
@@ -97,7 +97,7 @@ router.get("/qr/:reference", async (req, res) => {
   }
 });
 
-router.post("/qr/:reference/pay", requireUser, async (req, res) => {
+router.post("/qr/:reference/pay", requireAppUser, async (req, res) => {
   try {
     const { payerPhone, payerOperator, payerName, payerEmail } = req.body;
 

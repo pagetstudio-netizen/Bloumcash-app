@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { db } from "@workspace/db";
 import { userFeedbackTable, usersTable, adminSettingsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireUser } from "../middleware/user-auth";
+import { requireAppUser } from "../middleware/user-auth";
 import { requireAdmin } from "../middleware/admin-auth";
 import { notifyFeedback } from "../lib/telegram";
 
@@ -32,7 +32,7 @@ const feedbackLimiter = rateLimit({
 });
 
 /* ── POST /feedback — Soumettre un retour utilisateur ── */
-router.post("/feedback", feedbackLimiter, requireUser, async (req, res) => {
+router.post("/feedback", feedbackLimiter, requireAppUser, async (req, res) => {
   try {
     const userId = req.currentUser!.id;
     const { type, title, message } = req.body;

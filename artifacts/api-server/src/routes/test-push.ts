@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireUser } from "../middleware/user-auth";
+import { requireAppUser } from "../middleware/user-auth";
 
 const router: IRouter = Router();
 
@@ -9,7 +9,7 @@ const ONESIGNAL_API_URL = "https://onesignal.com/api/v1/notifications";
 
 const TEST_EMAIL = "blousprono@gmail.com";
 
-router.post("/test-push-self", requireUser, async (req, res) => {
+router.post("/test-push-self", requireAppUser, async (req, res) => {
   const user = req.currentUser!;
 
   if (user.email !== TEST_EMAIL) {
