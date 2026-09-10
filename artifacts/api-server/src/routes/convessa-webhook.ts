@@ -44,12 +44,8 @@ function normalizeAccountPhone(raw: string): string | null {
   let digits = raw.replace(/@s\.whatsapp\.net$/i, "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
   if (digits.startsWith("228")) digits = digits.slice(3);
-  if (!/^\d{8}$/.test(digits)) return null;
-  const prefix = Number(digits.slice(0, 2));
-  if ((prefix >= 70 && prefix <= 79) || (prefix >= 90 && prefix <= 99)) {
-    return digits;
-  }
-  return null;
+  if (!/^[789]\d{7}$/.test(digits)) return null;
+  return digits;
 }
 
 type TransferOperator = "tmoney" | "moov";
@@ -676,14 +672,6 @@ async function handleInboundMessage(
       await sendConvessaMessage(senderPhone, "Numéro bénéficiaire invalide. Envoyez un numéro Togo à 8 chiffres.");
       return;
     }
-    if (!recipientOperator || operatorForPhone(recipientPhone) !== recipientOperator) {
-      await sendConvessaMessage(
-        senderPhone,
-        `Ce numéro ne correspond pas à ${recipientOperator === "tmoney" ? "TMoney" : "Moov Money"}. Envoyez un numéro du bon opérateur.`,
-      );
-      return;
-    }
-
     const blocked = await db
       .select({ id: blacklistTable.id })
       .from(blacklistTable)
@@ -714,15 +702,6 @@ async function handleInboundMessage(
       await sendConvessaMessage(
         senderPhone,
         "Le transfert doit être effectué entre deux opérateurs différents. Choisissez l'autre opérateur.",
-      );
-      await sendOperatorChoiceMenu(senderPhone, "sender");
-      return;
-    }
-    if (conversation.accountPhone && operatorForPhone(conversation.accountPhone) !== senderOperator) {
-      const accountOperator = operatorForPhone(conversation.accountPhone);
-      await sendConvessaMessage(
-        senderPhone,
-        `Votre numéro enregistré correspond à ${accountOperator === "tmoney" ? "TMoney" : "Moov Money"}. Choisissez cet opérateur pour continuer.`,
       );
       await sendOperatorChoiceMenu(senderPhone, "sender");
       return;

@@ -68343,12 +68343,8 @@ function normalizeAccountPhone(raw) {
   let digits = raw.replace(/@s\.whatsapp\.net$/i, "").replace(/\D/g, "");
   if (digits.startsWith("00")) digits = digits.slice(2);
   if (digits.startsWith("228")) digits = digits.slice(3);
-  if (!/^\d{8}$/.test(digits)) return null;
-  const prefix = Number(digits.slice(0, 2));
-  if (prefix >= 70 && prefix <= 79 || prefix >= 90 && prefix <= 99) {
-    return digits;
-  }
-  return null;
+  if (!/^[789]\d{7}$/.test(digits)) return null;
+  return digits;
 }
 function parseOperatorChoice(value) {
   const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
@@ -68761,13 +68757,6 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await sendWawpMessage(senderPhone, "Num\xE9ro b\xE9n\xE9ficiaire invalide. Envoyez un num\xE9ro Togo \xE0 8 chiffres.");
       return;
     }
-    if (!recipientOperator || operatorForPhone2(recipientPhone) !== recipientOperator) {
-      await sendWawpMessage(
-        senderPhone,
-        `Ce num\xE9ro ne correspond pas \xE0 ${recipientOperator === "tmoney" ? "TMoney" : "Moov Money"}. Envoyez un num\xE9ro du bon op\xE9rateur.`
-      );
-      return;
-    }
     const blocked = await db.select({ id: blacklistTable.id }).from(blacklistTable).where(eq(blacklistTable.phone, recipientPhone)).limit(1);
     if (blocked.length) {
       await sendWawpMessage(senderPhone, "Ce num\xE9ro ne peut pas recevoir de transfert. Contactez l'assistance Bloum Cash.");
@@ -68792,15 +68781,6 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await sendWawpMessage(
         senderPhone,
         "Le transfert doit \xEAtre effectu\xE9 entre deux op\xE9rateurs diff\xE9rents. Choisissez l'autre op\xE9rateur."
-      );
-      await sendOperatorChoiceMenu(senderPhone, "sender");
-      return;
-    }
-    if (conversation.accountPhone && operatorForPhone2(conversation.accountPhone) !== senderOperator) {
-      const accountOperator = operatorForPhone2(conversation.accountPhone);
-      await sendWawpMessage(
-        senderPhone,
-        `Votre num\xE9ro enregistr\xE9 correspond \xE0 ${accountOperator === "tmoney" ? "TMoney" : "Moov Money"}. Choisissez cet op\xE9rateur pour continuer.`
       );
       await sendOperatorChoiceMenu(senderPhone, "sender");
       return;
