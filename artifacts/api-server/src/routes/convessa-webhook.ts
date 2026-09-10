@@ -300,7 +300,7 @@ async function sendHelpMessage(to: string): Promise<void> {
     lines.push("", "🌐 Aucun réseau social n'est actuellement configuré.");
   }
 
-  lines.push("", "Ces informations sont gérées par l'administrateur Bloum Cash.");
+  lines.push("", "Vous pouvez nous suivre sur WhatsApp directement");
   await sendConvessaMessage(to, lines.join("\n"));
 }
 

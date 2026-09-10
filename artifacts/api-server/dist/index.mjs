@@ -68494,7 +68494,7 @@ async function sendHelpMessage(to) {
   } else {
     lines.push("", "\u{1F310} Aucun r\xE9seau social n'est actuellement configur\xE9.");
   }
-  lines.push("", "Ces informations sont g\xE9r\xE9es par l'administrateur Bloum Cash.");
+  lines.push("", "Vous pouvez nous suivre sur WhatsApp directement");
   await sendWawpMessage(to, lines.join("\n"));
 }
 async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
