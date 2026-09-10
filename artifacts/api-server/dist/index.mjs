@@ -68426,6 +68426,17 @@ async function getConversation(whatsappPhone) {
 async function updateConversation(whatsappPhone, patch) {
   await db.update(whatsappConversationsTable).set({ ...patch, updatedAt: /* @__PURE__ */ new Date() }).where(eq(whatsappConversationsTable.whatsappPhone, whatsappPhone));
 }
+async function claimInboundMessage(whatsappPhone, inboundId) {
+  const result = await pool.query(
+    `UPDATE whatsapp_conversations
+     SET last_inbound_id = $2, last_message_at = NOW(), updated_at = NOW()
+     WHERE whatsapp_phone = $1
+       AND last_inbound_id IS DISTINCT FROM $2
+     RETURNING id`,
+    [whatsappPhone, inboundId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
 async function getOrCreateConversation(whatsappPhone) {
   const existing = await getConversation(whatsappPhone);
   if (existing) return existing;
@@ -68712,7 +68723,12 @@ router17.post("/webhooks/convessa", async (req, res) => {
   }
   const eventPayload = asRecord(payload.payload);
   const nestedPayload = asRecord(eventPayload?.payload);
-  if ([payload, eventPayload, nestedPayload].some((source) => source?.fromMe === true)) {
+  const eventData = asRecord(eventPayload?._data);
+  const eventInfo = asRecord(eventData?.Info);
+  const isOutgoing = [payload, eventPayload, nestedPayload, eventData, eventInfo].some(
+    (source) => source?.fromMe === true || source?.isFromMe === true || source?.IsFromMe === true
+  );
+  if (isOutgoing) {
     res.json({ received: true, ignored: "outgoing" });
     return;
   }
@@ -68722,15 +68738,17 @@ router17.post("/webhooks/convessa", async (req, res) => {
     return;
   }
   try {
-    const conversation = await getOrCreateConversation(inbound.from);
-    if (inbound.id && conversation.lastInboundId === inbound.id) {
+    await getOrCreateConversation(inbound.from);
+    if (inbound.id && !await claimInboundMessage(inbound.from, inbound.id)) {
       res.json({ received: true, duplicate: true });
       return;
     }
-    await updateConversation(inbound.from, {
-      lastInboundId: inbound.id || null,
-      lastMessageAt: /* @__PURE__ */ new Date()
-    });
+    if (!inbound.id) {
+      await updateConversation(inbound.from, {
+        lastInboundId: null,
+        lastMessageAt: /* @__PURE__ */ new Date()
+      });
+    }
     await handleInboundMessage(req, inbound.from, inbound.text);
     res.json({ received: true });
   } catch (error40) {
