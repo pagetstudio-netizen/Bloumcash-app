@@ -60094,9 +60094,9 @@ async function sendWelcomeMessage(to) {
         title: "Options principales",
         rows: [
           {
-            title: "Faire un transfert",
+            title: "Effectuer un transfert",
             rowId: "transfer",
-            description: "Pr\xE9parer un transfert s\xE9curis\xE9"
+            description: "Entre op\xE9rateurs au Togo"
           },
           {
             title: "Cr\xE9er un compte",

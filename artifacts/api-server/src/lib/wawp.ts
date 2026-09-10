@@ -186,9 +186,9 @@ export async function sendWelcomeMessage(to: string): Promise<WawpSendResponse> 
         title: "Options principales",
         rows: [
           {
-            title: "Faire un transfert",
+            title: "Effectuer un transfert",
             rowId: "transfer",
-            description: "Préparer un transfert sécurisé",
+            description: "Entre opérateurs au Togo",
           },
           {
             title: "Créer un compte",
