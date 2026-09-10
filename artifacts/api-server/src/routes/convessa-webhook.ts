@@ -1,9 +1,10 @@
 import { Router, type IRouter, type Request } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { db, pool } from "@workspace/db";
 import {
+  adminSettingsTable,
   blacklistTable,
   usersTable,
   whatsappConversationsTable,
@@ -265,6 +266,43 @@ async function getOrCreateConversation(whatsappPhone: string) {
   return created;
 }
 
+async function sendHelpMessage(to: string): Promise<void> {
+  const rows = await db
+    .select({ key: adminSettingsTable.key, value: adminSettingsTable.value })
+    .from(adminSettingsTable)
+    .where(sql`key IN ('support_phone','facebook_url','instagram_url','telegram_url','tiktok_url','youtube_url','whatsapp_url')`);
+  const settings = new Map(rows.map((row) => [row.key, row.value?.trim() ?? ""]));
+  const supportPhone = settings.get("support_phone") || "";
+  const socialLinks = [
+    ["Facebook", settings.get("facebook_url")],
+    ["Instagram", settings.get("instagram_url")],
+    ["Telegram", settings.get("telegram_url")],
+    ["TikTok", settings.get("tiktok_url")],
+    ["YouTube", settings.get("youtube_url")],
+    ["WhatsApp", settings.get("whatsapp_url")],
+  ].filter(([, url]) => Boolean(url));
+
+  const lines = [
+    "🆘 Aide Bloum Cash",
+    "",
+    supportPhone
+      ? `📞 Support WhatsApp : ${supportPhone}`
+      : "📞 Numéro du support WhatsApp non configuré.",
+  ];
+
+  if (socialLinks.length) {
+    lines.push("", "🌐 Retrouvez-nous sur :");
+    for (const [label, url] of socialLinks) {
+      lines.push(`• ${label} : ${url}`);
+    }
+  } else {
+    lines.push("", "🌐 Aucun réseau social n'est actuellement configuré.");
+  }
+
+  lines.push("", "Ces informations sont gérées par l'administrateur Bloum Cash.");
+  await sendConvessaMessage(to, lines.join("\n"));
+}
+
 async function sendPhoneVerification(
   senderPhone: string,
   accountPhone: string,
@@ -431,11 +469,13 @@ async function handleInboundMessage(
       return;
     }
 
-    if (normalized === "3" || normalized.includes("aide")) {
-      await sendConvessaMessage(
-        senderPhone,
-        "Bloum Cash permet de transférer de l'argent entre Mixx by Yas et Moov Togo. Répondez 1 pour commencer ou écrivez AIDE pour contacter l'assistance.",
-      );
+    if (
+      normalized === "3" ||
+      normalized === "help" ||
+      normalized.includes("aide") ||
+      normalized.includes("support")
+    ) {
+      await sendHelpMessage(senderPhone);
       return;
     }
 
