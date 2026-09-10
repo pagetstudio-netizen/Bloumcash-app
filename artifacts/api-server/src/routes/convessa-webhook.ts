@@ -10,13 +10,13 @@ import {
 } from "@workspace/db";
 import { signUserToken } from "../middleware/user-auth";
 import {
-  ConvessaError,
+  WawpError as ConvessaError,
   getWhatsappOnboardingUrl,
   getWhatsappTransferUrl,
-  sendConvessaMessage,
+  sendWawpMessage as sendConvessaMessage,
   sendWelcomeMessage,
-  toConvessaPhone,
-} from "../lib/convessa";
+  toWawpPhone as toConvessaPhone,
+} from "../lib/wawp";
 
 const router: IRouter = Router();
 
@@ -113,54 +113,39 @@ function parseInboundPayload(payload: Record<string, unknown>): {
   from: string;
   text: string;
 } {
-  const data = payload.data as Record<string, unknown> | undefined;
-  const message = payload.message as Record<string, unknown> | undefined;
-  const nestedMessage = data?.message as Record<string, unknown> | undefined;
+  const data = payload.payload as Record<string, unknown> | undefined;
+  const listResponse = data?.listResponse as Record<string, unknown> | undefined;
+  const buttonResponse = data?.buttonResponse as Record<string, unknown> | undefined;
 
   const from = firstString(
+    data?.from,
+    data?.author,
+    data?.chatId,
     payload.from,
     payload.sender,
-    payload.senderId,
-    payload.author,
     payload.phone,
     payload.chatId,
-    data?.from,
-    data?.sender,
-    data?.senderId,
-    data?.author,
-    data?.phone,
-    data?.chatId,
-    message?.from,
-    message?.sender,
-    message?.author,
-    nestedMessage?.from,
-    nestedMessage?.sender,
   );
 
   const text = normalizeInboundText(firstString(
+    data?.body,
+    data?.text,
+    data?.content,
+    data?.selectedRowId,
+    data?.rowId,
+    listResponse?.rowId,
+    listResponse?.selectedRowId,
+    buttonResponse?.id,
+    buttonResponse?.text,
     payload.text,
     payload.body,
-    payload.messageText,
-    payload.content,
-    data?.text,
-    data?.body,
-    data?.messageText,
-    data?.content,
-    message?.text,
-    message?.body,
-    message?.content,
-    nestedMessage?.text,
-    nestedMessage?.body,
   ));
 
   const id = firstString(
-    payload.messageId,
+    data?.id,
+    data?.messageId,
     payload.id,
     payload.eventId,
-    data?.messageId,
-    data?.id,
-    message?.messageId,
-    message?.id,
   );
 
   return { id, from: toConvessaPhone(from), text };
@@ -533,13 +518,19 @@ async function handleInboundMessage(
   await updateConversation(senderPhone, { state: "menu" });
 }
 
-/* Convessa appelle cette URL pour les messages entrants et les statuts sortants. */
+/* WAWP appelle cette URL pour les messages entrants et les événements de statut. */
 router.post("/webhooks/convessa", async (req, res) => {
   const payload = req.body as Record<string, unknown>;
   const event = typeof payload.event === "string" ? payload.event : "";
 
-  if (event === "message.sent" || event === "message.failed" || event === "message.delivered") {
+  if (!["message", "message.any", "list_response", "button_response"].includes(event)) {
     res.json({ received: true });
+    return;
+  }
+
+  const eventPayload = payload.payload as Record<string, unknown> | undefined;
+  if (eventPayload?.fromMe === true) {
+    res.json({ received: true, ignored: "outgoing" });
     return;
   }
 
@@ -563,9 +554,9 @@ router.post("/webhooks/convessa", async (req, res) => {
     res.json({ received: true });
   } catch (error) {
     if (error instanceof ConvessaError) {
-      req.log.error({ status: error.status, code: error.code }, "Erreur Convessa pendant le traitement WhatsApp");
+      req.log.error({ status: error.status, code: error.code }, "Erreur WAWP pendant le traitement WhatsApp");
     } else {
-      req.log.error({ err: error }, "Erreur webhook Convessa");
+      req.log.error({ err: error }, "Erreur webhook WAWP");
     }
     res.status(500).json({ received: false, error: "Erreur de traitement" });
   }

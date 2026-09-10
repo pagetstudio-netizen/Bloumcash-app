@@ -18,7 +18,7 @@ import { extractUser, requireUser } from "../middleware/user-auth";
 import { OPERATOR_MAP, TOGO_OPERATOR_MAP } from "../lib/paydunya-softpay-map";
 import { sendPushNotification } from "../lib/onesignal";
 import { formatAmount } from "../lib/format";
-import { sendConvessaMessage } from "../lib/convessa";
+import { sendWawpMessage } from "../lib/wawp";
 
 const router: IRouter = Router();
 
@@ -84,7 +84,7 @@ async function notifyWhatsappTransfer(
         ].join("\n");
 
     await Promise.allSettled(
-      conversations.map(({ whatsappPhone }) => sendConvessaMessage(whatsappPhone, message)),
+      conversations.map(({ whatsappPhone }) => sendWawpMessage(whatsappPhone, message)),
     );
   } catch {
     // Une panne de notification WhatsApp ne doit jamais modifier le résultat du transfert.
