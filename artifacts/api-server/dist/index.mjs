@@ -68310,6 +68310,19 @@ function firstString(...values) {
   }
   return "";
 }
+function isWhatsappLid(value) {
+  return /@lid$/i.test(value) || /:\d+@s\.whatsapp\.net$/i.test(value);
+}
+function firstSenderAddress(...values) {
+  let lidFallback = "";
+  for (const value of values) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const candidate = value.trim();
+    if (!isWhatsappLid(candidate)) return candidate;
+    if (!lidFallback) lidFallback = candidate;
+  }
+  return lidFallback;
+}
 function asRecord(value) {
   return value && typeof value === "object" ? value : void 0;
 }
@@ -68362,18 +68375,25 @@ function parseInboundPayload(payload) {
   const data = asRecord(payload.payload);
   const nestedPayload = asRecord(data?.payload);
   const nestedData = asRecord(data?.data);
+  const rawData = asRecord(data?._data);
+  const messageInfo = asRecord(rawData?.Info);
   const response = asRecord(data?.response) ?? asRecord(payload.response);
   const listResponse = asRecord(data?.listResponse) ?? asRecord(nestedPayload?.listResponse) ?? asRecord(response?.listResponse) ?? asRecord(response?.list_response);
   const buttonResponse = asRecord(data?.buttonResponse) ?? asRecord(nestedPayload?.buttonResponse) ?? asRecord(response?.buttonResponse) ?? asRecord(response?.button_response);
   const sources = [data, nestedPayload, nestedData, response, payload];
-  const from = firstString(
+  const from = firstSenderAddress(
     ...sources.flatMap((source) => [
+      source?.senderAlt,
+      source?.sender_alt,
+      source?.authorAlt,
+      source?.phone,
       source?.from,
       source?.author,
       source?.chatId,
-      source?.sender,
-      source?.phone
-    ])
+      source?.sender
+    ]),
+    messageInfo?.SenderAlt,
+    messageInfo?.Sender
   );
   const text2 = normalizeInboundText(firstString(
     ...sources.flatMap((source) => [
