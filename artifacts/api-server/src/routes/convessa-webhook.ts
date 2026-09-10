@@ -60,6 +60,10 @@ function firstString(...values: unknown[]): string {
   return "";
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? value as Record<string, unknown> : undefined;
+}
+
 async function consumeVerificationRequest(senderPhone: string): Promise<boolean> {
   const result = await pool.query(
     `UPDATE whatsapp_conversations
@@ -113,39 +117,54 @@ function parseInboundPayload(payload: Record<string, unknown>): {
   from: string;
   text: string;
 } {
-  const data = payload.payload as Record<string, unknown> | undefined;
-  const listResponse = data?.listResponse as Record<string, unknown> | undefined;
-  const buttonResponse = data?.buttonResponse as Record<string, unknown> | undefined;
+  const data = asRecord(payload.payload);
+  const nestedPayload = asRecord(data?.payload);
+  const nestedData = asRecord(data?.data);
+  const response = asRecord(data?.response) ?? asRecord(payload.response);
+  const listResponse =
+    asRecord(data?.listResponse) ??
+    asRecord(nestedPayload?.listResponse) ??
+    asRecord(response?.listResponse) ??
+    asRecord(response?.list_response);
+  const buttonResponse =
+    asRecord(data?.buttonResponse) ??
+    asRecord(nestedPayload?.buttonResponse) ??
+    asRecord(response?.buttonResponse) ??
+    asRecord(response?.button_response);
+  const sources = [data, nestedPayload, nestedData, response, payload];
 
   const from = firstString(
-    data?.from,
-    data?.author,
-    data?.chatId,
-    payload.from,
-    payload.sender,
-    payload.phone,
-    payload.chatId,
+    ...sources.flatMap((source) => [
+      source?.from,
+      source?.author,
+      source?.chatId,
+      source?.sender,
+      source?.phone,
+    ]),
   );
 
   const text = normalizeInboundText(firstString(
-    data?.body,
-    data?.text,
-    data?.content,
-    data?.selectedRowId,
-    data?.rowId,
+    ...sources.flatMap((source) => [
+      source?.body,
+      source?.text,
+      source?.content,
+      source?.selectedRowId,
+      source?.selectedRowID,
+      source?.rowId,
+      source?.rowID,
+    ]),
     listResponse?.rowId,
     listResponse?.selectedRowId,
+    listResponse?.selectedRowID,
+    listResponse?.title,
     buttonResponse?.id,
+    buttonResponse?.selectedButtonId,
+    buttonResponse?.selectedButtonID,
     buttonResponse?.text,
-    payload.text,
-    payload.body,
   ));
 
   const id = firstString(
-    data?.id,
-    data?.messageId,
-    payload.id,
-    payload.eventId,
+    ...sources.flatMap((source) => [source?.id, source?.messageId, source?.eventId]),
   );
 
   return { id, from: toConvessaPhone(from), text };
@@ -523,13 +542,14 @@ router.post("/webhooks/convessa", async (req, res) => {
   const payload = req.body as Record<string, unknown>;
   const event = typeof payload.event === "string" ? payload.event : "";
 
-  if (!["message", "message.any", "list_response", "button_response"].includes(event)) {
+  if (!["message", "message.any", "list_response", "button_response", "event.response"].includes(event)) {
     res.json({ received: true });
     return;
   }
 
-  const eventPayload = payload.payload as Record<string, unknown> | undefined;
-  if (eventPayload?.fromMe === true) {
+  const eventPayload = asRecord(payload.payload);
+  const nestedPayload = asRecord(eventPayload?.payload);
+  if ([payload, eventPayload, nestedPayload].some((source) => source?.fromMe === true)) {
     res.json({ received: true, ignored: "outgoing" });
     return;
   }

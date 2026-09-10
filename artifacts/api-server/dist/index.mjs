@@ -68258,6 +68258,9 @@ function firstString(...values) {
   }
   return "";
 }
+function asRecord(value) {
+  return value && typeof value === "object" ? value : void 0;
+}
 async function consumeVerificationRequest(senderPhone) {
   const result = await pool.query(
     `UPDATE whatsapp_conversations
@@ -68304,36 +68307,43 @@ async function resetVerificationAttempts(senderPhone) {
   );
 }
 function parseInboundPayload(payload) {
-  const data = payload.payload;
-  const listResponse = data?.listResponse;
-  const buttonResponse = data?.buttonResponse;
+  const data = asRecord(payload.payload);
+  const nestedPayload = asRecord(data?.payload);
+  const nestedData = asRecord(data?.data);
+  const response = asRecord(data?.response) ?? asRecord(payload.response);
+  const listResponse = asRecord(data?.listResponse) ?? asRecord(nestedPayload?.listResponse) ?? asRecord(response?.listResponse) ?? asRecord(response?.list_response);
+  const buttonResponse = asRecord(data?.buttonResponse) ?? asRecord(nestedPayload?.buttonResponse) ?? asRecord(response?.buttonResponse) ?? asRecord(response?.button_response);
+  const sources = [data, nestedPayload, nestedData, response, payload];
   const from = firstString(
-    data?.from,
-    data?.author,
-    data?.chatId,
-    payload.from,
-    payload.sender,
-    payload.phone,
-    payload.chatId
+    ...sources.flatMap((source) => [
+      source?.from,
+      source?.author,
+      source?.chatId,
+      source?.sender,
+      source?.phone
+    ])
   );
   const text2 = normalizeInboundText(firstString(
-    data?.body,
-    data?.text,
-    data?.content,
-    data?.selectedRowId,
-    data?.rowId,
+    ...sources.flatMap((source) => [
+      source?.body,
+      source?.text,
+      source?.content,
+      source?.selectedRowId,
+      source?.selectedRowID,
+      source?.rowId,
+      source?.rowID
+    ]),
     listResponse?.rowId,
     listResponse?.selectedRowId,
+    listResponse?.selectedRowID,
+    listResponse?.title,
     buttonResponse?.id,
-    buttonResponse?.text,
-    payload.text,
-    payload.body
+    buttonResponse?.selectedButtonId,
+    buttonResponse?.selectedButtonID,
+    buttonResponse?.text
   ));
   const id = firstString(
-    data?.id,
-    data?.messageId,
-    payload.id,
-    payload.eventId
+    ...sources.flatMap((source) => [source?.id, source?.messageId, source?.eventId])
   );
   return { id, from: toWawpPhone(from), text: text2 };
 }
@@ -68624,12 +68634,13 @@ async function handleInboundMessage(req, senderPhone, text2) {
 router17.post("/webhooks/convessa", async (req, res) => {
   const payload = req.body;
   const event = typeof payload.event === "string" ? payload.event : "";
-  if (!["message", "message.any", "list_response", "button_response"].includes(event)) {
+  if (!["message", "message.any", "list_response", "button_response", "event.response"].includes(event)) {
     res.json({ received: true });
     return;
   }
-  const eventPayload = payload.payload;
-  if (eventPayload?.fromMe === true) {
+  const eventPayload = asRecord(payload.payload);
+  const nestedPayload = asRecord(eventPayload?.payload);
+  if ([payload, eventPayload, nestedPayload].some((source) => source?.fromMe === true)) {
     res.json({ received: true, ignored: "outgoing" });
     return;
   }
