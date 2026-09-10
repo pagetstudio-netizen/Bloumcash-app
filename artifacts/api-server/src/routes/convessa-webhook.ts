@@ -405,9 +405,6 @@ async function sendWhatsappTransferLink(
   userId: number,
   accountPhone: string,
   fullName: string,
-  recipientOperator: TransferOperator,
-  recipientPhone: string,
-  senderOperator: TransferOperator,
 ): Promise<void> {
   const token = createToken();
   const url = getWhatsappTransferUrl(token);
@@ -419,9 +416,11 @@ async function sendWhatsappTransferLink(
     userId,
     accountPhone,
     fullName,
-    transferRecipientOperator: recipientOperator,
-    transferRecipientPhone: recipientPhone,
-    transferSenderOperator: senderOperator,
+    // Les réponses du parcours WhatsApp ne sont pas conservées après
+    // la création du lien : le client remplira le transfert sur la page.
+    transferRecipientOperator: null,
+    transferRecipientPhone: null,
+    transferSenderOperator: null,
     pendingTokenHash: sha256(token),
     pendingTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
     state: "awaiting_transfer",
@@ -432,7 +431,7 @@ async function sendWhatsappTransferLink(
     [
       `Bonjour ${fullName} ! Votre identité Bloum Cash a été vérifiée.`,
       "",
-      "Ouvrez ce lien sécurisé pour préparer votre transfert :",
+      "Ouvrez ce lien sécurisé pour saisir les informations et le montant de votre transfert :",
       url,
       "",
       "Le lien expire dans 15 minutes et ne peut être utilisé qu'une seule fois.",
@@ -781,20 +780,36 @@ async function handleInboundMessage(
       await sendOperatorChoiceMenu(senderPhone, "sender");
       return;
     }
-    if (!conversation.userId || !conversation.accountPhone || !conversation.transferRecipientPhone || !recipientOperator) {
+
+    // Les réponses du parcours WhatsApp ne préremplissent pas la page de
+    // paiement. Elles sont seulement utilisées pour guider l'utilisateur.
+    // On récupère l'utilisateur depuis la conversation ou son numéro afin
+    // qu'une ancienne conversation partielle ne provoque plus une fausse
+    // expiration du parcours.
+    const currentConversation = await getConversation(senderPhone) ?? conversation;
+    let user = currentConversation.userId
+      ? (await db.select().from(usersTable).where(eq(usersTable.id, currentConversation.userId)).limit(1))[0]
+      : undefined;
+    if (!user && currentConversation.accountPhone) {
+      user = (await db.select().from(usersTable).where(eq(usersTable.phone, currentConversation.accountPhone)).limit(1))[0];
+    }
+    if (!user) {
+      user = (await db.select().from(usersTable).where(eq(usersTable.phone, senderPhone)).limit(1))[0];
+    }
+    if (!user?.phone) {
       await updateConversation(senderPhone, { state: "menu" });
-      await sendConvessaMessage(senderPhone, "La préparation a expiré. Répondez 1 pour recommencer le transfert.");
+      await sendConvessaMessage(
+        senderPhone,
+        "Votre connexion Bloum Cash n'est plus disponible. Répondez 2 pour vous reconnecter.",
+      );
       return;
     }
 
     await sendWhatsappTransferLink(
       senderPhone,
-      conversation.userId,
-      conversation.accountPhone,
-      conversation.fullName ?? `Utilisateur ${conversation.accountPhone.slice(-4)}`,
-      recipientOperator,
-      conversation.transferRecipientPhone,
-      senderOperator,
+      user.id,
+      user.phone,
+      user.fullName,
     );
     return;
   }
