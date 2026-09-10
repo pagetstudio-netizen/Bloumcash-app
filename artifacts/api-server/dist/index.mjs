@@ -68453,6 +68453,34 @@ async function getOrCreateConversation(whatsappPhone) {
   }).returning();
   return created;
 }
+async function sendHelpMessage(to) {
+  const rows = await db.select({ key: adminSettingsTable.key, value: adminSettingsTable.value }).from(adminSettingsTable).where(sql`key IN ('support_phone','facebook_url','instagram_url','telegram_url','tiktok_url','youtube_url','whatsapp_url')`);
+  const settings = new Map(rows.map((row) => [row.key, row.value?.trim() ?? ""]));
+  const supportPhone = settings.get("support_phone") || "";
+  const socialLinks = [
+    ["Facebook", settings.get("facebook_url")],
+    ["Instagram", settings.get("instagram_url")],
+    ["Telegram", settings.get("telegram_url")],
+    ["TikTok", settings.get("tiktok_url")],
+    ["YouTube", settings.get("youtube_url")],
+    ["WhatsApp", settings.get("whatsapp_url")]
+  ].filter(([, url2]) => Boolean(url2));
+  const lines = [
+    "\u{1F198} Aide Bloum Cash",
+    "",
+    supportPhone ? `\u{1F4DE} Support WhatsApp : ${supportPhone}` : "\u{1F4DE} Num\xE9ro du support WhatsApp non configur\xE9."
+  ];
+  if (socialLinks.length) {
+    lines.push("", "\u{1F310} Retrouvez-nous sur :");
+    for (const [label, url2] of socialLinks) {
+      lines.push(`\u2022 ${label} : ${url2}`);
+    }
+  } else {
+    lines.push("", "\u{1F310} Aucun r\xE9seau social n'est actuellement configur\xE9.");
+  }
+  lines.push("", "Ces informations sont g\xE9r\xE9es par l'administrateur Bloum Cash.");
+  await sendWawpMessage(to, lines.join("\n"));
+}
 async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
   const token = createToken();
   const url2 = getWhatsappOnboardingUrl(token);
@@ -68552,11 +68580,8 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await updateConversation(senderPhone, { state: "awaiting_account_phone" });
       return;
     }
-    if (normalized === "3" || normalized.includes("aide")) {
-      await sendWawpMessage(
-        senderPhone,
-        "Bloum Cash permet de transf\xE9rer de l'argent entre Mixx by Yas et Moov Togo. R\xE9pondez 1 pour commencer ou \xE9crivez AIDE pour contacter l'assistance."
-      );
+    if (normalized === "3" || normalized === "help" || normalized.includes("aide") || normalized.includes("support")) {
+      await sendHelpMessage(senderPhone);
       return;
     }
     await sendWelcomeMessage(senderPhone);
