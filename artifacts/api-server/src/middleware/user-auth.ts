@@ -65,6 +65,20 @@ export function requireUser(
   }
 }
 
+export function requireAppUser(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  requireUser(req, res, () => {
+    if (req.currentUser?.channel === "whatsapp") {
+      res.status(403).json({ error: "Cette session est limitée à la page de transfert." });
+      return;
+    }
+    next();
+  });
+}
+
 /** Extracts userId without blocking — returns null if not authenticated */
 export function extractUser(req: Request): UserTokenPayload | null {
   const auth = req.headers.authorization ?? "";
