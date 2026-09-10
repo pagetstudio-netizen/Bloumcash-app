@@ -711,7 +711,11 @@ router.delete("/admin/notifications/:id", requireAdmin, async (req, res) => {
 /* ─────────────────────────── PUBLIC — Operators status ─────────────────────────── */
 router.get("/operators", async (_req, res) => {
   try {
-    const rows = await db.select().from(operatorsConfigTable).orderBy(operatorsConfigTable.name);
+    const rows = await db
+      .select()
+      .from(operatorsConfigTable)
+      .where(eq(operatorsConfigTable.countryCode, "TG"))
+      .orderBy(operatorsConfigTable.name);
     const MAP: Record<string, string> = { tmoney: "tmoney", moov: "moov" };
     const toKey = (name: string): string => {
       const n = name.toLowerCase();
@@ -723,7 +727,7 @@ router.get("/operators", async (_req, res) => {
       key: toKey(op.name),
       name: op.name,
       isActive: op.isActive,
-      inMaintenance: op.maintenanceAll || op.maintenanceWithdraw,
+      inMaintenance: op.maintenanceAll,
       maintenanceDeposit: op.maintenanceDeposit,
       maintenanceWithdraw: op.maintenanceWithdraw,
       maintenanceAll: op.maintenanceAll,

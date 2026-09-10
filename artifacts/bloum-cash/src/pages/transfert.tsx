@@ -160,10 +160,17 @@ const OPS: Record<Operator, { name: string; logo: string }> = {
   moov:   { name: "Moov Money", logo: moovLogo   },
 };
 
-interface OpStatus { key: string; isActive: boolean; inMaintenance: boolean; maintenanceWithdraw: boolean; }
+interface OpStatus {
+  key: string;
+  isActive: boolean;
+  inMaintenance: boolean;
+  maintenanceDeposit: boolean;
+  maintenanceWithdraw: boolean;
+  maintenanceAll: boolean;
+}
 const DEFAULT_OP_STATUSES: OpStatus[] = [
-  { key: "tmoney", isActive: true, inMaintenance: false, maintenanceWithdraw: false },
-  { key: "moov",   isActive: true, inMaintenance: false, maintenanceWithdraw: false },
+  { key: "tmoney", isActive: true, inMaintenance: false, maintenanceDeposit: false, maintenanceWithdraw: false, maintenanceAll: false },
+  { key: "moov",   isActive: true, inMaintenance: false, maintenanceDeposit: false, maintenanceWithdraw: false, maintenanceAll: false },
 ];
 
 const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000, 200000];
@@ -180,13 +187,21 @@ function OpModal({
   onSelect,
   onClose,
   opStatuses,
+  direction,
 }: {
   open: boolean;
   onSelect: (op: Operator) => void;
   onClose: () => void;
   opStatuses: OpStatus[];
+  direction: "deposit" | "withdraw";
 }) {
-  const getStatus = (key: Operator) => opStatuses.find(o => o.key === key) ?? { isActive: true, inMaintenance: false, maintenanceWithdraw: false };
+  const getStatus = (key: Operator) => opStatuses.find(o => o.key === key) ?? {
+    isActive: true,
+    inMaintenance: false,
+    maintenanceDeposit: false,
+    maintenanceWithdraw: false,
+    maintenanceAll: false,
+  };
 
   return (
     <AnimatePresence>
@@ -215,7 +230,9 @@ function OpModal({
               {(["tmoney", "moov"] as Operator[]).map((op) => {
                 const st = getStatus(op);
                 const disabled = !st.isActive;
-                const maintenance = st.inMaintenance || st.maintenanceWithdraw;
+                const maintenance = st.maintenanceAll ||
+                  st.inMaintenance ||
+                  (direction === "deposit" ? st.maintenanceDeposit : st.maintenanceWithdraw);
                 return (
                   <button
                     key={op}
@@ -288,7 +305,16 @@ export default function Transfert() {
   useEffect(() => {
     fetch("/api/operators")
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (Array.isArray(data) && data.length > 0) setOpStatuses(data); })
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setOpStatuses(data.map((status) => ({
+            ...status,
+            maintenanceDeposit: Boolean(status.maintenanceDeposit),
+            maintenanceWithdraw: Boolean(status.maintenanceWithdraw),
+            maintenanceAll: Boolean(status.maintenanceAll),
+          })));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -390,10 +416,15 @@ export default function Transfert() {
     } catch (err: unknown) {
       if (pollRef.current) clearInterval(pollRef.current);
       setStep("step2");
+      const apiError = err as { data?: { error?: string; code?: string }; message?: string };
+      const message = apiError.data?.error ??
+        (apiError.message?.includes("OPERATOR_MAINTENANCE") ? "Le service de paiement est actuellement en maintenance. Réessayez plus tard." : null) ??
+        (apiError.message?.includes("OPERATOR_UNAVAILABLE") ? "Le service de paiement est temporairement indisponible. Réessayez plus tard." : null) ??
+        "Une erreur s'est produite. Réessayez plus tard.";
       showModal({
-        type: "error",
-        title: "Transfert échoué",
-        message: "Une erreur s'est produite. Réessayez plus tard.",
+        type: apiError.data?.code === "OPERATOR_MAINTENANCE" ? "warning" : "error",
+        title: apiError.data?.code === "OPERATOR_MAINTENANCE" ? "Service en maintenance" : "Transfert échoué",
+        message,
       });
     } finally {
       isSubmittingRef.current = false;
@@ -789,7 +820,10 @@ export default function Transfert() {
               >
                 <div className="relative">
                   <img src={OPS[fromOp].logo} alt={OPS[fromOp].name} className="w-12 h-12 rounded-full object-cover shadow" />
-                  {opStatuses.find(o => o.key === fromOp)?.inMaintenance && (
+                  {(() => {
+                    const status = opStatuses.find(o => o.key === fromOp);
+                    return status && (status.maintenanceAll || status.maintenanceDeposit);
+                  })() && (
                     <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-bold text-white bg-orange-500 px-1 rounded-full whitespace-nowrap">MAINT.</span>
                   )}
                 </div>
@@ -923,12 +957,14 @@ export default function Transfert() {
         onSelect={handleChangeFrom}
         onClose={() => setModalFor(null)}
         opStatuses={opStatuses}
+        direction="deposit"
       />
       <OpModal
         open={modalFor === "to"}
         onSelect={handleChangeTo}
         onClose={() => setModalFor(null)}
         opStatuses={opStatuses}
+        direction="withdraw"
       />
     </div>
   );

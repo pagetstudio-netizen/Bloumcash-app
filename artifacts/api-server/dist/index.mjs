@@ -60175,20 +60175,53 @@ var OPERATOR_DB_NAME = {
   tmoney: "TMoney",
   moov: "Moov Money"
 };
-async function getOperatorGateway(operator) {
+async function getOperatorStatus(operator) {
   const name = OPERATOR_DB_NAME[operator.toLowerCase()];
-  if (!name) return "PayDunya";
+  if (!name) return null;
   try {
-    const rows = await db.select({ gateway: operatorsConfigTable.gateway }).from(operatorsConfigTable).where(
+    const rows = await db.select({
+      name: operatorsConfigTable.name,
+      gateway: operatorsConfigTable.gateway,
+      isActive: operatorsConfigTable.isActive,
+      maintenanceAll: operatorsConfigTable.maintenanceAll,
+      maintenanceDeposit: operatorsConfigTable.maintenanceDeposit,
+      maintenanceWithdraw: operatorsConfigTable.maintenanceWithdraw
+    }).from(operatorsConfigTable).where(
       and(
         ilike(operatorsConfigTable.name, name),
         eq(operatorsConfigTable.countryCode, "TG")
       )
     ).limit(1);
-    const gw = rows[0]?.gateway ?? "PayDunya";
-    return gw === "GomboPlus" ? "GomboPlus" : "PayDunya";
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      name: row.name,
+      gateway: row.gateway === "GomboPlus" ? "GomboPlus" : "PayDunya",
+      isActive: row.isActive,
+      maintenanceAll: row.maintenanceAll,
+      maintenanceDeposit: row.maintenanceDeposit,
+      maintenanceWithdraw: row.maintenanceWithdraw
+    };
   } catch {
-    return "PayDunya";
+    return null;
+  }
+}
+function maintenanceResponse(res, operator, direction) {
+  const inMaintenance = operator.maintenanceAll || (direction === "deposit" ? operator.maintenanceDeposit : operator.maintenanceWithdraw);
+  if (!operator.isActive) {
+    res.status(503).json({
+      error: `Le service ${operator.name} est temporairement indisponible. R\xE9essayez plus tard.`,
+      code: "OPERATOR_UNAVAILABLE",
+      operator: operator.name
+    });
+    return;
+  }
+  if (inMaintenance) {
+    res.status(503).json({
+      error: `Le service ${operator.name} est actuellement en maintenance. R\xE9essayez plus tard.`,
+      code: "OPERATOR_MAINTENANCE",
+      operator: operator.name
+    });
   }
 }
 async function getFeePercent() {
@@ -60294,7 +60327,26 @@ router6.post("/transfer", transferLimiter, requireUser, async (req, res) => {
       res.status(403).json({ error: "Escroquerie d\xE9tect\xE9e. Acc\xE8s refus\xE9. Bye.", code: "PHONE_BLACKLISTED" });
       return;
     }
-    const gateway = await getOperatorGateway(fromOperator);
+    const sourceOperator = await getOperatorStatus(fromOperator);
+    const targetOperator = await getOperatorStatus(toOperator);
+    if (!sourceOperator || !targetOperator) {
+      res.status(503).json({
+        error: "Le statut des services de paiement est momentan\xE9ment indisponible. R\xE9essayez plus tard.",
+        code: "OPERATOR_STATUS_UNAVAILABLE"
+      });
+      return;
+    }
+    const sourceMaintenance = sourceOperator.maintenanceAll || sourceOperator.maintenanceDeposit || !sourceOperator.isActive;
+    const targetMaintenance = targetOperator.maintenanceAll || targetOperator.maintenanceWithdraw || !targetOperator.isActive;
+    if (sourceMaintenance) {
+      maintenanceResponse(res, sourceOperator, "deposit");
+      return;
+    }
+    if (targetMaintenance) {
+      maintenanceResponse(res, targetOperator, "withdraw");
+      return;
+    }
+    const gateway = sourceOperator.gateway;
     req.log.info({ fromOperator, gateway, reference }, "Transfer \u2014 gateway s\xE9lectionn\xE9e");
     if (gateway === "GomboPlus") {
       if (!isConfigured2()) {
@@ -67112,7 +67164,7 @@ router10.delete("/admin/notifications/:id", requireAdmin, async (req, res) => {
 });
 router10.get("/operators", async (_req, res) => {
   try {
-    const rows = await db.select().from(operatorsConfigTable).orderBy(operatorsConfigTable.name);
+    const rows = await db.select().from(operatorsConfigTable).where(eq(operatorsConfigTable.countryCode, "TG")).orderBy(operatorsConfigTable.name);
     const MAP = { tmoney: "tmoney", moov: "moov" };
     const toKey = (name) => {
       const n = name.toLowerCase();
@@ -67124,7 +67176,7 @@ router10.get("/operators", async (_req, res) => {
       key: toKey(op.name),
       name: op.name,
       isActive: op.isActive,
-      inMaintenance: op.maintenanceAll || op.maintenanceWithdraw,
+      inMaintenance: op.maintenanceAll,
       maintenanceDeposit: op.maintenanceDeposit,
       maintenanceWithdraw: op.maintenanceWithdraw,
       maintenanceAll: op.maintenanceAll

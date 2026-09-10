@@ -97,13 +97,29 @@ const OPERATOR_DB_NAME: Record<string, string> = {
   moov:   "Moov Money",
 };
 
-/** Récupère la gateway configurée pour un opérateur Togo depuis la DB */
-async function getOperatorGateway(operator: string): Promise<"PayDunya" | "GomboPlus"> {
+type OperatorRuntimeStatus = {
+  name: string;
+  gateway: "PayDunya" | "GomboPlus";
+  isActive: boolean;
+  maintenanceAll: boolean;
+  maintenanceDeposit: boolean;
+  maintenanceWithdraw: boolean;
+};
+
+/** Récupère la gateway et l'état opérationnel d'un opérateur Togo depuis la DB. */
+async function getOperatorStatus(operator: string): Promise<OperatorRuntimeStatus | null> {
   const name = OPERATOR_DB_NAME[operator.toLowerCase()];
-  if (!name) return "PayDunya";
+  if (!name) return null;
   try {
     const rows = await db
-      .select({ gateway: operatorsConfigTable.gateway })
+      .select({
+        name: operatorsConfigTable.name,
+        gateway: operatorsConfigTable.gateway,
+        isActive: operatorsConfigTable.isActive,
+        maintenanceAll: operatorsConfigTable.maintenanceAll,
+        maintenanceDeposit: operatorsConfigTable.maintenanceDeposit,
+        maintenanceWithdraw: operatorsConfigTable.maintenanceWithdraw,
+      })
       .from(operatorsConfigTable)
       .where(
         and(
@@ -112,10 +128,45 @@ async function getOperatorGateway(operator: string): Promise<"PayDunya" | "Gombo
         )
       )
       .limit(1);
-    const gw = rows[0]?.gateway ?? "PayDunya";
-    return gw === "GomboPlus" ? "GomboPlus" : "PayDunya";
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      name: row.name,
+      gateway: row.gateway === "GomboPlus" ? "GomboPlus" : "PayDunya",
+      isActive: row.isActive,
+      maintenanceAll: row.maintenanceAll,
+      maintenanceDeposit: row.maintenanceDeposit,
+      maintenanceWithdraw: row.maintenanceWithdraw,
+    };
   } catch {
-    return "PayDunya";
+    return null;
+  }
+}
+
+function maintenanceResponse(
+  res: Parameters<Parameters<typeof router.post>[1]>[1],
+  operator: OperatorRuntimeStatus,
+  direction: "deposit" | "withdraw",
+): void {
+  const inMaintenance =
+    operator.maintenanceAll ||
+    (direction === "deposit" ? operator.maintenanceDeposit : operator.maintenanceWithdraw);
+
+  if (!operator.isActive) {
+    res.status(503).json({
+      error: `Le service ${operator.name} est temporairement indisponible. Réessayez plus tard.`,
+      code: "OPERATOR_UNAVAILABLE",
+      operator: operator.name,
+    });
+    return;
+  }
+
+  if (inMaintenance) {
+    res.status(503).json({
+      error: `Le service ${operator.name} est actuellement en maintenance. Réessayez plus tard.`,
+      code: "OPERATOR_MAINTENANCE",
+      operator: operator.name,
+    });
   }
 }
 
@@ -248,8 +299,33 @@ router.post("/transfer", transferLimiter, requireUser, async (req, res) => {
       return;
     }
 
+    /* ── Vérifier l'état des deux opérateurs avant tout appel financier ── */
+    const sourceOperator = await getOperatorStatus(fromOperator);
+    const targetOperator = await getOperatorStatus(toOperator);
+    if (!sourceOperator || !targetOperator) {
+      res.status(503).json({
+        error: "Le statut des services de paiement est momentanément indisponible. Réessayez plus tard.",
+        code: "OPERATOR_STATUS_UNAVAILABLE",
+      });
+      return;
+    }
+
+    const sourceMaintenance =
+      sourceOperator.maintenanceAll || sourceOperator.maintenanceDeposit || !sourceOperator.isActive;
+    const targetMaintenance =
+      targetOperator.maintenanceAll || targetOperator.maintenanceWithdraw || !targetOperator.isActive;
+
+    if (sourceMaintenance) {
+      maintenanceResponse(res, sourceOperator, "deposit");
+      return;
+    }
+    if (targetMaintenance) {
+      maintenanceResponse(res, targetOperator, "withdraw");
+      return;
+    }
+
     /* ── Détecter la gateway configurée pour l'opérateur de l'envoyeur ── */
-    const gateway = await getOperatorGateway(fromOperator);
+    const gateway = sourceOperator.gateway;
 
     req.log.info({ fromOperator, gateway, reference }, "Transfer — gateway sélectionnée");
 
