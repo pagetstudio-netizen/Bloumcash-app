@@ -68493,6 +68493,20 @@ async function sendHelpMessage(to) {
   lines.push("", "Vous pouvez nous suivre sur WhatsApp directement");
   await sendWawpMessage(to, lines.join("\n"));
 }
+async function sendOutOfScopeMessage(to) {
+  await sendWawpMessage(
+    to,
+    [
+      "Je suis l\xE0 uniquement pour r\xE9pondre et vous aider \xE0 transf\xE9rer de l'argent avec Bloum Cash.",
+      "",
+      "Si vous avez besoin d'aide, cliquez sur le bouton ci-dessous pour ouvrir le menu et choisir \xAB Obtenir de l'aide \xBB."
+    ].join("\n")
+  );
+  await sendWelcomeMessage(to);
+}
+function maskConnectedPhone(phone) {
+  return phone.length > 4 ? `${phone.slice(0, 2)}....${phone.slice(-4)}` : phone;
+}
 async function sendPinSetupLink(senderPhone, userId, accountPhone, fullName) {
   const token = createToken();
   const url2 = getWhatsappOnboardingUrl(token);
@@ -68574,6 +68588,22 @@ async function handleInboundMessage(req, senderPhone, text2) {
     await updateConversation(senderPhone, { state: "menu" });
     return;
   }
+  const wantsHelp = normalized === "help" || normalized.includes("aide") || normalized.includes("support") || normalized.includes("besoin d'aide");
+  if (wantsHelp) {
+    await sendHelpMessage(senderPhone);
+    return;
+  }
+  const wantsAccount = normalized === "2" || normalized.includes("compte") || normalized.includes("inscri");
+  if (wantsAccount && conversation.userId && conversation.accountPhone) {
+    await updateConversation(senderPhone, { state: "awaiting_logout_confirmation" });
+    await sendWawpMessage(
+      senderPhone,
+      `Vous \xEAtes d\xE9j\xE0 connect\xE9 \xE0 un compte Bloum Cash avec le num\xE9ro ${maskConnectedPhone(conversation.accountPhone)}.
+
+Voulez-vous vous d\xE9connecter ? R\xE9pondez OUI ou NON.`
+    );
+    return;
+  }
   if (conversation.state === "welcome" || /^(bonjour|bonsoir|salut|hello|hi|menu|start|0)$/i.test(normalized)) {
     await sendWelcomeMessage(senderPhone);
     await updateConversation(senderPhone, { state: "menu" });
@@ -68592,11 +68622,7 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await updateConversation(senderPhone, { state: "awaiting_account_phone" });
       return;
     }
-    if (normalized === "3" || normalized === "help" || normalized.includes("aide") || normalized.includes("support")) {
-      await sendHelpMessage(senderPhone);
-      return;
-    }
-    await sendWelcomeMessage(senderPhone);
+    await sendOutOfScopeMessage(senderPhone);
     await updateConversation(senderPhone, { state: "menu" });
     return;
   }
@@ -68706,6 +68732,32 @@ async function handleInboundMessage(req, senderPhone, text2) {
       return;
     }
     await sendWawpMessage(senderPhone, "R\xE9pondez OUI pour vous connecter ou NON pour annuler.");
+    return;
+  }
+  if (conversation.state === "awaiting_logout_confirmation") {
+    if (/^(oui|yes|o|1)$/i.test(normalized)) {
+      await updateConversation(senderPhone, {
+        userId: null,
+        accountPhone: null,
+        fullName: null,
+        state: "menu",
+        transferRecipientOperator: null,
+        transferRecipientPhone: null,
+        transferSenderOperator: null,
+        pendingTokenHash: null,
+        pendingTokenExpiresAt: null
+      });
+      await sendWawpMessage(senderPhone, "Vous \xEAtes maintenant d\xE9connect\xE9 \u2705.");
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
+    if (/^(non|no|n|2)$/i.test(normalized)) {
+      await updateConversation(senderPhone, { state: "menu" });
+      await sendWawpMessage(senderPhone, "D'accord, votre compte reste connect\xE9.");
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
+    await sendWawpMessage(senderPhone, "R\xE9pondez OUI pour vous d\xE9connecter ou NON pour garder votre connexion.");
     return;
   }
   if (conversation.state === "awaiting_existing_login_password") {
@@ -68871,13 +68923,10 @@ async function handleInboundMessage(req, senderPhone, text2) {
       await sendWelcomeMessage(senderPhone);
       return;
     }
-    await sendWawpMessage(
-      senderPhone,
-      "Votre compte est connect\xE9 \u2705. R\xE9pondez MENU pour revoir les options ou 1 pour effectuer un transfert."
-    );
+    await sendOutOfScopeMessage(senderPhone);
     return;
   }
-  await sendWelcomeMessage(senderPhone);
+  await sendOutOfScopeMessage(senderPhone);
   await updateConversation(senderPhone, { state: "menu" });
 }
 router17.post("/webhooks/convessa", async (req, res) => {

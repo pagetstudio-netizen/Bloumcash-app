@@ -300,6 +300,22 @@ async function sendHelpMessage(to: string): Promise<void> {
   await sendConvessaMessage(to, lines.join("\n"));
 }
 
+async function sendOutOfScopeMessage(to: string): Promise<void> {
+  await sendConvessaMessage(
+    to,
+    [
+      "Je suis là uniquement pour répondre et vous aider à transférer de l'argent avec Bloum Cash.",
+      "",
+      "Si vous avez besoin d'aide, cliquez sur le bouton ci-dessous pour ouvrir le menu et choisir « Obtenir de l'aide ».",
+    ].join("\n"),
+  );
+  await sendWelcomeMessage(to);
+}
+
+function maskConnectedPhone(phone: string): string {
+  return phone.length > 4 ? `${phone.slice(0, 2)}....${phone.slice(-4)}` : phone;
+}
+
 async function sendPhoneVerification(
   senderPhone: string,
   accountPhone: string,
@@ -442,6 +458,29 @@ async function handleInboundMessage(
     return;
   }
 
+  const wantsHelp =
+    normalized === "help" ||
+    normalized.includes("aide") ||
+    normalized.includes("support") ||
+    normalized.includes("besoin d'aide");
+  if (wantsHelp) {
+    await sendHelpMessage(senderPhone);
+    return;
+  }
+
+  const wantsAccount =
+    normalized === "2" ||
+    normalized.includes("compte") ||
+    normalized.includes("inscri");
+  if (wantsAccount && conversation.userId && conversation.accountPhone) {
+    await updateConversation(senderPhone, { state: "awaiting_logout_confirmation" });
+    await sendConvessaMessage(
+      senderPhone,
+      `Vous êtes déjà connecté à un compte Bloum Cash avec le numéro ${maskConnectedPhone(conversation.accountPhone)}.\n\nVoulez-vous vous déconnecter ? Répondez OUI ou NON.`,
+    );
+    return;
+  }
+
   if (
     conversation.state === "welcome" ||
     /^(bonjour|bonsoir|salut|hello|hi|menu|start|0)$/i.test(normalized)
@@ -466,17 +505,7 @@ async function handleInboundMessage(
       return;
     }
 
-    if (
-      normalized === "3" ||
-      normalized === "help" ||
-      normalized.includes("aide") ||
-      normalized.includes("support")
-    ) {
-      await sendHelpMessage(senderPhone);
-      return;
-    }
-
-    await sendWelcomeMessage(senderPhone);
+    await sendOutOfScopeMessage(senderPhone);
     await updateConversation(senderPhone, { state: "menu" });
     return;
   }
@@ -611,6 +640,33 @@ async function handleInboundMessage(
       return;
     }
     await sendConvessaMessage(senderPhone, "Répondez OUI pour vous connecter ou NON pour annuler.");
+    return;
+  }
+
+  if (conversation.state === "awaiting_logout_confirmation") {
+    if (/^(oui|yes|o|1)$/i.test(normalized)) {
+      await updateConversation(senderPhone, {
+        userId: null,
+        accountPhone: null,
+        fullName: null,
+        state: "menu",
+        transferRecipientOperator: null,
+        transferRecipientPhone: null,
+        transferSenderOperator: null,
+        pendingTokenHash: null,
+        pendingTokenExpiresAt: null,
+      });
+      await sendConvessaMessage(senderPhone, "Vous êtes maintenant déconnecté ✅.");
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
+    if (/^(non|no|n|2)$/i.test(normalized)) {
+      await updateConversation(senderPhone, { state: "menu" });
+      await sendConvessaMessage(senderPhone, "D'accord, votre compte reste connecté.");
+      await sendWelcomeMessage(senderPhone);
+      return;
+    }
+    await sendConvessaMessage(senderPhone, "Répondez OUI pour vous déconnecter ou NON pour garder votre connexion.");
     return;
   }
 
@@ -809,14 +865,11 @@ async function handleInboundMessage(
       await sendWelcomeMessage(senderPhone);
       return;
     }
-    await sendConvessaMessage(
-      senderPhone,
-      "Votre compte est connecté ✅. Répondez MENU pour revoir les options ou 1 pour effectuer un transfert.",
-    );
+    await sendOutOfScopeMessage(senderPhone);
     return;
   }
 
-  await sendWelcomeMessage(senderPhone);
+  await sendOutOfScopeMessage(senderPhone);
   await updateConversation(senderPhone, { state: "menu" });
 }
 
